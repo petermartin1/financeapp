@@ -2,7 +2,7 @@ package com.financeapp.security
 
 /**
  * Platform-specific secure storage for sensitive credentials like bank passwords.
- * Uses macOS Keychain on desktop, Android Keystore on Android, iOS Keychain on iOS.
+ * Uses macOS Keychain on desktop, Android Keystore on Android.
  */
 expect class SecureCredentialStore() {
     /**

@@ -4,7 +4,6 @@
 
 - `shared/`: Kotlin Multiplatform shared code. Core logic and Compose UI live in `shared/src/commonMain/kotlin`, and the SQLDelight schema lives in `shared/src/commonMain/sqldelight`.
 - `desktopApp/`: Desktop application shell and entry point in `desktopApp/src/desktopMain/kotlin`.
-- `iosApp/`: Xcode project for the iOS app (not managed by Gradle).
 - `shared/src/commonTest` and `shared/src/desktopTest`: Unit tests and platform-specific tests.
 - `build/` folders are generated output; do not edit.
 

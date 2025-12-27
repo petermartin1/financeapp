@@ -30,10 +30,9 @@ Personal finance app built with Kotlin Multiplatform (KMP) and Compose Multiplat
 ### Project Structure
 - **shared/**: KMP shared code (business logic, database, UI)
   - `commonMain/`: Cross-platform code
-  - `androidMain/`, `iosMain/`, `desktopMain/`: Platform-specific implementations
+  - `androidMain/`, `desktopMain/`: Platform-specific implementations
 - **androidApp/**: Android application shell
 - **desktopApp/**: Desktop (JVM) application shell
-- **iosApp/**: iOS application shell (Xcode project)
 
 ### Key Technologies
 - **UI**: Compose Multiplatform with Material 3
@@ -65,13 +64,12 @@ expect class DatabaseDriverFactory {
     fun createDriver(): SqlDriver
 }
 
-// androidMain, iosMain, desktopMain
+// androidMain, desktopMain
 actual class DatabaseDriverFactory { ... }
 ```
 
 ### Data Storage Locations
 - **Android**: App internal storage
-- **iOS**: App sandbox
 - **Desktop**: `~/.financeapp/finance.db`
 
 ## Code Conventions

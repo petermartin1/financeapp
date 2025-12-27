@@ -13,7 +13,7 @@
 - [x] Budgeting (monthly budgets, spending tracking, progress bars)
 - [x] SQLCipher database encryption
 - [x] Data backup & export (CSV/OFX)
-- [x] Biometric authentication (Touch ID / Face ID on iOS)
+- [x] Biometric authentication
 - [x] Transfer support (link transactions, auto-create matching entries)
 - [x] Payee Management (auto-categorization rules, merge duplicates, spending history)
 - [x] Investment Tracking (portfolio overview, cost basis, gain/loss, asset allocation)

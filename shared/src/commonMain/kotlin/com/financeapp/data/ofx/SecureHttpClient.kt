@@ -4,7 +4,7 @@ import io.ktor.client.*
 
 /**
  * Creates a secure HTTP client with certificate pinning support.
- * Platform implementations use OkHttp (JVM) or URLSession (iOS) with certificate validation.
+ * Platform implementations use OkHttp (JVM) with certificate validation.
  */
 expect fun createSecureHttpClient(certificatePins: Map<String, List<String>>): HttpClient
 
