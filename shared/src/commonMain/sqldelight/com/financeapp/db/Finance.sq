@@ -1,0 +1,554 @@
+-- Accounts (bank accounts, credit cards, investment accounts)
+CREATE TABLE Account (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL, -- CHECKING, SAVINGS, CREDIT_CARD, INVESTMENT, CASH
+    institution TEXT,
+    account_number TEXT, -- masked/encrypted
+    currency TEXT NOT NULL DEFAULT 'USD',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+-- Categories for transactions
+CREATE TABLE Category (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    parent_id INTEGER REFERENCES Category(id),
+    type TEXT NOT NULL, -- INCOME, EXPENSE, TRANSFER
+    icon TEXT,
+    color TEXT
+);
+
+-- Payees (who you pay or receive from)
+CREATE TABLE Payee (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    default_category_id INTEGER REFERENCES Category(id)
+);
+
+-- Transactions
+CREATE TABLE TransactionRecord (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL REFERENCES Account(id),
+    date INTEGER NOT NULL,
+    amount INTEGER NOT NULL, -- stored in cents
+    payee_id INTEGER REFERENCES Payee(id),
+    category_id INTEGER REFERENCES Category(id),
+    memo TEXT,
+    check_number TEXT,
+    is_cleared INTEGER NOT NULL DEFAULT 0,
+    is_reconciled INTEGER NOT NULL DEFAULT 0,
+    transfer_id INTEGER REFERENCES TransactionRecord(id), -- for transfer pairs
+    import_id TEXT, -- external ID from bank import
+    transaction_type TEXT, -- CREDIT, DEBIT, CHECK, ATM, TRANSFER, OTHER
+    sic TEXT, -- Standard Industrial Classification code
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+-- Split transaction items (for splitting one transaction across multiple categories)
+CREATE TABLE SplitItem (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id INTEGER NOT NULL REFERENCES TransactionRecord(id) ON DELETE CASCADE,
+    category_id INTEGER REFERENCES Category(id),
+    amount INTEGER NOT NULL, -- in cents (negative for expenses)
+    memo TEXT
+);
+
+-- Tags
+CREATE TABLE Tag (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    color TEXT -- hex color code
+);
+
+-- Transaction-Tag relationship (many-to-many)
+CREATE TABLE TransactionTag (
+    transaction_id INTEGER NOT NULL REFERENCES TransactionRecord(id) ON DELETE CASCADE,
+    tag_id INTEGER NOT NULL REFERENCES Tag(id) ON DELETE CASCADE,
+    PRIMARY KEY (transaction_id, tag_id)
+);
+
+CREATE INDEX idx_split_transaction ON SplitItem(transaction_id);
+CREATE INDEX idx_transaction_tag_txn ON TransactionTag(transaction_id);
+CREATE INDEX idx_transaction_tag_tag ON TransactionTag(tag_id);
+
+-- Budgets
+CREATE TABLE Budget (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER NOT NULL REFERENCES Category(id),
+    amount INTEGER NOT NULL, -- monthly budget in cents
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    UNIQUE(category_id, year, month)
+);
+
+-- Investment holdings
+CREATE TABLE Holding (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL REFERENCES Account(id),
+    symbol TEXT NOT NULL,
+    name TEXT,
+    shares REAL NOT NULL,
+    cost_basis INTEGER NOT NULL, -- in cents
+    UNIQUE(account_id, symbol)
+);
+
+-- Security prices
+CREATE TABLE SecurityPrice (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    date INTEGER NOT NULL,
+    price INTEGER NOT NULL, -- in cents
+    UNIQUE(symbol, date)
+);
+
+-- Scheduled/recurring transactions
+CREATE TABLE ScheduledTransaction (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL REFERENCES Account(id),
+    payee_id INTEGER REFERENCES Payee(id),
+    category_id INTEGER REFERENCES Category(id),
+    amount INTEGER NOT NULL,
+    memo TEXT,
+    frequency TEXT NOT NULL, -- DAILY, WEEKLY, BIWEEKLY, MONTHLY, YEARLY
+    next_date INTEGER NOT NULL,
+    end_date INTEGER,
+    is_active INTEGER NOT NULL DEFAULT 1
+);
+
+-- Transaction templates (for quick entry)
+CREATE TABLE TransactionTemplate (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    account_id INTEGER REFERENCES Account(id),
+    payee_id INTEGER REFERENCES Payee(id),
+    category_id INTEGER REFERENCES Category(id),
+    amount INTEGER, -- in cents, can be null for variable amounts
+    memo TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+-- Indexes for common queries
+CREATE INDEX idx_transaction_account ON TransactionRecord(account_id);
+CREATE INDEX idx_transaction_date ON TransactionRecord(date);
+CREATE INDEX idx_transaction_category ON TransactionRecord(category_id);
+CREATE INDEX idx_holding_account ON Holding(account_id);
+CREATE INDEX idx_security_price_symbol ON SecurityPrice(symbol);
+
+-- Account queries
+selectAllAccounts:
+SELECT * FROM Account WHERE is_active = 1 ORDER BY name;
+
+selectAccountById:
+SELECT * FROM Account WHERE id = ?;
+
+insertAccount:
+INSERT INTO Account(name, type, institution, account_number, currency, is_active, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+updateAccount:
+UPDATE Account SET name = ?, type = ?, institution = ?, account_number = ?, currency = ?, is_active = ?, updated_at = ? WHERE id = ?;
+
+deleteAccount:
+DELETE FROM Account WHERE id = ?;
+
+deleteTransactionsByAccount:
+DELETE FROM TransactionRecord WHERE account_id = ?;
+
+-- Category queries
+selectAllCategories:
+SELECT * FROM Category ORDER BY type, name;
+
+selectCategoriesByType:
+SELECT * FROM Category WHERE type = ? ORDER BY name;
+
+insertCategory:
+INSERT INTO Category(name, parent_id, type, icon, color) VALUES (?, ?, ?, ?, ?);
+
+-- Transaction queries
+selectTransactionsByAccount:
+SELECT * FROM TransactionRecord WHERE account_id = ? ORDER BY date DESC, id DESC;
+
+selectTransactionsByDateRange:
+SELECT * FROM TransactionRecord WHERE date >= ? AND date <= ? ORDER BY date DESC, id DESC;
+
+selectTransactionsByCategory:
+SELECT * FROM TransactionRecord WHERE category_id = ? ORDER BY date DESC;
+
+insertTransaction:
+INSERT INTO TransactionRecord(account_id, date, amount, payee_id, category_id, memo, check_number, is_cleared, is_reconciled, transfer_id, import_id, transaction_type, sic, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateTransaction:
+UPDATE TransactionRecord SET account_id = ?, date = ?, amount = ?, payee_id = ?, category_id = ?, memo = ?, check_number = ?, is_cleared = ?, is_reconciled = ?, transfer_id = ?, updated_at = ? WHERE id = ?;
+
+deleteTransaction:
+DELETE FROM TransactionRecord WHERE id = ?;
+
+selectTransactionByImportId:
+SELECT * FROM TransactionRecord WHERE import_id = ? LIMIT 1;
+
+-- Balance calculations
+selectAccountBalance:
+SELECT COALESCE(SUM(amount), 0) AS balance FROM TransactionRecord WHERE account_id = ?;
+
+selectClearedBalance:
+SELECT COALESCE(SUM(amount), 0) AS balance FROM TransactionRecord WHERE account_id = ? AND is_cleared = 1;
+
+-- Budget queries
+selectBudgetsByMonth:
+SELECT * FROM Budget WHERE year = ? AND month = ?;
+
+selectBudgetById:
+SELECT * FROM Budget WHERE id = ?;
+
+selectBudgetByCategoryAndMonth:
+SELECT * FROM Budget WHERE category_id = ? AND year = ? AND month = ?;
+
+insertBudget:
+INSERT OR REPLACE INTO Budget(category_id, amount, year, month) VALUES (?, ?, ?, ?);
+
+updateBudget:
+UPDATE Budget SET amount = ? WHERE id = ?;
+
+deleteBudget:
+DELETE FROM Budget WHERE id = ?;
+
+-- Get spending by category for a month (expenses are negative, so we negate)
+selectSpendingByCategory:
+SELECT category_id, COALESCE(SUM(-amount), 0) AS spent
+FROM TransactionRecord
+WHERE category_id IS NOT NULL
+AND date >= ? AND date <= ?
+AND amount < 0
+GROUP BY category_id;
+
+-- Payee queries
+selectAllPayees:
+SELECT * FROM Payee ORDER BY name;
+
+selectPayeeById:
+SELECT * FROM Payee WHERE id = ?;
+
+selectPayeeByName:
+SELECT * FROM Payee WHERE LOWER(name) = LOWER(?);
+
+insertPayee:
+INSERT INTO Payee(name, default_category_id) VALUES (?, ?);
+
+updatePayee:
+UPDATE Payee SET name = ?, default_category_id = ? WHERE id = ?;
+
+deletePayee:
+DELETE FROM Payee WHERE id = ?;
+
+-- Payee spending history
+selectPayeeSpendingHistory:
+SELECT
+    t.payee_id,
+    p.name AS payee_name,
+    COUNT(*) AS transaction_count,
+    SUM(t.amount) AS total_amount,
+    MIN(t.date) AS first_transaction,
+    MAX(t.date) AS last_transaction
+FROM TransactionRecord t
+JOIN Payee p ON t.payee_id = p.id
+GROUP BY t.payee_id
+ORDER BY transaction_count DESC;
+
+-- Merge payees (update transactions to use target payee)
+mergePayeeTransactions:
+UPDATE TransactionRecord SET payee_id = ? WHERE payee_id = ?;
+
+-- Find similar payees for merge suggestions
+selectPayeesWithTransactionCount:
+SELECT p.*, COUNT(t.id) AS transaction_count
+FROM Payee p
+LEFT JOIN TransactionRecord t ON t.payee_id = p.id
+GROUP BY p.id
+ORDER BY p.name;
+
+-- Split item queries
+selectSplitsByTransaction:
+SELECT * FROM SplitItem WHERE transaction_id = ?;
+
+insertSplit:
+INSERT INTO SplitItem(transaction_id, category_id, amount, memo) VALUES (?, ?, ?, ?);
+
+deleteSplitsByTransaction:
+DELETE FROM SplitItem WHERE transaction_id = ?;
+
+-- Tag queries
+selectAllTags:
+SELECT * FROM Tag ORDER BY name;
+
+selectTagById:
+SELECT * FROM Tag WHERE id = ?;
+
+insertTag:
+INSERT INTO Tag(name, color) VALUES (?, ?);
+
+updateTag:
+UPDATE Tag SET name = ?, color = ? WHERE id = ?;
+
+deleteTag:
+DELETE FROM Tag WHERE id = ?;
+
+-- Transaction-Tag queries
+selectTagsByTransaction:
+SELECT t.* FROM Tag t
+JOIN TransactionTag tt ON t.id = tt.tag_id
+WHERE tt.transaction_id = ?;
+
+selectTransactionsByTag:
+SELECT tr.* FROM TransactionRecord tr
+JOIN TransactionTag tt ON tr.id = tt.transaction_id
+WHERE tt.tag_id = ?
+ORDER BY tr.date DESC;
+
+addTagToTransaction:
+INSERT OR IGNORE INTO TransactionTag(transaction_id, tag_id) VALUES (?, ?);
+
+removeTagFromTransaction:
+DELETE FROM TransactionTag WHERE transaction_id = ? AND tag_id = ?;
+
+clearTransactionTags:
+DELETE FROM TransactionTag WHERE transaction_id = ?;
+
+-- Bulk operations
+bulkUpdateCategory:
+UPDATE TransactionRecord SET category_id = ?, updated_at = ? WHERE id IN ?;
+
+bulkClearTransactions:
+UPDATE TransactionRecord SET is_cleared = 1, updated_at = ? WHERE id IN ?;
+
+-- Holding queries
+selectHoldingsByAccount:
+SELECT * FROM Holding WHERE account_id = ?;
+
+selectAllHoldings:
+SELECT * FROM Holding ORDER BY symbol;
+
+selectHoldingById:
+SELECT * FROM Holding WHERE id = ?;
+
+insertHolding:
+INSERT OR REPLACE INTO Holding(account_id, symbol, name, shares, cost_basis) VALUES (?, ?, ?, ?, ?);
+
+updateHolding:
+UPDATE Holding SET symbol = ?, name = ?, shares = ?, cost_basis = ? WHERE id = ?;
+
+deleteHolding:
+DELETE FROM Holding WHERE id = ?;
+
+-- Security price queries
+selectLatestPrice:
+SELECT * FROM SecurityPrice WHERE symbol = ? ORDER BY date DESC LIMIT 1;
+
+selectPriceHistory:
+SELECT * FROM SecurityPrice WHERE symbol = ? ORDER BY date DESC LIMIT ?;
+
+selectAllLatestPrices:
+SELECT * FROM SecurityPrice sp
+WHERE sp.date = (SELECT MAX(date) FROM SecurityPrice sp2 WHERE sp2.symbol = sp.symbol);
+
+insertSecurityPrice:
+INSERT OR REPLACE INTO SecurityPrice(symbol, date, price) VALUES (?, ?, ?);
+
+-- Portfolio summary: all holdings with latest prices
+selectPortfolioSummary:
+SELECT
+    h.id,
+    h.account_id,
+    h.symbol,
+    h.name,
+    h.shares,
+    h.cost_basis,
+    sp.price AS current_price,
+    a.name AS account_name
+FROM Holding h
+LEFT JOIN (
+    SELECT symbol, price FROM SecurityPrice sp1
+    WHERE date = (SELECT MAX(date) FROM SecurityPrice sp2 WHERE sp2.symbol = sp1.symbol)
+) sp ON h.symbol = sp.symbol
+JOIN Account a ON h.account_id = a.id
+ORDER BY h.symbol;
+
+-- Bank connections for OFX Direct Connect
+-- Note: Passwords are stored securely in platform-specific keychain/encrypted storage, not in database
+CREATE TABLE BankConnection (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bank_name TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    last_synced INTEGER,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE ConnectedAccount (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    connection_id INTEGER NOT NULL REFERENCES BankConnection(id),
+    local_account_id INTEGER NOT NULL REFERENCES Account(id),
+    remote_account_id TEXT NOT NULL,
+    account_type TEXT NOT NULL,
+    UNIQUE(connection_id, remote_account_id)
+);
+
+-- Bank connection queries
+selectAllConnections:
+SELECT * FROM BankConnection ORDER BY bank_name;
+
+selectConnectionById:
+SELECT * FROM BankConnection WHERE id = ?;
+
+insertConnection:
+INSERT INTO BankConnection(bank_name, user_id, password, last_synced, created_at)
+VALUES (?, ?, ?, ?, ?);
+
+updateConnectionLastSynced:
+UPDATE BankConnection SET last_synced = ? WHERE id = ?;
+
+deleteConnection:
+DELETE FROM BankConnection WHERE id = ?;
+
+selectConnectedAccountsByConnection:
+SELECT * FROM ConnectedAccount WHERE connection_id = ?;
+
+insertConnectedAccount:
+INSERT INTO ConnectedAccount(connection_id, local_account_id, remote_account_id, account_type)
+VALUES (?, ?, ?, ?);
+
+deleteConnectedAccountsByConnection:
+DELETE FROM ConnectedAccount WHERE connection_id = ?;
+
+-- Reconciliation sessions
+CREATE TABLE ReconciliationSession (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL REFERENCES Account(id),
+    statement_date INTEGER NOT NULL,
+    statement_balance INTEGER NOT NULL,
+    is_completed INTEGER NOT NULL DEFAULT 0,
+    completed_at INTEGER,
+    created_at INTEGER NOT NULL
+);
+
+-- Reconciliation queries
+selectReconciliationsByAccount:
+SELECT * FROM ReconciliationSession WHERE account_id = ? ORDER BY statement_date DESC;
+
+selectLastReconciliation:
+SELECT * FROM ReconciliationSession WHERE account_id = ? AND is_completed = 1 ORDER BY statement_date DESC LIMIT 1;
+
+insertReconciliation:
+INSERT INTO ReconciliationSession(account_id, statement_date, statement_balance, is_completed, completed_at, created_at)
+VALUES (?, ?, ?, ?, ?, ?);
+
+completeReconciliation:
+UPDATE ReconciliationSession SET is_completed = 1, completed_at = ? WHERE id = ?;
+
+deleteReconciliation:
+DELETE FROM ReconciliationSession WHERE id = ?;
+
+selectUnreconciledTransactions:
+SELECT * FROM TransactionRecord WHERE account_id = ? AND is_reconciled = 0 ORDER BY date ASC;
+
+selectReconciledBalance:
+SELECT COALESCE(SUM(amount), 0) AS balance FROM TransactionRecord WHERE account_id = ? AND is_reconciled = 1;
+
+markTransactionReconciled:
+UPDATE TransactionRecord SET is_reconciled = ? WHERE id = ?;
+
+-- Scheduled transaction queries
+selectAllScheduledTransactions:
+SELECT * FROM ScheduledTransaction WHERE is_active = 1 ORDER BY next_date ASC;
+
+selectScheduledTransactionsByAccount:
+SELECT * FROM ScheduledTransaction WHERE account_id = ? AND is_active = 1 ORDER BY next_date ASC;
+
+selectDueScheduledTransactions:
+SELECT * FROM ScheduledTransaction WHERE is_active = 1 AND next_date <= ? ORDER BY next_date ASC;
+
+selectScheduledTransactionById:
+SELECT * FROM ScheduledTransaction WHERE id = ?;
+
+insertScheduledTransaction:
+INSERT INTO ScheduledTransaction(account_id, payee_id, category_id, amount, memo, frequency, next_date, end_date, is_active)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateScheduledTransactionNextDate:
+UPDATE ScheduledTransaction SET next_date = ? WHERE id = ?;
+
+updateScheduledTransactionActive:
+UPDATE ScheduledTransaction SET is_active = ? WHERE id = ?;
+
+deleteScheduledTransaction:
+DELETE FROM ScheduledTransaction WHERE id = ?;
+
+-- Report queries
+selectSpendingByCategoryForPeriod:
+SELECT c.id AS category_id, c.name AS category_name, COALESCE(SUM(-t.amount), 0) AS total
+FROM Category c
+LEFT JOIN TransactionRecord t ON t.category_id = c.id
+    AND t.date >= ? AND t.date <= ?
+    AND t.amount < 0
+WHERE c.type = 'EXPENSE'
+GROUP BY c.id, c.name
+HAVING total > 0
+ORDER BY total DESC;
+
+selectMonthlyIncomeExpenses:
+SELECT
+    strftime('%Y', date / 1000, 'unixepoch') AS year,
+    strftime('%m', date / 1000, 'unixepoch') AS month,
+    COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) AS income,
+    COALESCE(SUM(CASE WHEN amount < 0 THEN -amount ELSE 0 END), 0) AS expenses
+FROM TransactionRecord
+WHERE date >= ? AND date <= ?
+GROUP BY year, month
+ORDER BY year, month;
+
+selectTotalIncomeForPeriod:
+SELECT COALESCE(SUM(amount), 0) AS total
+FROM TransactionRecord
+WHERE date >= ? AND date <= ? AND amount > 0;
+
+selectTotalExpensesForPeriod:
+SELECT COALESCE(SUM(-amount), 0) AS total
+FROM TransactionRecord
+WHERE date >= ? AND date <= ? AND amount < 0;
+
+selectAllAccountBalances:
+SELECT a.id, a.name, a.type, COALESCE(SUM(t.amount), 0) AS balance
+FROM Account a
+LEFT JOIN TransactionRecord t ON t.account_id = a.id
+WHERE a.is_active = 1
+GROUP BY a.id;
+
+selectFirstTransactionDate:
+SELECT MIN(date) FROM TransactionRecord;
+
+-- Transaction template queries
+selectAllTemplates:
+SELECT * FROM TransactionTemplate ORDER BY name;
+
+selectTemplateById:
+SELECT * FROM TransactionTemplate WHERE id = ?;
+
+insertTemplate:
+INSERT INTO TransactionTemplate (name, account_id, payee_id, category_id, amount, memo, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+updateTemplate:
+UPDATE TransactionTemplate
+SET name = ?, account_id = ?, payee_id = ?, category_id = ?, amount = ?, memo = ?, updated_at = ?
+WHERE id = ?;
+
+deleteTemplate:
+DELETE FROM TransactionTemplate WHERE id = ?;
+
+-- Utility query
+lastInsertRowId:
+SELECT last_insert_rowid();

@@ -1,0 +1,349 @@
+package com.financeapp.data.repository
+
+import com.financeapp.db.schema.Accounts
+import com.financeapp.db.schema.Categories
+import com.financeapp.db.schema.Payees
+import com.financeapp.db.schema.Transactions
+import com.financeapp.domain.model.Transaction
+import com.financeapp.domain.model.TransactionWithDetails
+import com.financeapp.domain.repository.TransactionRepository
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.transactions.transaction
+
+class TransactionRepositoryImpl(
+    private val database: Database,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+) : TransactionRepository {
+
+    // Trigger for reactive transaction updates
+    private val transactionRefreshTrigger = MutableStateFlow(0L)
+
+    override fun notifyTransactionsChanged() {
+        transactionRefreshTrigger.value += 1
+    }
+
+    override fun getTransactionsByAccount(accountId: Long): Flow<List<Transaction>> = flow {
+        val transactions = withContext(ioDispatcher) {
+            transaction(database) {
+                Transactions
+                    .selectAll().where { Transactions.accountId eq accountId.toInt() }
+                    .orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC)
+                    .map { it.toDomain() }
+            }
+        }
+        emit(transactions)
+    }
+
+    override fun getTransactionsWithDetailsByAccount(accountId: Long): Flow<List<TransactionWithDetails>> =
+        transactionRefreshTrigger.map { _ ->
+            withContext(ioDispatcher) {
+                transaction(database) {
+                    // Fetch everything in a single transaction for speed
+                    val transactions = Transactions
+                        .selectAll().where { Transactions.accountId eq accountId.toInt() }
+                        .orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC)
+                        .map { it.toDomain() }
+
+                    // Fetch lookup tables once
+                    val payees = Payees.selectAll().associate { it[Payees.id].value.toLong() to it[Payees.name] }
+                    val categories = Categories.selectAll().associate { it[Categories.id].value.toLong() to it[Categories.name] }
+                    val accountName = Accounts.selectAll().where { Accounts.id eq accountId.toInt() }
+                        .singleOrNull()
+                        ?.get(Accounts.name) ?: ""
+
+                    // Map to details
+                    transactions.map { txn ->
+                        TransactionWithDetails(
+                            transaction = txn,
+                            payeeName = txn.payeeId?.let { payees[it] },
+                            categoryName = txn.categoryId?.let { categories[it] },
+                            accountName = accountName
+                        )
+                    }
+                }
+            }
+        }
+
+    override fun getAllTransactionsWithDetails(): Flow<List<TransactionWithDetails>> =
+        transactionRefreshTrigger.map { _ ->
+            withContext(ioDispatcher) {
+                transaction(database) {
+                    // Fetch all transactions
+                    val transactions = Transactions
+                        .selectAll()
+                        .orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC)
+                        .map { it.toDomain() }
+
+                    // Fetch lookup tables once
+                    val payees = Payees.selectAll().associate { it[Payees.id].value.toLong() to it[Payees.name] }
+                    val categories = Categories.selectAll().associate { it[Categories.id].value.toLong() to it[Categories.name] }
+                    val accounts = Accounts.selectAll().associate { it[Accounts.id].value.toLong() to it[Accounts.name] }
+
+                    // Map to details
+                    transactions.map { txn ->
+                        TransactionWithDetails(
+                            transaction = txn,
+                            payeeName = txn.payeeId?.let { payees[it] },
+                            categoryName = txn.categoryId?.let { categories[it] },
+                            accountName = accounts[txn.accountId] ?: ""
+                        )
+                    }
+                }
+            }
+        }
+
+    override fun getTransactionsByDateRange(
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): Flow<List<Transaction>> = flow {
+        val startMillis = startDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+        val endMillis = endDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds() + 86400000 - 1
+
+        val transactions = withContext(ioDispatcher) {
+            transaction(database) {
+                Transactions
+                    .selectAll().where { (Transactions.date greaterEq startMillis) and (Transactions.date lessEq endMillis) }
+                    .orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC)
+                    .map { it.toDomain() }
+            }
+        }
+        emit(transactions)
+    }
+
+    override fun getTransactionsByCategory(categoryId: Long): Flow<List<Transaction>> = flow {
+        val transactions = withContext(ioDispatcher) {
+            transaction(database) {
+                Transactions
+                    .selectAll().where { Transactions.categoryId eq categoryId.toInt() }
+                    .orderBy(Transactions.date to SortOrder.DESC)
+                    .map { it.toDomain() }
+            }
+        }
+        emit(transactions)
+    }
+
+    override suspend fun getTransactionById(id: Long): Transaction? = withContext(ioDispatcher) {
+        transaction(database) {
+            Transactions.selectAll().where { Transactions.id eq id.toInt() }
+                .singleOrNull()
+                ?.toDomain()
+        }
+    }
+
+    override suspend fun insertTransaction(transaction: Transaction): Long = withContext(ioDispatcher) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        val dateMillis = transaction.date.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+
+        transaction(database) {
+            Transactions.insert {
+                it[accountId] = transaction.accountId.toInt()
+                it[date] = dateMillis
+                it[amount] = transaction.amount
+                it[payeeId] = transaction.payeeId?.toInt()
+                it[categoryId] = transaction.categoryId?.toInt()
+                it[memo] = transaction.memo
+                it[checkNumber] = transaction.checkNumber
+                it[isCleared] = transaction.isCleared
+                it[isReconciled] = transaction.isReconciled
+                it[transferId] = transaction.transferId?.toInt()
+                it[importId] = transaction.importId
+                it[transactionType] = transaction.transactionType
+                it[sic] = transaction.sic
+                it[createdAt] = now
+                it[updatedAt] = now
+            }[Transactions.id].value.toLong()
+        }
+    }
+
+    override suspend fun batchInsertTransactions(transactions: List<Transaction>): List<Long> = withContext(ioDispatcher) {
+        if (transactions.isEmpty()) return@withContext emptyList()
+
+        val now = Clock.System.now().toEpochMilliseconds()
+
+        transaction(database) {
+            transactions.map { transaction ->
+                try {
+                    val dateMillis = transaction.date.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+
+                    Transactions.insert {
+                        it[accountId] = transaction.accountId.toInt()
+                        it[date] = dateMillis
+                        it[amount] = transaction.amount
+                        it[payeeId] = transaction.payeeId?.toInt()
+                        it[categoryId] = transaction.categoryId?.toInt()
+                        it[memo] = transaction.memo
+                        it[checkNumber] = transaction.checkNumber
+                        it[isCleared] = transaction.isCleared
+                        it[isReconciled] = transaction.isReconciled
+                        it[transferId] = transaction.transferId?.toInt()
+                        it[importId] = transaction.importId
+                        it[transactionType] = transaction.transactionType
+                        it[sic] = transaction.sic
+                        it[createdAt] = now
+                        it[updatedAt] = now
+                    }[Transactions.id].value.toLong()
+                } catch (e: Exception) {
+                    println("Failed to insert transaction with importId=${transaction.importId}: ${e.message}")
+                    throw e
+                }
+            }
+        }
+    }
+
+    override suspend fun updateTransaction(transaction: Transaction): Unit = withContext(ioDispatcher) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        val dateMillis = transaction.date.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+
+        org.jetbrains.exposed.sql.transactions.transaction(database) {
+            Transactions.update({ Transactions.id eq transaction.id.toInt() }) {
+                it[accountId] = transaction.accountId.toInt()
+                it[date] = dateMillis
+                it[amount] = transaction.amount
+                it[payeeId] = transaction.payeeId?.toInt()
+                it[categoryId] = transaction.categoryId?.toInt()
+                it[memo] = transaction.memo
+                it[checkNumber] = transaction.checkNumber
+                it[isCleared] = transaction.isCleared
+                it[isReconciled] = transaction.isReconciled
+                it[transferId] = transaction.transferId?.toInt()
+                it[updatedAt] = now
+            }
+        }
+    }
+
+    override suspend fun deleteTransaction(id: Long): Unit = withContext(ioDispatcher) {
+        org.jetbrains.exposed.sql.transactions.transaction(database) {
+            Transactions.deleteWhere { Transactions.id eq id.toInt() }
+        }
+    }
+
+    override suspend fun getRecentTransactions(limit: Int): List<TransactionWithDetails> = withContext(ioDispatcher) {
+        transaction(database) {
+            // Get recent transactions
+            val transactions = Transactions
+                .selectAll()
+                .orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC)
+                .limit(limit)
+                .map { it.toDomain() }
+
+            // Fetch lookup tables
+            val payees = Payees.selectAll().associate { it[Payees.id].value.toLong() to it[Payees.name] }
+            val categories = Categories.selectAll().associate { it[Categories.id].value.toLong() to it[Categories.name] }
+            val accounts = Accounts.selectAll().associate { it[Accounts.id].value.toLong() to it[Accounts.name] }
+
+            transactions.map { txn ->
+                val payeeName = txn.payeeId?.let { payees[it] }
+                val categoryName = txn.categoryId?.let { categories[it] }
+                val accountName = accounts[txn.accountId] ?: ""
+
+                TransactionWithDetails(
+                    transaction = txn,
+                    payeeName = payeeName,
+                    categoryName = categoryName,
+                    accountName = accountName
+                )
+            }
+        }
+    }
+
+    override suspend fun getTransactionByImportId(importId: String): Transaction? = withContext(ioDispatcher) {
+        transaction(database) {
+            Transactions
+                .selectAll().where { Transactions.importId eq importId }
+                .singleOrNull()
+                ?.toDomain()
+        }
+    }
+
+    override suspend fun getExistingImportIds(importIds: List<String>): Set<String> = withContext(ioDispatcher) {
+        if (importIds.isEmpty()) return@withContext emptySet()
+
+        transaction(database) {
+            Transactions
+                .select(Transactions.importId)
+                .where { Transactions.importId inList importIds }
+                .mapNotNull { it[Transactions.importId] }
+                .toSet()
+        }
+    }
+
+    override suspend fun getSpendingByCategory(): Map<String, Long> = withContext(ioDispatcher) {
+        transaction(database) {
+            // Get current month's date range
+            val now = Clock.System.now()
+            val currentDate = now.toLocalDateTime(TimeZone.currentSystemDefault()).date
+            val startOfMonth = LocalDate(currentDate.year, currentDate.monthNumber, 1)
+            val startMillis = startOfMonth.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+            val endMillis = now.toEpochMilliseconds()
+
+            // Get all transactions for current month (only expenses)
+            val transactions = Transactions
+                .selectAll().where {
+                    (Transactions.date greaterEq startMillis) and
+                    (Transactions.date lessEq endMillis) and
+                    (Transactions.amount less 0)
+                }
+                .map { it.toDomain() }
+
+            // Get categories
+            val categories = Categories.selectAll().associate { it[Categories.id].value.toLong() to it[Categories.name] }
+
+            // Group by category
+            transactions
+                .groupBy { it.categoryId }
+                .mapNotNull { (categoryId, txns) ->
+                    val categoryName = categoryId?.let { categories[it] } ?: "Uncategorized"
+                    categoryName to kotlin.math.abs(txns.sumOf { it.amount })
+                }
+                .toMap()
+        }
+    }
+
+    override suspend fun markTransactionReconciled(id: Long, isReconciled: Boolean): Unit = withContext(ioDispatcher) {
+        transaction(database) {
+            Transactions.update({ Transactions.id eq id.toInt() }) {
+                it[Transactions.isReconciled] = isReconciled
+            }
+        }
+    }
+
+    private fun ResultRow.toDomain(): Transaction {
+        val tz = TimeZone.currentSystemDefault()
+        val localDate = Instant.fromEpochMilliseconds(this[Transactions.date])
+            .toLocalDateTime(tz).date
+
+        return Transaction(
+            id = this[Transactions.id].value.toLong(),
+            accountId = this[Transactions.accountId].value.toLong(),
+            date = localDate,
+            amount = this[Transactions.amount],
+            payeeId = this[Transactions.payeeId]?.value?.toLong(),
+            categoryId = this[Transactions.categoryId]?.value?.toLong(),
+            memo = this[Transactions.memo],
+            checkNumber = this[Transactions.checkNumber],
+            isCleared = this[Transactions.isCleared],
+            isReconciled = this[Transactions.isReconciled],
+            transferId = this[Transactions.transferId]?.value?.toLong(),
+            importId = this[Transactions.importId],
+            transactionType = this[Transactions.transactionType],
+            sic = this[Transactions.sic],
+            createdAt = Instant.fromEpochMilliseconds(this[Transactions.createdAt]),
+            updatedAt = Instant.fromEpochMilliseconds(this[Transactions.updatedAt])
+        )
+    }
+}
