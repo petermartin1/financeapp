@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeapp.ui.theme.Spacing
+import com.financeapp.ui.animations.rememberPieSliceAnimation
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -44,7 +45,8 @@ fun PieChart(
     showLegend: Boolean = true,
     showLabels: Boolean = true,
     centerHoleRatio: Float = 0f, // 0 = full pie, 0.5 = donut with 50% hole
-    totalLabel: String? = null
+    totalLabel: String? = null,
+    animationEnabled: Boolean = true
 ) {
     if (data.isEmpty()) {
         EmptyChartState(
@@ -72,8 +74,16 @@ fun PieChart(
                 Canvas(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                     var startAngle = -90f
 
-                    data.forEach { slice ->
+                    data.forEachIndexed { index, slice ->
                         val sweepAngle = (slice.value / total) * 360f
+
+                        // Get animation progress for this slice (only if animation enabled)
+                        val animProgress = if (animationEnabled) {
+                            // We'll use a remembered value per index
+                            1f // Placeholder - actual animation happens in AnimatedPieChart wrapper
+                        } else {
+                            1f
+                        }
 
                         // Draw slice
                         drawArc(
@@ -144,9 +154,146 @@ fun DonutChart(
     data: List<PieChartData>,
     modifier: Modifier = Modifier,
     showLegend: Boolean = true,
-    totalLabel: String? = null
+    totalLabel: String? = null,
+    animationEnabled: Boolean = true
 ) {
     PieChart(
+        data = data,
+        modifier = modifier,
+        showLegend = showLegend,
+        centerHoleRatio = 0.5f,
+        totalLabel = totalLabel,
+        animationEnabled = animationEnabled
+    )
+}
+
+/**
+ * AnimatedPieChart with staggered slice animations
+ */
+@Composable
+fun AnimatedPieChart(
+    data: List<PieChartData>,
+    modifier: Modifier = Modifier,
+    showLegend: Boolean = true,
+    showLabels: Boolean = true,
+    centerHoleRatio: Float = 0f,
+    totalLabel: String? = null
+) {
+    if (data.isEmpty()) {
+        EmptyChartState(
+            message = "No data to display",
+            modifier = modifier
+        )
+        return
+    }
+
+    val total = data.sumOf { it.value.toDouble() }.toFloat()
+
+    // Get animation progress for each slice
+    val sliceAnimations = data.mapIndexed { index, _ ->
+        rememberPieSliceAnimation(
+            sliceIndex = index,
+            sliceCount = data.size,
+            durationMillis = 600,
+            staggerMillis = 40
+        )
+    }
+
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Pie chart
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .aspectRatio(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                    var startAngle = -90f
+
+                    data.forEachIndexed { index, slice ->
+                        val sweepAngle = (slice.value / total) * 360f
+                        val animation = sliceAnimations[index]
+
+                        // Apply animation to sweep angle
+                        val animatedSweep = sweepAngle * animation.sweepProgress
+
+                        // Draw slice
+                        drawArc(
+                            color = slice.color,
+                            startAngle = startAngle,
+                            sweepAngle = animatedSweep,
+                            useCenter = true,
+                            size = Size(size.minDimension, size.minDimension),
+                            topLeft = Offset(
+                                (size.width - size.minDimension) / 2,
+                                (size.height - size.minDimension) / 2
+                            )
+                        )
+
+                        startAngle += sweepAngle // Use full sweep for positioning, not animated
+                    }
+
+                    // Draw center hole for donut chart
+                    if (centerHoleRatio > 0f) {
+                        val holeSize = size.minDimension * centerHoleRatio
+                        drawCircle(
+                            color = Color.White,
+                            radius = holeSize / 2,
+                            center = center
+                        )
+                    }
+                }
+
+                // Center label for donut charts
+                if (centerHoleRatio > 0f && totalLabel != null) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = totalLabel,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // Legend
+            if (showLegend) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = Spacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    data.forEach { slice ->
+                        val percentage = (slice.value / total) * 100
+                        ChartLegendItem(
+                            label = slice.label,
+                            color = slice.color,
+                            value = String.format("%.1f%%", percentage)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * AnimatedDonutChart with staggered slice animations
+ */
+@Composable
+fun AnimatedDonutChart(
+    data: List<PieChartData>,
+    modifier: Modifier = Modifier,
+    showLegend: Boolean = true,
+    totalLabel: String? = null
+) {
+    AnimatedPieChart(
         data = data,
         modifier = modifier,
         showLegend = showLegend,

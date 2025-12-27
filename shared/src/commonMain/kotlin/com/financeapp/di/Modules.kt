@@ -47,6 +47,17 @@ import com.financeapp.domain.repository.ScheduledTransactionRepository
 import com.financeapp.data.repository.ScheduledTransactionRepositoryImpl
 import com.financeapp.security.SecureCredentialStore
 import com.financeapp.ui.search.SearchViewModel
+import com.financeapp.domain.repository.QuoteRepository
+import com.financeapp.data.repository.QuoteRepositoryImpl
+import com.financeapp.domain.repository.PerformanceRepository
+import com.financeapp.data.repository.PerformanceRepositoryImpl
+import com.financeapp.domain.service.PriceRefreshService
+import com.financeapp.domain.service.SnapshotScheduler
+import com.financeapp.data.quotes.YahooFinanceClient
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -68,11 +79,26 @@ val sharedModule = module {
     single<TemplateRepository> { TemplateRepositoryImpl(get()) }
     single<BudgetRepository> { BudgetRepositoryImpl(get()) }
     single<ScheduledTransactionRepository> { ScheduledTransactionRepositoryImpl(get()) }
+    single {
+        HttpClient {
+            install(ContentNegotiation) {
+                json(Json {
+                    ignoreUnknownKeys = true
+                    isLenient = true
+                })
+            }
+        }
+    }
+    single { YahooFinanceClient(get()) }
+    single<QuoteRepository> { QuoteRepositoryImpl(get(), get(), get()) }
+    single<PerformanceRepository> { PerformanceRepositoryImpl(get(), get(), get()) }
     single { ImportRepository(get(), get(), get()) }
     single { OfxClient() }
     single { SecureCredentialStore() }
     single { OfxRepository(get(), get(), get(), get()) }
     single { ExportRepository(get()) }
+    single { PriceRefreshService(get(), get()) }
+    single { SnapshotScheduler(get()) }
 
     single { AppViewModel(get(), get(), get()) }
     single { AccountsViewModel(get()) }

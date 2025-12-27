@@ -56,7 +56,9 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
                 TransactionTemplates,
                 BankConnections,
                 ConnectedAccounts,
-                ReconciliationSessions
+                ReconciliationSessions,
+                PortfolioSnapshots,
+                HoldingSnapshots
             )
         }
 

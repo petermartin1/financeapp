@@ -552,3 +552,101 @@ DELETE FROM TransactionTemplate WHERE id = ?;
 -- Utility query
 lastInsertRowId:
 SELECT last_insert_rowid();
+
+-- Portfolio snapshots for performance tracking
+CREATE TABLE PortfolioSnapshot (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date INTEGER NOT NULL,
+    total_value INTEGER NOT NULL,
+    total_cost_basis INTEGER NOT NULL,
+    total_gain_loss INTEGER NOT NULL,
+    snapshot_type TEXT NOT NULL DEFAULT 'DAILY'
+);
+
+CREATE INDEX idx_portfolio_snapshot_date ON PortfolioSnapshot(date);
+
+-- Holding snapshots for individual position tracking
+CREATE TABLE HoldingSnapshot (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    holding_id INTEGER NOT NULL REFERENCES Holding(id),
+    date INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,
+    price INTEGER NOT NULL,
+    value INTEGER NOT NULL,
+    cost_basis INTEGER NOT NULL,
+    gain_loss INTEGER NOT NULL,
+    snapshot_type TEXT NOT NULL DEFAULT 'DAILY',
+    UNIQUE(holding_id, date, snapshot_type)
+);
+
+CREATE INDEX idx_holding_snapshot_holding ON HoldingSnapshot(holding_id);
+CREATE INDEX idx_holding_snapshot_date ON HoldingSnapshot(date);
+
+-- Dividend events
+CREATE TABLE DividendEvent (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    holding_id INTEGER NOT NULL REFERENCES Holding(id),
+    symbol TEXT NOT NULL,
+    payment_date INTEGER NOT NULL,
+    amount INTEGER NOT NULL,
+    per_share INTEGER NOT NULL,
+    shares INTEGER NOT NULL,
+    is_reinvested INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX idx_dividend_holding ON DividendEvent(holding_id);
+CREATE INDEX idx_dividend_date ON DividendEvent(payment_date);
+
+-- Portfolio snapshot queries
+insertPortfolioSnapshot:
+INSERT INTO PortfolioSnapshot(date, total_value, total_cost_basis, total_gain_loss, snapshot_type)
+VALUES (?, ?, ?, ?, ?);
+
+getPortfolioSnapshotsByDateRange:
+SELECT * FROM PortfolioSnapshot
+WHERE date >= ? AND date <= ?
+ORDER BY date ASC;
+
+getLatestPortfolioSnapshot:
+SELECT * FROM PortfolioSnapshot
+ORDER BY date DESC
+LIMIT 1;
+
+deletePortfolioSnapshotsBefore:
+DELETE FROM PortfolioSnapshot WHERE date < ?;
+
+-- Holding snapshot queries
+insertHoldingSnapshot:
+INSERT OR REPLACE INTO HoldingSnapshot(holding_id, date, quantity, price, value, cost_basis, gain_loss, snapshot_type)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+getHoldingSnapshotsByDateRange:
+SELECT * FROM HoldingSnapshot
+WHERE holding_id = ? AND date >= ? AND date <= ?
+ORDER BY date ASC;
+
+getHoldingSnapshotsByDate:
+SELECT * FROM HoldingSnapshot
+WHERE date = ?
+ORDER BY holding_id;
+
+deleteHoldingSnapshotsBefore:
+DELETE FROM HoldingSnapshot WHERE date < ?;
+
+-- Dividend queries
+insertDividend:
+INSERT INTO DividendEvent(holding_id, symbol, payment_date, amount, per_share, shares, is_reinvested)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+getDividendsByHolding:
+SELECT * FROM DividendEvent
+WHERE holding_id = ?
+ORDER BY payment_date DESC;
+
+getDividendsByDateRange:
+SELECT * FROM DividendEvent
+WHERE payment_date >= ? AND payment_date <= ?
+ORDER BY payment_date DESC;
+
+getTotalDividendsForHolding:
+SELECT COALESCE(SUM(amount), 0) FROM DividendEvent WHERE holding_id = ?;

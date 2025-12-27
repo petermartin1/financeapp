@@ -9,6 +9,7 @@ interface InvestmentRepository {
     fun getPortfolio(): Flow<List<HoldingWithPrice>>
     fun getHoldingsByAccount(accountId: Long): Flow<List<Holding>>
     suspend fun getHoldingById(id: Long): Holding?
+    suspend fun getAllHoldings(): List<Holding>
     suspend fun insertHolding(holding: Holding): Long
     suspend fun updateHolding(holding: Holding)
     suspend fun deleteHolding(id: Long)

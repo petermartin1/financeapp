@@ -68,6 +68,12 @@ class InvestmentRepositoryImpl(
         }
     }
 
+    override suspend fun getAllHoldings(): List<Holding> = withContext(Dispatchers.IO) {
+        transaction(database) {
+            Holdings.selectAll().map { it.toHoldingDomain() }
+        }
+    }
+
     override suspend fun insertHolding(holding: Holding): Long = withContext(Dispatchers.IO) {
         transaction(database) {
             Holdings.insert {

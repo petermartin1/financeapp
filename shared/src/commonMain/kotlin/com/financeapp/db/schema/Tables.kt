@@ -161,3 +161,37 @@ object ReconciliationSessions : IntIdTable("ReconciliationSession") {
     val completedAt = long("completed_at").nullable()
     val createdAt = long("created_at")
 }
+
+// Portfolio snapshots for performance tracking
+object PortfolioSnapshots : IntIdTable("PortfolioSnapshot") {
+    val date = long("date") // timestamp (daily snapshot at market close)
+    val totalValue = long("total_value") // in cents
+    val totalCostBasis = long("total_cost_basis") // in cents
+    val totalGainLoss = long("total_gain_loss") // in cents
+    val snapshotType = varchar("snapshot_type", 20).default("DAILY") // DAILY, WEEKLY, MONTHLY
+
+    init {
+        uniqueIndex(date, snapshotType)
+    }
+}
+
+// Individual holding snapshots (detailed tracking)
+object HoldingSnapshots : IntIdTable("HoldingSnapshot") {
+    val portfolioSnapshotId = reference("portfolio_snapshot_id", PortfolioSnapshots)
+    val symbol = varchar("symbol", 20)
+    val shares = double("shares")
+    val costBasis = long("cost_basis") // in cents
+    val marketValue = long("market_value") // in cents
+    val price = long("price") // in cents
+}
+
+// Dividend events
+object DividendEvents : IntIdTable("DividendEvent") {
+    val holdingId = reference("holding_id", Holdings)
+    val symbol = varchar("symbol", 20)
+    val paymentDate = long("payment_date")
+    val amount = long("amount") // total dividend in cents
+    val perShare = long("per_share") // dividend per share in cents
+    val shares = double("shares") // number of shares at time of dividend
+    val isReinvested = bool("is_reinvested").default(false)
+}

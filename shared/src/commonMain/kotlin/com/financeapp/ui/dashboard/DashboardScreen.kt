@@ -15,6 +15,10 @@ import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.DashboardWidgetType
 import com.financeapp.domain.model.AccountWithBalance
 import com.financeapp.domain.model.TransactionWithDetails
+import com.financeapp.ui.animations.AnimatedCurrencyLarge
+import com.financeapp.ui.animations.AnimatedCurrency
+import com.financeapp.ui.animations.StaggeredListItem
+import com.financeapp.ui.animations.pressAnimation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,11 +100,10 @@ private fun NetWorthWidget(totalBalance: Long) {
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
-            Text(
-                text = formatCurrency(totalBalance),
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+            AnimatedCurrencyLarge(
+                amountCents = totalBalance,
+                modifier = Modifier,
+                showSign = false
             )
         }
     }
@@ -119,27 +122,35 @@ private fun AccountsSummaryWidget(
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(8.dp))
-            accounts.take(5).forEach { account ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onAccountClick(account.account.id) }
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+            accounts.take(5).forEachIndexed { index, account ->
+                StaggeredListItem(
+                    index = index,
+                    staggerDelayMillis = 30,
+                    itemDurationMillis = 250
                 ) {
-                    Text(
-                        text = account.account.name,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = formatCurrency(account.balance),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (account.balance >= 0)
-                            MaterialTheme.colorScheme.onSurface
-                        else
-                            MaterialTheme.colorScheme.error
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onAccountClick(account.account.id) }
+                            .pressAnimation()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = account.account.name,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        AnimatedCurrency(
+                            amountCents = account.balance,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = if (account.balance >= 0)
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
             if (accounts.size > 5) {
@@ -170,33 +181,40 @@ private fun RecentTransactionsWidget(transactions: List<TransactionWithDetails>)
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                transactions.forEach { txn ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                transactions.forEachIndexed { index, txn ->
+                    StaggeredListItem(
+                        index = index,
+                        staggerDelayMillis = 30,
+                        itemDurationMillis = 250
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = txn.payeeName ?: "Unknown",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = txn.categoryName ?: "Uncategorized",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = txn.payeeName ?: "Unknown",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = txn.categoryName ?: "Uncategorized",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            AnimatedCurrency(
+                                amountCents = txn.transaction.amount,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                color = if (txn.transaction.amount >= 0)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.error
                             )
                         }
-                        Text(
-                            text = formatCurrency(txn.transaction.amount),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (txn.transaction.amount >= 0)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.error
-                        )
                     }
                 }
             }

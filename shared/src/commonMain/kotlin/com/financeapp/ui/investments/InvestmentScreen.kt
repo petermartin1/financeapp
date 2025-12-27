@@ -116,6 +116,11 @@ fun InvestmentScreen(
                     onClick = { viewModel.setSelectedTab(1) },
                     text = { Text("Allocation") }
                 )
+                Tab(
+                    selected = uiState.selectedTab == 2,
+                    onClick = { viewModel.setSelectedTab(2) },
+                    text = { Text("Performance") }
+                )
             }
 
             if (uiState.isLoading) {
@@ -139,6 +144,7 @@ fun InvestmentScreen(
                         }
                     )
                     1 -> AllocationChart(uiState.assetAllocation)
+                    2 -> PerformanceTab(viewModel)
                 }
             }
         }
@@ -596,6 +602,48 @@ private fun UpdatePriceDialog(
             }
         }
     )
+}
+
+@Composable
+private fun PerformanceTab(viewModel: InvestmentViewModel) {
+    // For now, show a placeholder message
+    // In production, this would show performance metrics, charts, etc.
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                Icons.Default.Info,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "Performance Tracking",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Track your portfolio performance over time with detailed metrics and charts.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Coming soon: Performance metrics, historical charts, and detailed analytics.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        }
+    }
 }
 
 private fun formatCurrency(cents: Long): String {
