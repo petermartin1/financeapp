@@ -266,6 +266,19 @@ private fun SearchBar(
     onClearFilter: () -> Unit,
     focusRequester: FocusRequester? = null
 ) {
+    // Use local TextFieldValue state to properly manage cursor position
+    var textFieldValue by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(searchQuery)) }
+
+    // Sync with incoming searchQuery from ViewModel, but preserve cursor position
+    LaunchedEffect(searchQuery) {
+        if (textFieldValue.text != searchQuery) {
+            textFieldValue = androidx.compose.ui.text.input.TextFieldValue(
+                text = searchQuery,
+                selection = androidx.compose.ui.text.TextRange(searchQuery.length)
+            )
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -274,15 +287,21 @@ private fun SearchBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchChange,
+            value = textFieldValue,
+            onValueChange = { newValue ->
+                textFieldValue = newValue
+                onSearchChange(newValue.text)
+            },
             placeholder = { Text("Search transactions...") },
             leadingIcon = {
                 Icon(Icons.Default.Search, contentDescription = null)
             },
             trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSearchChange("") }) {
+                if (textFieldValue.text.isNotEmpty()) {
+                    IconButton(onClick = {
+                        textFieldValue = androidx.compose.ui.text.input.TextFieldValue("")
+                        onSearchChange("")
+                    }) {
                         Icon(Icons.Default.Clear, contentDescription = "Clear search")
                     }
                 }
