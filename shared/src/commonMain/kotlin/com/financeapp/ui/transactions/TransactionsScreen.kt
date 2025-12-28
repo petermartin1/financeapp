@@ -18,6 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.PointerButton
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -256,7 +259,8 @@ fun TransactionsScreen(
                             transactionToEdit = txn
                         }
                     },
-                    onToggleCleared = { viewModel.toggleCleared(it.transaction) }
+                    onToggleCleared = { viewModel.toggleCleared(it.transaction) },
+                    onDelete = { txn -> viewModel.deleteTransaction(txn.transaction.id) }
                 )
             }
         }
@@ -514,6 +518,7 @@ private fun TransactionsList(
     onTransactionClick: (TransactionWithDetails, KeyEvent?) -> Unit,
     onTransactionDoubleClick: (TransactionWithDetails) -> Unit,
     onToggleCleared: (TransactionWithDetails) -> Unit,
+    onDelete: (TransactionWithDetails) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Group by date
@@ -540,25 +545,43 @@ private fun TransactionsList(
                     isSelected = transaction.transaction.id in selectedIds,
                     onClick = { event -> onTransactionClick(transaction, event) },
                     onDoubleClick = { onTransactionDoubleClick(transaction) },
-                    onToggleCleared = { onToggleCleared(transaction) }
+                    onToggleCleared = { onToggleCleared(transaction) },
+                    onDelete = { onDelete(transaction) }
                 )
             }
         }
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun TransactionCard(
     transaction: TransactionWithDetails,
     isSelected: Boolean,
     onClick: (KeyEvent?) -> Unit,
     onDoubleClick: () -> Unit,
-    onToggleCleared: () -> Unit
+    onToggleCleared: () -> Unit,
+    onDelete: () -> Unit = {}
 ) {
+    var showContextMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Press) {
+                            if (event.button == PointerButton.Secondary) {
+                                showContextMenu = true
+                                event.changes.forEach { it.consume() }
+                            }
+                        }
+                    }
+                }
+            }
             .combinedClickable(
                 onClick = { onClick(null) },
                 onDoubleClick = onDoubleClick
@@ -672,6 +695,69 @@ private fun TransactionCard(
                     )
                 }
             }
+        }
+
+        // Context Menu
+        DropdownMenu(
+            expanded = showContextMenu,
+            onDismissRequest = { showContextMenu = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Edit") },
+                onClick = {
+                    showContextMenu = false
+                    onDoubleClick()
+                },
+                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+            )
+            DropdownMenuItem(
+                text = { Text(if (transaction.transaction.isCleared) "Mark as Uncleared" else "Mark as Cleared") },
+                onClick = {
+                    showContextMenu = false
+                    onToggleCleared()
+                },
+                leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) }
+            )
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("Delete") },
+                onClick = {
+                    showContextMenu = false
+                    showDeleteConfirm = true
+                },
+                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                colors = MenuDefaults.itemColors(
+                    textColor = MaterialTheme.colorScheme.error,
+                    leadingIconColor = MaterialTheme.colorScheme.error
+                )
+            )
+        }
+
+        // Delete Confirmation Dialog
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("Delete Transaction") },
+                text = { Text("Are you sure you want to delete this transaction? This action cannot be undone.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showDeleteConfirm = false
+                            onDelete()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
     }
 }
