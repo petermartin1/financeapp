@@ -14,7 +14,9 @@ fun main() {
     application {
         Window(
             onCloseRequest = ::exitApplication,
-            title = "Finance App"
+            title = "FinanceApp"
+            // Note: Add icon parameter when app-icon.png is placed in resources/icons/
+            // icon = painterResource("icons/app-icon.png")
         ) {
             App()
         }

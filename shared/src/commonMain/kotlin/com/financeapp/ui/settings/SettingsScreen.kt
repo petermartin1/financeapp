@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.financeapp.ui.theme.ThemeMode
+import com.financeapp.ui.components.branding.AboutDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -20,6 +21,7 @@ fun SettingsScreen(
     onBack: () -> Unit
 ) {
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -50,6 +52,13 @@ fun SettingsScreen(
                     )
                 },
                 modifier = Modifier.clickable { showThemeDialog = true }
+            )
+            HorizontalDivider()
+
+            ListItem(
+                headlineContent = { Text("About") },
+                supportingContent = { Text("Version and app information") },
+                modifier = Modifier.clickable { showAboutDialog = true }
             )
             HorizontalDivider()
         }
@@ -97,5 +106,9 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+
+    if (showAboutDialog) {
+        AboutDialog(onDismiss = { showAboutDialog = false })
     }
 }

@@ -31,6 +31,7 @@ import com.financeapp.ui.payees.PayeeManagementScreen
 import com.financeapp.ui.payees.PayeeManagementViewModel
 import com.financeapp.ui.investments.InvestmentScreen
 import com.financeapp.ui.investments.InvestmentViewModel
+import com.financeapp.ui.investments.PerformanceTabViewModel
 import com.financeapp.ui.tags.TagsScreen
 import com.financeapp.ui.tags.TagsViewModel
 import com.financeapp.ui.settings.SettingsScreen
@@ -113,6 +114,7 @@ private fun MainContent() {
     val backupViewModel: BackupViewModel = koinInject()
     val payeeManagementViewModel: PayeeManagementViewModel = koinInject()
     val investmentViewModel: InvestmentViewModel = koinInject()
+    val performanceTabViewModel: PerformanceTabViewModel = koinInject()
     val tagsViewModel: TagsViewModel = koinInject()
     val accountsViewModel: AccountsViewModel = koinInject()
     val categoriesViewModel: CategoriesViewModel = koinInject()
@@ -256,6 +258,7 @@ private fun MainContent() {
                 )
                 Screen.INVESTMENTS -> InvestmentScreen(
                     viewModel = investmentViewModel,
+                    performanceViewModel = performanceTabViewModel,
                     onBack = { /* NavigationRail handles navigation */ }
                 )
                 Screen.TAGS -> TagsScreen(

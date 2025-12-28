@@ -47,6 +47,7 @@ import com.financeapp.domain.repository.ScheduledTransactionRepository
 import com.financeapp.data.repository.ScheduledTransactionRepositoryImpl
 import com.financeapp.security.SecureCredentialStore
 import com.financeapp.ui.search.SearchViewModel
+import com.financeapp.ui.investments.PerformanceTabViewModel
 import com.financeapp.domain.repository.QuoteRepository
 import com.financeapp.data.repository.QuoteRepositoryImpl
 import com.financeapp.domain.repository.PerformanceRepository
@@ -113,6 +114,7 @@ val sharedModule = module {
     single { BackupViewModel(get()) }
     factory { PayeeManagementViewModel(get(), get()) }
     factory { InvestmentViewModel(get(), get()) }
+    factory { PerformanceTabViewModel(get(), get()) }
     factory { TagsViewModel(get()) }
     factory { DashboardViewModel(get(), get(), get()) }
     factory { TemplatesViewModel(get(), get(), get(), get()) }

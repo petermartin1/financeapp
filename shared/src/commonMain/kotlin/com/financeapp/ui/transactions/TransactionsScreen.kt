@@ -1,6 +1,8 @@
 package com.financeapp.ui.transactions
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,6 +44,13 @@ fun TransactionsScreen(
     val searchFocusRequester = remember { FocusRequester() }
     val coroutineScope = rememberCoroutineScope()
 
+    // Bulk selection state
+    var selectedTransactionIds by remember { mutableStateOf(setOf<Long>()) }
+    var lastClickedIndex by remember { mutableStateOf(-1) }
+    var showBulkCategorize by remember { mutableStateOf(false) }
+    var showBulkTag by remember { mutableStateOf(false) }
+    var showBulkDeleteConfirm by remember { mutableStateOf(false) }
+
     LaunchedEffect(accountId) {
         viewModel.loadTransactions(accountId)
     }
@@ -51,23 +60,41 @@ fun TransactionsScreen(
         if (event.type == KeyEventType.KeyDown) {
             val isCtrlOrCmd = event.isCtrlPressed || event.isMetaPressed
             when {
-                // Ctrl/Cmd + N: New transaction
-                isCtrlOrCmd && event.key == Key.N -> {
+                // Ctrl/Cmd + A: Select all
+                isCtrlOrCmd && event.key == Key.A -> {
+                    selectedTransactionIds = uiState.filteredTransactions.map { it.transaction.id }.toSet()
+                    true
+                }
+                // Delete: Delete selected or show confirmation
+                event.key == Key.Delete && selectedTransactionIds.isNotEmpty() -> {
+                    showBulkDeleteConfirm = true
+                    true
+                }
+                // Escape: Clear selection, filter, or go back
+                event.key == Key.Escape -> {
+                    when {
+                        selectedTransactionIds.isNotEmpty() -> {
+                            selectedTransactionIds = emptySet()
+                            true
+                        }
+                        uiState.isFilterActive -> {
+                            viewModel.clearFilter()
+                            true
+                        }
+                        else -> {
+                            onBack()
+                            true
+                        }
+                    }
+                }
+                // Ctrl/Cmd + N: New transaction (only if nothing selected)
+                isCtrlOrCmd && event.key == Key.N && selectedTransactionIds.isEmpty() -> {
                     showAddDialog = true
                     true
                 }
-                // Ctrl/Cmd + F: Focus search
-                isCtrlOrCmd && event.key == Key.F -> {
+                // Ctrl/Cmd + F: Focus search (only if nothing selected)
+                isCtrlOrCmd && event.key == Key.F && selectedTransactionIds.isEmpty() -> {
                     searchFocusRequester.requestFocus()
-                    true
-                }
-                // Escape: Go back or clear filter
-                event.key == Key.Escape -> {
-                    if (uiState.isFilterActive) {
-                        viewModel.clearFilter()
-                    } else {
-                        onBack()
-                    }
                     true
                 }
                 else -> false
@@ -123,6 +150,34 @@ fun TransactionsScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // Bulk action toolbar
+            BulkActionToolbarExtended(
+                selectedCount = selectedTransactionIds.size,
+                onSelectAll = {
+                    selectedTransactionIds = uiState.filteredTransactions.map { it.transaction.id }.toSet()
+                },
+                onCategorize = { showBulkCategorize = true },
+                onTag = { showBulkTag = true },
+                onMarkCleared = {
+                    selectedTransactionIds.forEach { id ->
+                        uiState.filteredTransactions.find { it.transaction.id == id }?.let { txn ->
+                            viewModel.toggleCleared(txn.transaction.copy(isCleared = true))
+                        }
+                    }
+                    selectedTransactionIds = emptySet()
+                },
+                onMarkUncleared = {
+                    selectedTransactionIds.forEach { id ->
+                        uiState.filteredTransactions.find { it.transaction.id == id }?.let { txn ->
+                            viewModel.toggleCleared(txn.transaction.copy(isCleared = false))
+                        }
+                    }
+                    selectedTransactionIds = emptySet()
+                },
+                onDelete = { showBulkDeleteConfirm = true },
+                onClearSelection = { selectedTransactionIds = emptySet() }
+            )
+
             // Search bar
             SearchBar(
                 searchQuery = uiState.filter.searchQuery,
@@ -184,7 +239,18 @@ fun TransactionsScreen(
 
                 TransactionsList(
                     transactions = transactionsWithBalance,
-                    onTransactionClick = { txn ->
+                    selectedIds = selectedTransactionIds,
+                    onTransactionClick = { txn, _ ->
+                        // Toggle selection
+                        selectedTransactionIds = if (txn.transaction.id in selectedTransactionIds) {
+                            selectedTransactionIds - txn.transaction.id
+                        } else {
+                            selectedTransactionIds + txn.transaction.id
+                        }
+                        lastClickedIndex = transactionsWithBalance.indexOf(txn)
+                    },
+                    onTransactionDoubleClick = { txn ->
+                        // Double-click opens edit dialog
                         coroutineScope.launch {
                             editTagIds = viewModel.getTagsForTransaction(txn.transaction.id)
                             transactionToEdit = txn
@@ -253,6 +319,90 @@ fun TransactionsScreen(
                 transactionToEdit = null
             },
             initialTagIds = editTagIds
+        )
+    }
+
+    // Bulk Categorize Dialog
+    if (showBulkCategorize) {
+        BulkCategorizeDialog(
+            selectedCount = selectedTransactionIds.size,
+            onDismiss = { showBulkCategorize = false },
+            onConfirm = { categoryId ->
+                selectedTransactionIds.forEach { id ->
+                    uiState.filteredTransactions.find { it.transaction.id == id }?.let { txn ->
+                        viewModel.editTransaction(
+                            txn.transaction,
+                            categoryId,
+                            txn.transaction.memo,
+                            txn.transaction.date,
+                            txn.transaction.isCleared,
+                            emptyList() // Keep existing tags
+                        )
+                    }
+                }
+                selectedTransactionIds = emptySet()
+                showBulkCategorize = false
+            }
+        )
+    }
+
+    // Bulk Tag Dialog
+    if (showBulkTag) {
+        BulkTagDialog(
+            selectedCount = selectedTransactionIds.size,
+            onDismiss = { showBulkTag = false },
+            onConfirm = { tagIds ->
+                selectedTransactionIds.forEach { id ->
+                    uiState.filteredTransactions.find { it.transaction.id == id }?.let { txn ->
+                        coroutineScope.launch {
+                            val existingTags = viewModel.getTagsForTransaction(txn.transaction.id)
+                            val combinedTags = (existingTags + tagIds).distinct()
+                            viewModel.editTransaction(
+                                txn.transaction,
+                                txn.transaction.categoryId,
+                                txn.transaction.memo,
+                                txn.transaction.date,
+                                txn.transaction.isCleared,
+                                combinedTags
+                            )
+                        }
+                    }
+                }
+                selectedTransactionIds = emptySet()
+                showBulkTag = false
+            }
+        )
+    }
+
+    // Bulk Delete Confirmation
+    if (showBulkDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBulkDeleteConfirm = false },
+            title = { Text("Delete Transactions") },
+            text = {
+                Text("Are you sure you want to delete ${selectedTransactionIds.size} transaction(s)? This action cannot be undone.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        selectedTransactionIds.forEach { id ->
+                            viewModel.deleteTransaction(id)
+                        }
+                        selectedTransactionIds = emptySet()
+                        showBulkDeleteConfirm = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBulkDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }
@@ -360,7 +510,9 @@ private fun EmptyTransactionsContent(
 @Composable
 private fun TransactionsList(
     transactions: List<TransactionWithDetails>,
-    onTransactionClick: (TransactionWithDetails) -> Unit,
+    selectedIds: Set<Long>,
+    onTransactionClick: (TransactionWithDetails, KeyEvent?) -> Unit,
+    onTransactionDoubleClick: (TransactionWithDetails) -> Unit,
     onToggleCleared: (TransactionWithDetails) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -385,7 +537,9 @@ private fun TransactionsList(
             items(dayTransactions) { transaction ->
                 TransactionCard(
                     transaction = transaction,
-                    onClick = { onTransactionClick(transaction) },
+                    isSelected = transaction.transaction.id in selectedIds,
+                    onClick = { event -> onTransactionClick(transaction, event) },
+                    onDoubleClick = { onTransactionDoubleClick(transaction) },
                     onToggleCleared = { onToggleCleared(transaction) }
                 )
             }
@@ -393,16 +547,27 @@ private fun TransactionsList(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun TransactionCard(
     transaction: TransactionWithDetails,
-    onClick: () -> Unit,
+    isSelected: Boolean,
+    onClick: (KeyEvent?) -> Unit,
+    onDoubleClick: () -> Unit,
     onToggleCleared: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = { onClick(null) },
+                onDoubleClick = onDoubleClick
+            ),
+        colors = if (isSelected) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        } else {
+            CardDefaults.cardColors()
+        }
     ) {
         Row(
             modifier = Modifier
@@ -411,6 +576,15 @@ private fun TransactionCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Selection checkbox (visible when in selection mode or item is selected)
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onClick(null) },
+                modifier = Modifier.size(24.dp)
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
             // Cleared checkbox
             IconButton(
                 onClick = onToggleCleared,
