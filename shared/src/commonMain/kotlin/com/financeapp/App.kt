@@ -103,6 +103,7 @@ enum class Screen {
 @Composable
 private fun MainContent() {
     var currentScreen by remember { mutableStateOf(Screen.ACCOUNTS) }
+    var navigationStack by remember { mutableStateOf(listOf<Screen>()) }
     var selectedAccountId by remember { mutableStateOf<Long?>(null) }
     val transactionsViewModel: TransactionsViewModel = koinInject()
     val importViewModel: ImportViewModel = koinInject()
@@ -131,9 +132,24 @@ private fun MainContent() {
     val categoriesState by categoriesViewModel.uiState.collectAsState()
     val themeMode by appViewModel.themeMode.collectAsState()
 
-    // Central navigation handler
+    // Navigation functions
+    val navigateTo = { screen: Screen ->
+        if (currentScreen != screen) {
+            navigationStack = navigationStack + currentScreen
+            currentScreen = screen
+        }
+    }
+
+    val navigateBack = {
+        if (navigationStack.isNotEmpty()) {
+            currentScreen = navigationStack.last()
+            navigationStack = navigationStack.dropLast(1)
+        }
+    }
+
+    // Central navigation handler for NavigationRail
     val navigate = { route: String ->
-        currentScreen = when (route) {
+        val newScreen = when (route) {
             "dashboard" -> Screen.DASHBOARD
             "accounts" -> Screen.ACCOUNTS
             "categories" -> Screen.CATEGORIES
@@ -150,6 +166,7 @@ private fun MainContent() {
             "settings" -> Screen.SETTINGS
             else -> Screen.ACCOUNTS
         }
+        navigateTo(newScreen)
     }
 
     // Convert current screen to route for NavigationRail
@@ -187,7 +204,7 @@ private fun MainContent() {
                     viewModel = dashboardViewModel,
                     onAccountClick = { accountId ->
                         selectedAccountId = accountId
-                        currentScreen = Screen.TRANSACTIONS
+                        navigateTo(Screen.TRANSACTIONS)
                     },
                     onCustomize = { showDashboardCustomize = true },
                     modifier = Modifier.fillMaxSize()
@@ -195,26 +212,26 @@ private fun MainContent() {
                 Screen.ACCOUNTS -> AccountsScreen(
                     onAccountClick = { accountId ->
                         selectedAccountId = accountId
-                        currentScreen = Screen.TRANSACTIONS
+                        navigateTo(Screen.TRANSACTIONS)
                     },
                     modifier = Modifier.fillMaxSize()
                 )
                 Screen.TRANSACTIONS -> TransactionsScreen(
                     accountId = selectedAccountId!!,
                     viewModel = transactionsViewModel,
-                    onBack = { currentScreen = Screen.ACCOUNTS },
+                    onBack = navigateBack,
                     onReconcile = { accountId, accountName ->
                         selectedAccountName = accountName
                         showReconcileDialog = true
                     }
                 )
                 Screen.CATEGORIES -> CategoriesScreen(
-                    onBack = { /* NavigationRail handles navigation */ },
+                    onBack = navigateBack,
                     modifier = Modifier.fillMaxSize()
                 )
                 Screen.IMPORT -> ImportScreen(
                     viewModel = importViewModel,
-                    onBack = { /* NavigationRail handles navigation */ },
+                    onBack = navigateBack,
                     onPickFile = { callback ->
                         pickFile { content ->
                             callback(content)
@@ -223,60 +240,60 @@ private fun MainContent() {
                 )
                 Screen.CONNECTIONS -> ConnectionsScreen(
                     viewModel = connectionsViewModel,
-                    onBack = { /* NavigationRail handles navigation */ }
+                    onBack = navigateBack
                 )
                 Screen.RECONCILE -> ReconcileScreen(
                     viewModel = reconcileViewModel,
                     accountName = selectedAccountName,
-                    onBack = { currentScreen = Screen.TRANSACTIONS },
-                    onComplete = { currentScreen = Screen.TRANSACTIONS }
+                    onBack = navigateBack,
+                    onComplete = navigateBack
                 )
                 Screen.SCHEDULED -> ScheduledScreen(
                     viewModel = scheduledViewModel,
                     accounts = accountsState.accounts.map { it.account },
                     categories = categoriesState.categories,
-                    onBack = { /* NavigationRail handles navigation */ }
+                    onBack = navigateBack
                 )
                 Screen.BUDGET -> BudgetScreen(
                     viewModel = budgetViewModel,
-                    onBack = { /* NavigationRail handles navigation */ }
+                    onBack = navigateBack
                 )
                 Screen.REPORTS -> ReportsScreen(
                     viewModel = reportsViewModel,
-                    onBack = { /* NavigationRail handles navigation */ }
+                    onBack = navigateBack
                 )
                 Screen.BACKUP -> BackupScreen(
                     viewModel = backupViewModel,
-                    onBack = { /* NavigationRail handles navigation */ },
+                    onBack = navigateBack,
                     onSaveFile = { content, filename ->
                         saveFile(content, filename) { /* result handled by ViewModel */ }
                     }
                 )
                 Screen.PAYEES -> PayeeManagementScreen(
                     viewModel = payeeManagementViewModel,
-                    onBack = { /* NavigationRail handles navigation */ }
+                    onBack = navigateBack
                 )
                 Screen.INVESTMENTS -> InvestmentScreen(
                     viewModel = investmentViewModel,
                     performanceViewModel = performanceTabViewModel,
-                    onBack = { /* NavigationRail handles navigation */ }
+                    onBack = navigateBack
                 )
                 Screen.TAGS -> TagsScreen(
                     viewModel = tagsViewModel,
-                    onBack = { /* NavigationRail handles navigation */ }
+                    onBack = navigateBack
                 )
                 Screen.TEMPLATES -> TemplatesScreen(
                     viewModel = templatesViewModel,
-                    onBack = { /* NavigationRail handles navigation */ },
+                    onBack = navigateBack,
                     onUseTemplate = { template ->
                         selectedAccountId = template.accountId ?: selectedAccountId
-                        currentScreen = Screen.TRANSACTIONS
+                        navigateTo(Screen.TRANSACTIONS)
                     }
                 )
                 Screen.SETTINGS -> SettingsScreen(
                     currentThemeMode = themeMode,
                     onThemeModeChange = { appViewModel.setThemeMode(it) },
-                    onBack = { /* NavigationRail handles navigation */ }
+                    onBack = navigateBack
                 )
             }
         }
@@ -288,7 +305,7 @@ private fun MainContent() {
             onStart = { date, balance ->
                 showReconcileDialog = false
                 reconcileViewModel.startReconciliation(selectedAccountId!!, date, balance)
-                currentScreen = Screen.RECONCILE
+                navigateTo(Screen.RECONCILE)
             }
         )
     }
