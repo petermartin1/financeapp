@@ -29,9 +29,9 @@
 - [ ] PDF export for reports
 
 #### Desktop Features
-- [ ] Drag & drop OFX files to import
-- [ ] Context menus (right-click)
-- [ ] Enhanced tooltips (HoverCard component)
+- [ ] Drag & drop OFX files to import (deferred - experimental APIs unstable)
+- [x] Context menus (right-click)
+- [x] Enhanced tooltips (HoverCard component)
 - [ ] Drag transactions between accounts
 
 ### Medium Priority

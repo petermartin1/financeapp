@@ -132,7 +132,6 @@ private fun AccountsSummaryWidget(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onAccountClick(account.account.id) }
-                            .pressAnimation()
                             .padding(vertical = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {

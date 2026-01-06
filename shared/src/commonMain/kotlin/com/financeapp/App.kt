@@ -144,6 +144,9 @@ private fun MainContent() {
         if (navigationStack.isNotEmpty()) {
             currentScreen = navigationStack.last()
             navigationStack = navigationStack.dropLast(1)
+        } else {
+            // Fallback: if stack is empty, go to default screen
+            currentScreen = Screen.ACCOUNTS
         }
     }
 
@@ -166,7 +169,9 @@ private fun MainContent() {
             "settings" -> Screen.SETTINGS
             else -> Screen.ACCOUNTS
         }
-        navigateTo(newScreen)
+        // Clear navigation stack when navigating to top-level screens from rail
+        navigationStack = emptyList()
+        currentScreen = newScreen
     }
 
     // Convert current screen to route for NavigationRail
@@ -216,15 +221,24 @@ private fun MainContent() {
                     },
                     modifier = Modifier.fillMaxSize()
                 )
-                Screen.TRANSACTIONS -> TransactionsScreen(
-                    accountId = selectedAccountId!!,
-                    viewModel = transactionsViewModel,
-                    onBack = navigateBack,
-                    onReconcile = { accountId, accountName ->
-                        selectedAccountName = accountName
-                        showReconcileDialog = true
+                Screen.TRANSACTIONS -> {
+                    if (selectedAccountId != null) {
+                        TransactionsScreen(
+                            accountId = selectedAccountId!!,
+                            viewModel = transactionsViewModel,
+                            onBack = navigateBack,
+                            onReconcile = { accountId, accountName ->
+                                selectedAccountName = accountName
+                                showReconcileDialog = true
+                            }
+                        )
+                    } else {
+                        // Safety: Navigate back to accounts if no account selected
+                        LaunchedEffect(Unit) {
+                            navigateBack()
+                        }
                     }
-                )
+                }
                 Screen.CATEGORIES -> CategoriesScreen(
                     onBack = navigateBack,
                     modifier = Modifier.fillMaxSize()
@@ -286,8 +300,11 @@ private fun MainContent() {
                     viewModel = templatesViewModel,
                     onBack = navigateBack,
                     onUseTemplate = { template ->
-                        selectedAccountId = template.accountId ?: selectedAccountId
-                        navigateTo(Screen.TRANSACTIONS)
+                        val accountId = template.accountId ?: selectedAccountId
+                        if (accountId != null) {
+                            selectedAccountId = accountId
+                            navigateTo(Screen.TRANSACTIONS)
+                        }
                     }
                 )
                 Screen.SETTINGS -> SettingsScreen(
@@ -299,13 +316,15 @@ private fun MainContent() {
         }
     }
 
-    if (showReconcileDialog) {
+    if (showReconcileDialog && selectedAccountId != null) {
         ReconcileStartDialog(
             onDismiss = { showReconcileDialog = false },
             onStart = { date, balance ->
                 showReconcileDialog = false
-                reconcileViewModel.startReconciliation(selectedAccountId!!, date, balance)
-                navigateTo(Screen.RECONCILE)
+                selectedAccountId?.let { accountId ->
+                    reconcileViewModel.startReconciliation(accountId, date, balance)
+                    navigateTo(Screen.RECONCILE)
+                }
             }
         )
     }

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.Account
 import com.financeapp.domain.model.TransactionWithDetails
+import com.financeapp.ui.components.HoverTooltip
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 
@@ -118,17 +119,23 @@ fun TransactionsScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    HoverTooltip(text = "Back to Accounts") {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showAddDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Transaction")
+                    HoverTooltip(text = "Add Transaction (Ctrl+N)") {
+                        IconButton(onClick = { showAddDialog = true }) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Transaction")
+                        }
                     }
                     Box {
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "Menu")
+                        HoverTooltip(text = "More Options") {
+                            IconButton(onClick = { showMenu = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "Menu")
+                            }
                         }
                         DropdownMenu(
                             expanded = showMenu,
