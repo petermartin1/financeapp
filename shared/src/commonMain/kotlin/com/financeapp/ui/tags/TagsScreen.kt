@@ -182,6 +182,7 @@ private fun TagDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Tag Name") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 

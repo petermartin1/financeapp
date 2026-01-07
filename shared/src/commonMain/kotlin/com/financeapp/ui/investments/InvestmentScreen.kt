@@ -438,6 +438,7 @@ private fun AddHoldingDialog(
                         value = symbol,
                         onValueChange = { symbol = it.uppercase() },
                         label = { Text("Symbol *") },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -445,6 +446,7 @@ private fun AddHoldingDialog(
                         value = name,
                         onValueChange = { name = it },
                         label = { Text("Name") },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -452,6 +454,7 @@ private fun AddHoldingDialog(
                         value = shares,
                         onValueChange = { shares = it },
                         label = { Text("Shares *") },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -460,6 +463,7 @@ private fun AddHoldingDialog(
                         onValueChange = { costBasis = it },
                         label = { Text("Total Cost Basis *") },
                         prefix = { Text("$") },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -511,6 +515,7 @@ private fun EditHoldingDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Name") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -518,6 +523,7 @@ private fun EditHoldingDialog(
                     value = shares,
                     onValueChange = { shares = it },
                     label = { Text("Shares") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -526,6 +532,7 @@ private fun EditHoldingDialog(
                     onValueChange = { costBasis = it },
                     label = { Text("Cost Basis") },
                     prefix = { Text("$") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -583,6 +590,7 @@ private fun UpdatePriceDialog(
                 onValueChange = { price = it },
                 label = { Text("Price per Share") },
                 prefix = { Text("$") },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
         },

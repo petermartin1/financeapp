@@ -246,6 +246,7 @@ private fun TemplateDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Template Name") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -378,6 +379,7 @@ private fun TemplateDialog(
                     value = amountText,
                     onValueChange = { amountText = it },
                     label = { Text("Amount (optional)") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -385,6 +387,7 @@ private fun TemplateDialog(
                     value = memo,
                     onValueChange = { memo = it },
                     label = { Text("Memo") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
