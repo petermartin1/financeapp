@@ -51,6 +51,7 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
                 TransactionTags,
                 Budgets,
                 Holdings,
+                HoldingLots,
                 SecurityPrices,
                 ScheduledTransactions,
                 TransactionTemplates,
@@ -58,7 +59,8 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
                 ConnectedAccounts,
                 ReconciliationSessions,
                 PortfolioSnapshots,
-                HoldingSnapshots
+                HoldingSnapshots,
+                DividendEvents
             )
         }
 
