@@ -7,10 +7,12 @@ import com.financeapp.db.schema.TransactionTemplates
 import com.financeapp.domain.model.TransactionTemplate
 import com.financeapp.domain.model.TransactionTemplateWithDetails
 import com.financeapp.domain.repository.TemplateRepository
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
@@ -19,34 +21,42 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 
 class TemplateRepositoryImpl(
-    private val database: Database
+    private val database: Database,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : TemplateRepository {
 
-    override fun getAllTemplates(): Flow<List<TransactionTemplateWithDetails>> = flow {
-        val templates = withContext(Dispatchers.IO) {
-            transaction(database) {
-                // Fetch lookup tables once
-                val accounts = Accounts.selectAll().associate { it[Accounts.id].value.toLong() to it[Accounts.name] }
-                val payees = Payees.selectAll().associate { it[Payees.id].value.toLong() to it[Payees.name] }
-                val categories = Categories.selectAll().associate { it[Categories.id].value.toLong() to it[Categories.name] }
+    // Trigger for reactive updates
+    private val templateRefreshTrigger = MutableStateFlow(0L)
 
-                // Get all templates
-                TransactionTemplates
-                    .selectAll()
-                    .orderBy(TransactionTemplates.name to SortOrder.ASC)
-                    .map { row ->
-                        val template = row.toDomain()
-                        TransactionTemplateWithDetails(
-                            template = template,
-                            accountName = template.accountId?.let { accounts[it] },
-                            payeeName = template.payeeId?.let { payees[it] },
-                            categoryName = template.categoryId?.let { categories[it] }
-                        )
-                    }
+    override fun notifyTemplatesChanged() {
+        templateRefreshTrigger.value += 1
+    }
+
+    override fun getAllTemplates(): Flow<List<TransactionTemplateWithDetails>> =
+        templateRefreshTrigger.map { _ ->
+            withContext(ioDispatcher) {
+                transaction(database) {
+                    // Fetch lookup tables once
+                    val accounts = Accounts.selectAll().associate { it[Accounts.id].value.toLong() to it[Accounts.name] }
+                    val payees = Payees.selectAll().associate { it[Payees.id].value.toLong() to it[Payees.name] }
+                    val categories = Categories.selectAll().associate { it[Categories.id].value.toLong() to it[Categories.name] }
+
+                    // Get all templates
+                    TransactionTemplates
+                        .selectAll()
+                        .orderBy(TransactionTemplates.name to SortOrder.ASC)
+                        .map { row ->
+                            val template = row.toDomain()
+                            TransactionTemplateWithDetails(
+                                template = template,
+                                accountName = template.accountId?.let { accounts[it] },
+                                payeeName = template.payeeId?.let { payees[it] },
+                                categoryName = template.categoryId?.let { categories[it] }
+                            )
+                        }
+                }
             }
         }
-        emit(templates)
-    }
 
     override suspend fun getTemplateById(id: Long): TransactionTemplate? = withContext(Dispatchers.IO) {
         transaction(database) {
@@ -56,9 +66,9 @@ class TemplateRepositoryImpl(
         }
     }
 
-    override suspend fun insertTemplate(template: TransactionTemplate): Long = withContext(Dispatchers.IO) {
+    override suspend fun insertTemplate(template: TransactionTemplate): Long = withContext(ioDispatcher) {
         val now = Clock.System.now().toEpochMilliseconds()
-        transaction(database) {
+        val id = transaction(database) {
             TransactionTemplates.insert {
                 it[name] = template.name
                 it[accountId] = template.accountId?.toInt()
@@ -70,9 +80,11 @@ class TemplateRepositoryImpl(
                 it[updatedAt] = now
             }[TransactionTemplates.id].value.toLong()
         }
+        notifyTemplatesChanged()
+        id
     }
 
-    override suspend fun updateTemplate(template: TransactionTemplate): Unit = withContext(Dispatchers.IO) {
+    override suspend fun updateTemplate(template: TransactionTemplate): Unit = withContext(ioDispatcher) {
         val now = Clock.System.now().toEpochMilliseconds()
         transaction(database) {
             TransactionTemplates.update({ TransactionTemplates.id eq template.id.toInt() }) {
@@ -85,12 +97,14 @@ class TemplateRepositoryImpl(
                 it[updatedAt] = now
             }
         }
+        notifyTemplatesChanged()
     }
 
-    override suspend fun deleteTemplate(id: Long): Unit = withContext(Dispatchers.IO) {
+    override suspend fun deleteTemplate(id: Long): Unit = withContext(ioDispatcher) {
         transaction(database) {
             TransactionTemplates.deleteWhere { TransactionTemplates.id eq id.toInt() }
         }
+        notifyTemplatesChanged()
     }
 
     private fun ResultRow.toDomain(): TransactionTemplate {

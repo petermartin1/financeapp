@@ -2,9 +2,10 @@ package com.financeapp.domain.repository
 
 import com.financeapp.domain.model.ScheduledTransaction
 import com.financeapp.domain.model.ScheduledTransactionWithDetails
+import kotlinx.coroutines.flow.Flow
 
 interface ScheduledTransactionRepository {
-    suspend fun getAllScheduledTransactions(): List<ScheduledTransactionWithDetails>
+    fun getAllScheduledTransactions(): Flow<List<ScheduledTransactionWithDetails>>
 
     suspend fun getScheduledTransactionById(id: Long): ScheduledTransaction?
 
@@ -17,4 +18,7 @@ interface ScheduledTransactionRepository {
     suspend fun updateScheduledTransactionActive(id: Long, isActive: Boolean)
 
     suspend fun deleteScheduledTransaction(id: Long)
+
+    // Notification method for reactive updates
+    fun notifyScheduledTransactionsChanged()
 }

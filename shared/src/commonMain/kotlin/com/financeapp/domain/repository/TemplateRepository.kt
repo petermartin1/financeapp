@@ -10,4 +10,7 @@ interface TemplateRepository {
     suspend fun insertTemplate(template: TransactionTemplate): Long
     suspend fun updateTemplate(template: TransactionTemplate)
     suspend fun deleteTemplate(id: Long)
+
+    // Notification method for reactive updates
+    fun notifyTemplatesChanged()
 }

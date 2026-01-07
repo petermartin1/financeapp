@@ -7,58 +7,74 @@ import com.financeapp.domain.model.Holding
 import com.financeapp.domain.model.HoldingWithPrice
 import com.financeapp.domain.model.SecurityPrice
 import com.financeapp.domain.repository.InvestmentRepository
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 
 class InvestmentRepositoryImpl(
-    private val database: Database
+    private val database: Database,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : InvestmentRepository {
 
-    override fun getPortfolio(): Flow<List<HoldingWithPrice>> = flow {
-        val portfolio = withContext(Dispatchers.IO) {
-            transaction(database) {
-                // Join Holdings with latest SecurityPrices and Accounts
-                Holdings
-                    .leftJoin(Accounts, { accountId }, { Accounts.id })
-                    .selectAll()
-                    .map { row ->
-                        val holding = row.toHoldingDomain()
+    // Triggers for reactive updates
+    private val holdingsRefreshTrigger = MutableStateFlow(0L)
+    private val pricesRefreshTrigger = MutableStateFlow(0L)
 
-                        // Get latest price for this symbol
-                        val latestPrice = SecurityPrices
-                            .selectAll().where { SecurityPrices.symbol eq holding.symbol }
-                            .orderBy(SecurityPrices.date to SortOrder.DESC)
-                            .limit(1)
-                            .singleOrNull()
-                            ?.get(SecurityPrices.price)
+    override fun notifyHoldingsChanged() {
+        holdingsRefreshTrigger.value += 1
+    }
 
-                        HoldingWithPrice(
-                            holding = holding,
-                            currentPrice = latestPrice,
-                            accountName = row[Accounts.name]
-                        )
+    override fun notifyPricesChanged() {
+        pricesRefreshTrigger.value += 1
+    }
+
+    override fun getPortfolio(): Flow<List<HoldingWithPrice>> =
+        combine(holdingsRefreshTrigger, pricesRefreshTrigger) { _, _ -> Unit }
+            .map { _ ->
+                withContext(ioDispatcher) {
+                    transaction(database) {
+                        // Join Holdings with latest SecurityPrices and Accounts
+                        Holdings
+                            .leftJoin(Accounts, { accountId }, { Accounts.id })
+                            .selectAll()
+                            .map { row ->
+                                val holding = row.toHoldingDomain()
+
+                                // Get latest price for this symbol
+                                val latestPrice = SecurityPrices
+                                    .selectAll().where { SecurityPrices.symbol eq holding.symbol }
+                                    .orderBy(SecurityPrices.date to SortOrder.DESC)
+                                    .limit(1)
+                                    .singleOrNull()
+                                    ?.get(SecurityPrices.price)
+
+                                HoldingWithPrice(
+                                    holding = holding,
+                                    currentPrice = latestPrice,
+                                    accountName = row[Accounts.name]
+                                )
+                            }
                     }
+                }
             }
-        }
-        emit(portfolio)
-    }
 
-    override fun getHoldingsByAccount(accountId: Long): Flow<List<Holding>> = flow {
-        val holdings = withContext(Dispatchers.IO) {
-            transaction(database) {
-                Holdings
-                    .selectAll().where { Holdings.accountId eq accountId.toInt() }
-                    .map { it.toHoldingDomain() }
+    override fun getHoldingsByAccount(accountId: Long): Flow<List<Holding>> =
+        holdingsRefreshTrigger.map { _ ->
+            withContext(ioDispatcher) {
+                transaction(database) {
+                    Holdings
+                        .selectAll().where { Holdings.accountId eq accountId.toInt() }
+                        .map { it.toHoldingDomain() }
+                }
             }
         }
-        emit(holdings)
-    }
 
     override suspend fun getHoldingById(id: Long): Holding? = withContext(Dispatchers.IO) {
         transaction(database) {
@@ -74,8 +90,8 @@ class InvestmentRepositoryImpl(
         }
     }
 
-    override suspend fun insertHolding(holding: Holding): Long = withContext(Dispatchers.IO) {
-        transaction(database) {
+    override suspend fun insertHolding(holding: Holding): Long = withContext(ioDispatcher) {
+        val id = transaction(database) {
             Holdings.insert {
                 it[accountId] = holding.accountId.toInt()
                 it[symbol] = holding.symbol
@@ -84,9 +100,11 @@ class InvestmentRepositoryImpl(
                 it[costBasis] = holding.costBasis
             }[Holdings.id].value.toLong()
         }
+        notifyHoldingsChanged()
+        id
     }
 
-    override suspend fun updateHolding(holding: Holding): Unit = withContext(Dispatchers.IO) {
+    override suspend fun updateHolding(holding: Holding): Unit = withContext(ioDispatcher) {
         transaction(database) {
             Holdings.update({ Holdings.id eq holding.id.toInt() }) {
                 it[symbol] = holding.symbol
@@ -95,12 +113,14 @@ class InvestmentRepositoryImpl(
                 it[costBasis] = holding.costBasis
             }
         }
+        notifyHoldingsChanged()
     }
 
-    override suspend fun deleteHolding(id: Long): Unit = withContext(Dispatchers.IO) {
+    override suspend fun deleteHolding(id: Long): Unit = withContext(ioDispatcher) {
         transaction(database) {
             Holdings.deleteWhere { Holdings.id eq id.toInt() }
         }
+        notifyHoldingsChanged()
     }
 
     override suspend fun getLatestPrice(symbol: String): SecurityPrice? = withContext(Dispatchers.IO) {
@@ -114,7 +134,7 @@ class InvestmentRepositoryImpl(
         }
     }
 
-    override suspend fun updatePrice(symbol: String, price: Long, date: Long): Unit = withContext(Dispatchers.IO) {
+    override suspend fun updatePrice(symbol: String, price: Long, date: Long): Unit = withContext(ioDispatcher) {
         transaction(database) {
             // Insert or update security price
             val existing = SecurityPrices
@@ -135,6 +155,7 @@ class InvestmentRepositoryImpl(
                 }
             }
         }
+        notifyPricesChanged()
     }
 
     override suspend fun getPriceHistory(symbol: String, limit: Int): List<SecurityPrice> = withContext(Dispatchers.IO) {

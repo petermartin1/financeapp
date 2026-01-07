@@ -16,4 +16,8 @@ interface InvestmentRepository {
     suspend fun getLatestPrice(symbol: String): SecurityPrice?
     suspend fun updatePrice(symbol: String, price: Long, date: Long)
     suspend fun getPriceHistory(symbol: String, limit: Int): List<SecurityPrice>
+
+    // Notification methods for reactive updates
+    fun notifyHoldingsChanged()
+    fun notifyPricesChanged()
 }

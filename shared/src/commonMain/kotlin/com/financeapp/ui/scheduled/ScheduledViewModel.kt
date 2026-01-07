@@ -24,17 +24,20 @@ class ScheduledViewModel(
     val uiState: StateFlow<ScheduledUiState> = _uiState.asStateFlow()
 
     init {
-        loadScheduledTransactions()
+        scope.launch {
+            scheduledTransactionRepository.getAllScheduledTransactions()
+                .collect { scheduled ->
+                    _uiState.value = _uiState.value.copy(
+                        scheduledTransactions = scheduled,
+                        isLoading = false
+                    )
+                }
+        }
     }
 
     fun loadScheduledTransactions() {
-        scope.launch {
-            val scheduled = scheduledTransactionRepository.getAllScheduledTransactions()
-            _uiState.value = _uiState.value.copy(
-                scheduledTransactions = scheduled,
-                isLoading = false
-            )
-        }
+        // No longer needed - Flow automatically updates
+        // Kept for compatibility in case called from UI
     }
 
     fun addScheduledTransaction(
@@ -61,14 +64,12 @@ class ScheduledViewModel(
                 isActive = true
             )
             scheduledTransactionRepository.insertScheduledTransaction(scheduledTransaction)
-            loadScheduledTransactions()
         }
     }
 
     fun deleteScheduledTransaction(id: Long) {
         scope.launch {
             scheduledTransactionRepository.deleteScheduledTransaction(id)
-            loadScheduledTransactions()
         }
     }
 
@@ -87,7 +88,6 @@ class ScheduledViewModel(
             } else {
                 scheduledTransactionRepository.updateScheduledTransactionNextDate(id, newDateMillis)
             }
-            loadScheduledTransactions()
         }
     }
 
@@ -132,7 +132,6 @@ class ScheduledViewModel(
                 }
             }
             _uiState.value = _uiState.value.copy(lastEnteredCount = entered)
-            loadScheduledTransactions()
         }
     }
 

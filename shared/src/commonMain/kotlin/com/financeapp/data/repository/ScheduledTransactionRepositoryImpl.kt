@@ -5,7 +5,12 @@ import com.financeapp.domain.model.ScheduledTransaction
 import com.financeapp.domain.model.ScheduledTransactionWithDetails
 import com.financeapp.domain.model.TransactionFrequency
 import com.financeapp.domain.repository.ScheduledTransactionRepository
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.*
 import org.jetbrains.exposed.sql.*
@@ -13,17 +18,28 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 
 class ScheduledTransactionRepositoryImpl(
-    private val database: Database
+    private val database: Database,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ScheduledTransactionRepository {
 
-    override suspend fun getAllScheduledTransactions(): List<ScheduledTransactionWithDetails> = withContext(Dispatchers.IO) {
-        transaction(database) {
-            ScheduledTransactions
-                .join(Accounts, JoinType.INNER, ScheduledTransactions.accountId, Accounts.id)
-                .selectAll()
-                .map { it.toScheduledTransactionWithDetails() }
-        }
+    // Trigger for reactive updates
+    private val scheduledTransactionRefreshTrigger = MutableStateFlow(0L)
+
+    override fun notifyScheduledTransactionsChanged() {
+        scheduledTransactionRefreshTrigger.value += 1
     }
+
+    override fun getAllScheduledTransactions(): Flow<List<ScheduledTransactionWithDetails>> =
+        scheduledTransactionRefreshTrigger.map { _ ->
+            withContext(ioDispatcher) {
+                transaction(database) {
+                    ScheduledTransactions
+                        .join(Accounts, JoinType.INNER, ScheduledTransactions.accountId, Accounts.id)
+                        .selectAll()
+                        .map { it.toScheduledTransactionWithDetails() }
+                }
+            }
+        }
 
     override suspend fun getScheduledTransactionById(id: Long): ScheduledTransaction? = withContext(Dispatchers.IO) {
         transaction(database) {
@@ -45,8 +61,8 @@ class ScheduledTransactionRepositoryImpl(
         }
     }
 
-    override suspend fun insertScheduledTransaction(scheduledTransaction: ScheduledTransaction): Long = withContext(Dispatchers.IO) {
-        transaction(database) {
+    override suspend fun insertScheduledTransaction(scheduledTransaction: ScheduledTransaction): Long = withContext(ioDispatcher) {
+        val id = transaction(database) {
             ScheduledTransactions.insert {
                 it[accountId] = scheduledTransaction.accountId.toInt()
                 it[payeeId] = scheduledTransaction.payeeId?.toInt()
@@ -59,6 +75,8 @@ class ScheduledTransactionRepositoryImpl(
                 it[isActive] = scheduledTransaction.isActive
             }[ScheduledTransactions.id].value.toLong()
         }
+        notifyScheduledTransactionsChanged()
+        id
     }
 
     override suspend fun updateScheduledTransactionNextDate(id: Long, nextDateMillis: Long): Unit = withContext(Dispatchers.IO) {
@@ -67,6 +85,7 @@ class ScheduledTransactionRepositoryImpl(
                 it[nextDate] = nextDateMillis
             }
         }
+        notifyScheduledTransactionsChanged()
     }
 
     override suspend fun updateScheduledTransactionActive(id: Long, isActive: Boolean): Unit = withContext(Dispatchers.IO) {
@@ -75,12 +94,14 @@ class ScheduledTransactionRepositoryImpl(
                 it[ScheduledTransactions.isActive] = isActive
             }
         }
+        notifyScheduledTransactionsChanged()
     }
 
     override suspend fun deleteScheduledTransaction(id: Long): Unit = withContext(Dispatchers.IO) {
         transaction(database) {
             ScheduledTransactions.deleteWhere { ScheduledTransactions.id eq id.toInt() }
         }
+        notifyScheduledTransactionsChanged()
     }
 
     private fun ResultRow.toScheduledTransaction(): ScheduledTransaction {
