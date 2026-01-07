@@ -1,8 +1,7 @@
 package com.financeapp.db.schema
 
 import org.jetbrains.exposed.dao.id.IntIdTable
-import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
-import kotlinx.datetime.Instant
+import org.jetbrains.exposed.sql.ReferenceOption
 
 // Accounts (bank accounts, credit cards, investment accounts)
 object Accounts : IntIdTable("Account") {
@@ -93,6 +92,20 @@ object Holdings : IntIdTable("Holding") {
 
     init {
         uniqueIndex(accountId, symbol)
+    }
+}
+
+// Lots for investment holdings (multiple purchase lots per holding)
+object HoldingLots : IntIdTable("HoldingLot") {
+    val holdingId = reference("holding_id", Holdings, onDelete = ReferenceOption.CASCADE)
+    val acquiredDate = long("acquired_date")
+    val purpose = varchar("purpose", 255).nullable()
+    val shares = double("shares")
+    val costBasis = long("cost_basis")
+    val notes = text("notes").nullable()
+
+    init {
+        index(false, holdingId, acquiredDate)
     }
 }
 

@@ -9,6 +9,16 @@ data class Holding(
     val costBasis: Long  // in cents
 )
 
+data class HoldingLot(
+    val id: Long = 0,
+    val holdingId: Long,
+    val acquiredDate: Long,
+    val purpose: String?,
+    val shares: Double,
+    val costBasis: Long,
+    val notes: String? = null
+)
+
 data class SecurityPrice(
     val id: Long = 0,
     val symbol: String,

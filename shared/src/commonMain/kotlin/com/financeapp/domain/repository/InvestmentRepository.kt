@@ -1,6 +1,7 @@
 package com.financeapp.domain.repository
 
 import com.financeapp.domain.model.Holding
+import com.financeapp.domain.model.HoldingLot
 import com.financeapp.domain.model.HoldingWithPrice
 import com.financeapp.domain.model.SecurityPrice
 import kotlinx.coroutines.flow.Flow
@@ -13,6 +14,10 @@ interface InvestmentRepository {
     suspend fun insertHolding(holding: Holding): Long
     suspend fun updateHolding(holding: Holding)
     suspend fun deleteHolding(id: Long)
+    fun getLots(holdingId: Long): Flow<List<HoldingLot>>
+    suspend fun insertHoldingLot(lot: HoldingLot): Long
+    suspend fun updateHoldingLot(lot: HoldingLot)
+    suspend fun deleteHoldingLot(id: Long)
     suspend fun getLatestPrice(symbol: String): SecurityPrice?
     suspend fun updatePrice(symbol: String, price: Long, date: Long)
     suspend fun getPriceHistory(symbol: String, limit: Int): List<SecurityPrice>

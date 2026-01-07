@@ -18,6 +18,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.AssetAllocation
 import com.financeapp.domain.model.HoldingWithPrice
+import com.financeapp.ui.components.forms.DatePickerField
+import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,6 +36,7 @@ fun InvestmentScreen(
     var selectedHolding by remember { mutableStateOf<HoldingWithPrice?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showPriceDialog by remember { mutableStateOf(false) }
+    var showLotsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -155,8 +161,8 @@ fun InvestmentScreen(
         AddHoldingDialog(
             accounts = uiState.investmentAccounts,
             onDismiss = { showAddDialog = false },
-            onConfirm = { accountId, symbol, name, shares, costBasis ->
-                viewModel.addHolding(accountId, symbol, name, shares, costBasis)
+            onConfirm = { accountId, symbol, name, shares, costBasis, acquiredDate, purpose, notes ->
+                viewModel.addHolding(accountId, symbol, name, shares, costBasis, acquiredDate, purpose, notes)
                 showAddDialog = false
             }
         )
@@ -173,6 +179,10 @@ fun InvestmentScreen(
             onDelete = {
                 viewModel.deleteHolding(selectedHolding!!.holding.id)
                 showEditDialog = false
+            },
+            onManageLots = {
+                showEditDialog = false
+                showLotsDialog = true
             }
         )
     }
@@ -185,6 +195,27 @@ fun InvestmentScreen(
             onConfirm = { price ->
                 viewModel.updatePrice(selectedHolding!!.holding.symbol, price)
                 showPriceDialog = false
+            }
+        )
+    }
+
+    if (showLotsDialog && selectedHolding != null) {
+        val lotsFlow = remember(selectedHolding!!.holding.id) {
+            viewModel.observeLots(selectedHolding!!.holding.id)
+        }
+        val lots by lotsFlow.collectAsState(initial = emptyList())
+        ManageLotsDialog(
+            holding = selectedHolding!!.holding,
+            lots = lots,
+            onDismiss = { showLotsDialog = false },
+            onAddLot = { date, purpose, shares, costBasis, notes ->
+                viewModel.addLot(selectedHolding!!.holding.id, date, purpose, shares, costBasis, notes)
+            },
+            onUpdateLot = { lot, date, purpose, shares, costBasis, notes ->
+                viewModel.updateLot(lot, date, purpose, shares, costBasis, notes)
+            },
+            onDeleteLot = { lotId ->
+                viewModel.deleteLot(lotId)
             }
         )
     }
@@ -384,13 +415,19 @@ private fun AllocationChart(allocation: List<AssetAllocation>) {
 private fun AddHoldingDialog(
     accounts: List<Pair<Long, String>>,
     onDismiss: () -> Unit,
-    onConfirm: (Long, String, String?, Double, Long) -> Unit
+    onConfirm: (Long, String, String?, Double, Long, LocalDate, String?, String?) -> Unit
 ) {
     var selectedAccountId by remember { mutableStateOf(accounts.firstOrNull()?.first ?: 0L) }
     var symbol by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     var shares by remember { mutableStateOf("") }
     var costBasis by remember { mutableStateOf("") }
+    var purpose by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+    val defaultDate = remember {
+        Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+    }
+    var acquiredDate by remember { mutableStateOf(defaultDate) }
     var accountExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -466,6 +503,30 @@ private fun AddHoldingDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    DatePickerField(
+                        selectedDate = acquiredDate,
+                        onDateSelected = { acquiredDate = it },
+                        label = "Lot Acquired Date",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = purpose,
+                        onValueChange = { purpose = it },
+                        label = { Text("Lot Purpose / Notes") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { notes = it },
+                        label = { Text("Internal Notes") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 80.dp)
+                    )
                 }
             }
         },
@@ -479,7 +540,10 @@ private fun AddHoldingDialog(
                         symbol,
                         name.ifBlank { null },
                         sharesValue,
-                        costValue
+                        costValue,
+                        acquiredDate,
+                        purpose.ifBlank { null },
+                        notes.ifBlank { null }
                     )
                 },
                 enabled = accounts.isNotEmpty() && symbol.isNotBlank() && shares.isNotBlank() && costBasis.isNotBlank()
@@ -500,11 +564,10 @@ private fun EditHoldingDialog(
     holding: HoldingWithPrice,
     onDismiss: () -> Unit,
     onConfirm: (com.financeapp.domain.model.Holding) -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onManageLots: () -> Unit
 ) {
     var name by remember { mutableStateOf(holding.holding.name ?: "") }
-    var shares by remember { mutableStateOf(holding.holding.shares.toString()) }
-    var costBasis by remember { mutableStateOf((holding.holding.costBasis / 100.0).toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -519,22 +582,27 @@ private fun EditHoldingDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                OutlinedTextField(
-                    value = shares,
-                    onValueChange = { shares = it },
-                    label = { Text("Shares") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                Text(
+                    text = "Total Shares: ${formatHoldingShares(holding.holding.shares)}",
+                    style = MaterialTheme.typography.bodyMedium
                 )
 
-                OutlinedTextField(
-                    value = costBasis,
-                    onValueChange = { costBasis = it },
-                    label = { Text("Cost Basis") },
-                    prefix = { Text("$") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                Text(
+                    text = "Total Cost Basis: ${formatCurrency(holding.holding.costBasis)}",
+                    style = MaterialTheme.typography.bodyMedium
                 )
+
+                Text(
+                    text = "Manage individual lots to adjust totals.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedButton(onClick = onManageLots) {
+                    Icon(Icons.Default.List, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Manage Lots")
+                }
 
                 TextButton(
                     onClick = onDelete,
@@ -552,9 +620,7 @@ private fun EditHoldingDialog(
             TextButton(
                 onClick = {
                     val updated = holding.holding.copy(
-                        name = name.ifBlank { null },
-                        shares = shares.toDoubleOrNull() ?: holding.holding.shares,
-                        costBasis = ((costBasis.toDoubleOrNull() ?: 0.0) * 100).toLong()
+                        name = name.ifBlank { null }
                     )
                     onConfirm(updated)
                 }

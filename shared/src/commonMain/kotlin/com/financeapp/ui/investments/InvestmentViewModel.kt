@@ -3,6 +3,7 @@ package com.financeapp.ui.investments
 import com.financeapp.domain.model.AccountType
 import com.financeapp.domain.model.AssetAllocation
 import com.financeapp.domain.model.Holding
+import com.financeapp.domain.model.HoldingLot
 import com.financeapp.domain.model.HoldingWithPrice
 import com.financeapp.domain.model.PortfolioSummary
 import com.financeapp.domain.repository.AccountRepository
@@ -13,7 +14,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 
 data class InvestmentUiState(
     val portfolio: PortfolioSummary = PortfolioSummary(
@@ -99,7 +104,10 @@ class InvestmentViewModel(
         symbol: String,
         name: String?,
         shares: Double,
-        costBasis: Long
+        costBasis: Long,
+        acquiredDate: LocalDate,
+        purpose: String?,
+        notes: String?
     ) {
         scope.launch {
             val holding = Holding(
@@ -109,7 +117,16 @@ class InvestmentViewModel(
                 shares = shares,
                 costBasis = costBasis
             )
-            investmentRepository.insertHolding(holding)
+            val holdingId = investmentRepository.insertHolding(holding)
+            val lot = HoldingLot(
+                holdingId = holdingId,
+                acquiredDate = acquiredDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
+                purpose = purpose?.ifBlank { null },
+                shares = shares,
+                costBasis = costBasis,
+                notes = notes?.ifBlank { null }
+            )
+            investmentRepository.insertHoldingLot(lot)
         }
     }
 
@@ -129,6 +146,49 @@ class InvestmentViewModel(
         scope.launch {
             val now = Clock.System.now().toEpochMilliseconds()
             investmentRepository.updatePrice(symbol, price, now)
+        }
+    }
+
+    fun observeLots(holdingId: Long): Flow<List<HoldingLot>> =
+        investmentRepository.getLots(holdingId)
+
+    fun addLot(
+        holdingId: Long,
+        acquiredDate: LocalDate,
+        purpose: String?,
+        shares: Double,
+        costBasis: Long,
+        notes: String?
+    ) {
+        scope.launch {
+            val lot = HoldingLot(
+                holdingId = holdingId,
+                acquiredDate = acquiredDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
+                purpose = purpose?.ifBlank { null },
+                shares = shares,
+                costBasis = costBasis,
+                notes = notes?.ifBlank { null }
+            )
+            investmentRepository.insertHoldingLot(lot)
+        }
+    }
+
+    fun updateLot(lot: HoldingLot, acquiredDate: LocalDate, purpose: String?, shares: Double, costBasis: Long, notes: String?) {
+        scope.launch {
+            val updated = lot.copy(
+                acquiredDate = acquiredDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
+                purpose = purpose?.ifBlank { null },
+                shares = shares,
+                costBasis = costBasis,
+                notes = notes?.ifBlank { null }
+            )
+            investmentRepository.updateHoldingLot(updated)
+        }
+    }
+
+    fun deleteLot(lotId: Long) {
+        scope.launch {
+            investmentRepository.deleteHoldingLot(lotId)
         }
     }
 }

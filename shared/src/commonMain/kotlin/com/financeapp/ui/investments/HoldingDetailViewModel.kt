@@ -1,6 +1,7 @@
 package com.financeapp.ui.investments
 
 import com.financeapp.domain.model.*
+import com.financeapp.domain.repository.InvestmentRepository
 import com.financeapp.domain.repository.PerformanceRepository
 import com.financeapp.domain.service.PriceRefreshService
 import kotlinx.coroutines.CoroutineScope
@@ -8,12 +9,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 
 /**
  * ViewModel for holding detail screen showing performance metrics
  */
 class HoldingDetailViewModel(
-    private val holdingId: Long,
+    val holdingId: Long,
+    private val investmentRepository: InvestmentRepository,
     private val performanceRepository: PerformanceRepository,
     private val priceRefreshService: PriceRefreshService
 ) {
@@ -37,11 +42,15 @@ class HoldingDetailViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    private val _lots = MutableStateFlow<List<HoldingLot>>(emptyList())
+    val lots: StateFlow<List<HoldingLot>> = _lots.asStateFlow()
+
     val isRefreshing: StateFlow<Boolean> = priceRefreshService.isRefreshing
 
     init {
         loadHoldingDetails()
         loadDividends()
+        observeLots()
     }
 
     fun loadHoldingDetails() {
@@ -94,6 +103,13 @@ class HoldingDetailViewModel(
         }
     }
 
+    private fun observeLots() {
+        viewModelScope.launch {
+            investmentRepository.getLots(holdingId)
+                .collect { _lots.value = it }
+        }
+    }
+
     fun refreshPrice() {
         viewModelScope.launch {
             val symbol = _holdingPerformance.value?.symbol ?: return@launch
@@ -110,6 +126,53 @@ class HoldingDetailViewModel(
 
     fun clearError() {
         _error.value = null
+    }
+
+    fun addLot(
+        date: LocalDate,
+        purpose: String?,
+        shares: Double,
+        costBasis: Long,
+        notes: String?
+    ) {
+        viewModelScope.launch {
+            val epoch = date.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+            val lot = HoldingLot(
+                holdingId = holdingId,
+                acquiredDate = epoch,
+                purpose = purpose?.ifBlank { null },
+                shares = shares,
+                costBasis = costBasis,
+                notes = notes?.ifBlank { null }
+            )
+            investmentRepository.insertHoldingLot(lot)
+        }
+    }
+
+    fun updateLot(
+        lot: HoldingLot,
+        date: LocalDate,
+        purpose: String?,
+        shares: Double,
+        costBasis: Long,
+        notes: String?
+    ) {
+        viewModelScope.launch {
+            val updated = lot.copy(
+                acquiredDate = date.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
+                purpose = purpose?.ifBlank { null },
+                shares = shares,
+                costBasis = costBasis,
+                notes = notes?.ifBlank { null }
+            )
+            investmentRepository.updateHoldingLot(updated)
+        }
+    }
+
+    fun deleteLot(lotId: Long) {
+        viewModelScope.launch {
+            investmentRepository.deleteHoldingLot(lotId)
+        }
     }
 
     fun onDispose() {

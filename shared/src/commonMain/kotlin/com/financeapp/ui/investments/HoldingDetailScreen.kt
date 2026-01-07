@@ -11,7 +11,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.financeapp.domain.model.*
+import com.financeapp.domain.model.DividendEvent
+import com.financeapp.domain.model.Holding
+import com.financeapp.domain.model.HoldingLot
+import com.financeapp.domain.model.HoldingPerformance
+import com.financeapp.domain.model.PerformanceChartData
+import com.financeapp.domain.model.TimeRange
 import com.financeapp.ui.components.charts.LineChart
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
@@ -31,6 +36,8 @@ fun HoldingDetailScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val error by viewModel.error.collectAsState()
+    val lots by viewModel.lots.collectAsState()
+    var showLotsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -96,6 +103,13 @@ fun HoldingDetailScreen(
                     holdingPerformance?.let { performance ->
                         PerformanceSummaryCard(performance)
                     }
+                }
+
+                item {
+                    LotsSummaryCard(
+                        lots = lots,
+                        onManageLots = { showLotsDialog = true }
+                    )
                 }
 
                 // Performance Chart with Time Range Selector
@@ -218,6 +232,32 @@ fun HoldingDetailScreen(
                 }
             }
         }
+    }
+
+    val currentPerformance = holdingPerformance
+    if (showLotsDialog && currentPerformance != null) {
+        val dialogHolding = Holding(
+            id = viewModel.holdingId,
+            accountId = 0,
+            symbol = currentPerformance.symbol,
+            name = currentPerformance.name,
+            shares = currentPerformance.quantity / 10000.0,
+            costBasis = currentPerformance.costBasis
+        )
+        ManageLotsDialog(
+            holding = dialogHolding,
+            lots = lots,
+            onDismiss = { showLotsDialog = false },
+            onAddLot = { date, purpose, shares, costBasis, notes ->
+                viewModel.addLot(date, purpose, shares, costBasis, notes)
+            },
+            onUpdateLot = { lot, date, purpose, shares, costBasis, notes ->
+                viewModel.updateLot(lot, date, purpose, shares, costBasis, notes)
+            },
+            onDeleteLot = { lotId ->
+                viewModel.deleteLot(lotId)
+            }
+        )
     }
 }
 
@@ -410,6 +450,112 @@ private fun DividendItem(dividend: DividendEvent) {
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LotsSummaryCard(
+    lots: List<HoldingLot>,
+    onManageLots: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Lots",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${lots.size} tracked",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = onManageLots) {
+                    Text("Manage")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Total Shares", style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        formatHoldingShares(lots.sumOf { it.shares }),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Cost Basis", style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        formatHoldingCurrency(lots.sumOf { it.costBasis }),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            if (lots.isEmpty()) {
+                Text(
+                    text = "No lots recorded. Track purchase lots to improve performance reporting.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    lots.take(3).forEach { lot ->
+                        Column(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = formatLotDate(lot.acquiredDate),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = lot.purpose ?: "General lot",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Shares: ${formatHoldingShares(lot.shares)}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    text = formatHoldingCurrency(lot.costBasis),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                    if (lots.size > 3) {
+                        Text(
+                            text = "+${lots.size - 3} more lots",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
     }

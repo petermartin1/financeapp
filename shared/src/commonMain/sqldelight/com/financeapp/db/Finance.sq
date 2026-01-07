@@ -96,6 +96,17 @@ CREATE TABLE Holding (
     UNIQUE(account_id, symbol)
 );
 
+-- Lots within a holding to support tax lots / purchase intents
+CREATE TABLE HoldingLot (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    holding_id INTEGER NOT NULL REFERENCES Holding(id) ON DELETE CASCADE,
+    acquired_date INTEGER NOT NULL, -- epoch millis
+    purpose TEXT,
+    shares REAL NOT NULL,
+    cost_basis INTEGER NOT NULL, -- in cents
+    notes TEXT
+);
+
 -- Security prices
 CREATE TABLE SecurityPrice (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -137,6 +148,8 @@ CREATE INDEX idx_transaction_account ON TransactionRecord(account_id);
 CREATE INDEX idx_transaction_date ON TransactionRecord(date);
 CREATE INDEX idx_transaction_category ON TransactionRecord(category_id);
 CREATE INDEX idx_holding_account ON Holding(account_id);
+CREATE INDEX idx_holding_lot_holding ON HoldingLot(holding_id);
+CREATE INDEX idx_holding_lot_date ON HoldingLot(acquired_date);
 CREATE INDEX idx_security_price_symbol ON SecurityPrice(symbol);
 
 -- Account queries
@@ -344,6 +357,19 @@ UPDATE Holding SET symbol = ?, name = ?, shares = ?, cost_basis = ? WHERE id = ?
 
 deleteHolding:
 DELETE FROM Holding WHERE id = ?;
+
+-- Holding lot queries
+selectLotsByHolding:
+SELECT * FROM HoldingLot WHERE holding_id = ? ORDER BY acquired_date ASC, id ASC;
+
+insertHoldingLot:
+INSERT INTO HoldingLot(holding_id, acquired_date, purpose, shares, cost_basis, notes) VALUES (?, ?, ?, ?, ?, ?);
+
+updateHoldingLot:
+UPDATE HoldingLot SET acquired_date = ?, purpose = ?, shares = ?, cost_basis = ?, notes = ? WHERE id = ?;
+
+deleteHoldingLot:
+DELETE FROM HoldingLot WHERE id = ?;
 
 -- Security price queries
 selectLatestPrice:

@@ -1,9 +1,11 @@
 package com.financeapp.data.repository
 
 import com.financeapp.db.schema.Accounts
+import com.financeapp.db.schema.HoldingLots
 import com.financeapp.db.schema.Holdings
 import com.financeapp.db.schema.SecurityPrices
 import com.financeapp.domain.model.Holding
+import com.financeapp.domain.model.HoldingLot
 import com.financeapp.domain.model.HoldingWithPrice
 import com.financeapp.domain.model.SecurityPrice
 import com.financeapp.domain.repository.InvestmentRepository
@@ -14,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -26,6 +29,7 @@ class InvestmentRepositoryImpl(
     // Triggers for reactive updates
     private val holdingsRefreshTrigger = MutableStateFlow(0L)
     private val pricesRefreshTrigger = MutableStateFlow(0L)
+    private val lotsRefreshTrigger = MutableStateFlow(0L)
 
     override fun notifyHoldingsChanged() {
         holdingsRefreshTrigger.value += 1
@@ -33,6 +37,10 @@ class InvestmentRepositoryImpl(
 
     override fun notifyPricesChanged() {
         pricesRefreshTrigger.value += 1
+    }
+
+    private fun notifyLotsChanged() {
+        lotsRefreshTrigger.value += 1
     }
 
     override fun getPortfolio(): Flow<List<HoldingWithPrice>> =
@@ -72,6 +80,19 @@ class InvestmentRepositoryImpl(
                     Holdings
                         .selectAll().where { Holdings.accountId eq accountId.toInt() }
                         .map { it.toHoldingDomain() }
+                }
+            }
+        }
+
+    override fun getLots(holdingId: Long): Flow<List<HoldingLot>> =
+        lotsRefreshTrigger.map { _ ->
+            withContext(ioDispatcher) {
+                transaction(database) {
+                    ensureLotsExist(holdingId.toInt())
+                    HoldingLots
+                        .select { HoldingLots.holdingId eq holdingId.toInt() }
+                        .orderBy(HoldingLots.acquiredDate to SortOrder.ASC, HoldingLots.id to SortOrder.ASC)
+                        .map { it.toLotDomain() }
                 }
             }
         }
@@ -120,6 +141,56 @@ class InvestmentRepositoryImpl(
         transaction(database) {
             Holdings.deleteWhere { Holdings.id eq id.toInt() }
         }
+        notifyHoldingsChanged()
+    }
+
+    override suspend fun insertHoldingLot(lot: HoldingLot): Long = withContext(ioDispatcher) {
+        val lotId = transaction(database) {
+            val insertedId = HoldingLots.insert {
+                it[holdingId] = lot.holdingId.toInt()
+                it[acquiredDate] = lot.acquiredDate
+                it[purpose] = lot.purpose
+                it[shares] = lot.shares
+                it[costBasis] = lot.costBasis
+                it[notes] = lot.notes
+            }[HoldingLots.id].value.toLong()
+
+            recalculateHoldingTotals(lot.holdingId.toInt())
+            insertedId
+        }
+        notifyLotsChanged()
+        notifyHoldingsChanged()
+        lotId
+    }
+
+    override suspend fun updateHoldingLot(lot: HoldingLot): Unit = withContext(ioDispatcher) {
+        transaction(database) {
+            HoldingLots.update({ HoldingLots.id eq lot.id.toInt() }) {
+                it[acquiredDate] = lot.acquiredDate
+                it[purpose] = lot.purpose
+                it[shares] = lot.shares
+                it[costBasis] = lot.costBasis
+                it[notes] = lot.notes
+            }
+            recalculateHoldingTotals(lot.holdingId.toInt())
+        }
+        notifyLotsChanged()
+        notifyHoldingsChanged()
+    }
+
+    override suspend fun deleteHoldingLot(id: Long): Unit = withContext(ioDispatcher) {
+        transaction(database) {
+            val holdingId = HoldingLots
+                .select { HoldingLots.id eq id.toInt() }
+                .singleOrNull()
+                ?.get(HoldingLots.holdingId)
+                ?.value
+
+            HoldingLots.deleteWhere { HoldingLots.id eq id.toInt() }
+
+            holdingId?.let { recalculateHoldingTotals(it) }
+        }
+        notifyLotsChanged()
         notifyHoldingsChanged()
     }
 
@@ -179,6 +250,18 @@ class InvestmentRepositoryImpl(
         )
     }
 
+    private fun ResultRow.toLotDomain(): HoldingLot {
+        return HoldingLot(
+            id = this[HoldingLots.id].value.toLong(),
+            holdingId = this[HoldingLots.holdingId].value.toLong(),
+            acquiredDate = this[HoldingLots.acquiredDate],
+            purpose = this[HoldingLots.purpose],
+            shares = this[HoldingLots.shares],
+            costBasis = this[HoldingLots.costBasis],
+            notes = this[HoldingLots.notes]
+        )
+    }
+
     private fun ResultRow.toPriceDomain(): SecurityPrice {
         return SecurityPrice(
             id = this[SecurityPrices.id].value.toLong(),
@@ -186,5 +269,53 @@ class InvestmentRepositoryImpl(
             date = this[SecurityPrices.date],
             price = this[SecurityPrices.price]
         )
+    }
+
+    private fun Transaction.ensureLotsExist(holdingId: Int) {
+        val hasLots = HoldingLots
+            .select { HoldingLots.holdingId eq holdingId }
+            .limit(1)
+            .any()
+
+        if (hasLots) return
+
+        val holdingRow = Holdings
+            .select { Holdings.id eq holdingId }
+            .singleOrNull() ?: return
+
+        val sharesValue = holdingRow[Holdings.shares]
+        val costBasisValue = holdingRow[Holdings.costBasis]
+
+        if (sharesValue == 0.0 && costBasisValue == 0L) {
+            return
+        }
+
+        HoldingLots.insert {
+            it[this.holdingId] = holdingId
+            it[acquiredDate] = Clock.System.now().toEpochMilliseconds()
+            it[purpose] = "Migrated lot"
+            it[shares] = sharesValue
+            it[costBasis] = costBasisValue
+            it[notes] = "Auto-created from legacy holding data"
+        }
+        recalculateHoldingTotals(holdingId)
+    }
+
+    private fun Transaction.recalculateHoldingTotals(holdingId: Int) {
+        val shareSum = HoldingLots.shares.sum()
+        val costSum = HoldingLots.costBasis.sum()
+
+        val totals = HoldingLots
+            .slice(shareSum, costSum)
+            .select { HoldingLots.holdingId eq holdingId }
+            .singleOrNull()
+
+        val totalShares = totals?.get(shareSum) ?: 0.0
+        val totalCostBasis = totals?.get(costSum) ?: 0L
+
+        Holdings.update({ Holdings.id eq holdingId }) {
+            it[shares] = totalShares
+            it[costBasis] = totalCostBasis
+        }
     }
 }
