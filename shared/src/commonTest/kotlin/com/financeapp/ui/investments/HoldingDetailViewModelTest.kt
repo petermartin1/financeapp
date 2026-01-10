@@ -1,6 +1,5 @@
 package com.financeapp.ui.investments
 
-import app.cash.turbine.test
 import com.financeapp.domain.model.DividendEvent
 import com.financeapp.domain.model.Holding
 import com.financeapp.domain.model.HoldingLot
@@ -25,6 +24,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -66,16 +66,14 @@ class HoldingDetailViewModelTest {
             priceRefreshService = priceRefreshService
         )
 
-        viewModel.lots.test {
-            awaitItem() // initial empty state
-            val date = LocalDate(2024, 1, 1)
-            viewModel.addLot(date, "Initial", 2.5, 100_00, null)
-            val lots = awaitItem()
-            assertEquals(1, lots.size)
-            assertEquals("Initial", lots.first().purpose)
-            assertEquals(100_00, lots.first().costBasis)
-            cancelAndIgnoreRemainingEvents()
-        }
+        val date = LocalDate(2024, 1, 1)
+        viewModel.addLot(date, "Initial", 2.5, 100_00, null)
+        advanceUntilIdle()
+
+        val lots = viewModel.lots.value
+        assertEquals(1, lots.size)
+        assertEquals("Initial", lots.first().purpose)
+        assertEquals(100_00, lots.first().costBasis)
     }
 
     @Test
@@ -89,12 +87,31 @@ class HoldingDetailViewModelTest {
 
         val date = LocalDate(2024, 1, 1)
         viewModel.addLot(date, "Initial", 2.0, 80_00, null)
+        advanceUntilIdle()
 
         val existingLot = investmentRepository.lotsFlow.value.first()
         viewModel.updateLot(existingLot, date, "Adjusted", 3.0, 120_00, null)
+        advanceUntilIdle()
 
         assertEquals("Adjusted", investmentRepository.lotsFlow.value.first().purpose)
         assertEquals(120_00, investmentRepository.lotsFlow.value.first().costBasis)
+    }
+
+    @Test
+    fun `lot analytics reflect current price`() = runTest {
+        val viewModel = HoldingDetailViewModel(
+            holdingId = 1L,
+            investmentRepository = investmentRepository,
+            performanceRepository = performanceRepository,
+            priceRefreshService = priceRefreshService
+        )
+
+        viewModel.addLot(LocalDate(2024, 1, 1), "Lot A", 1.0, 50_00, null)
+        advanceUntilIdle()
+
+        val lot = viewModel.lotAnalytics.value.first()
+        assertEquals(120_00, lot.marketValue)
+        assertEquals(70_00, lot.gainLoss)
     }
 
     private class FakeInvestmentRepository : InvestmentRepository {

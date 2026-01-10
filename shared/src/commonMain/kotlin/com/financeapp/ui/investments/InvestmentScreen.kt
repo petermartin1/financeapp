@@ -17,7 +17,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.AssetAllocation
+import com.financeapp.domain.model.HoldingLot
 import com.financeapp.domain.model.HoldingWithPrice
+import com.financeapp.domain.model.LotAnalytics
 import com.financeapp.ui.components.forms.DatePickerField
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
@@ -32,6 +34,7 @@ fun InvestmentScreen(
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedHolding by remember { mutableStateOf<HoldingWithPrice?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -48,6 +51,19 @@ fun InvestmentScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { viewModel.refreshAllPrices() },
+                        enabled = !isRefreshing
+                    ) {
+                        if (isRefreshing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh Prices")
+                        }
+                    }
                     IconButton(onClick = { showAddDialog = true }) {
                         Icon(Icons.Default.Add, contentDescription = "Add Holding")
                     }
@@ -204,9 +220,12 @@ fun InvestmentScreen(
             viewModel.observeLots(selectedHolding!!.holding.id)
         }
         val lots by lotsFlow.collectAsState(initial = emptyList())
+        val analytics = remember(lots, selectedHolding!!.currentPrice) {
+            buildLotAnalytics(lots, selectedHolding!!.currentPrice)
+        }
         ManageLotsDialog(
             holding = selectedHolding!!.holding,
-            lots = lots,
+            analytics = analytics,
             onDismiss = { showLotsDialog = false },
             onAddLot = { date, purpose, shares, costBasis, notes ->
                 viewModel.addLot(selectedHolding!!.holding.id, date, purpose, shares, costBasis, notes)
@@ -682,4 +701,20 @@ private fun UpdatePriceDialog(
 private fun formatCurrency(cents: Long): String {
     val dollars = cents / 100.0
     return "$${String.format("%,.2f", dollars)}"
+}
+
+private fun buildLotAnalytics(lots: List<HoldingLot>, currentPrice: Long?): List<LotAnalytics> {
+    return lots.map { lot ->
+        val marketValue = currentPrice?.let { (lot.shares * it).toLong() }
+        val gainLoss = marketValue?.minus(lot.costBasis)
+        val percent = if (gainLoss != null && lot.costBasis != 0L) {
+            (gainLoss.toDouble() / lot.costBasis) * 100
+        } else null
+        LotAnalytics(
+            lot = lot,
+            marketValue = marketValue,
+            gainLoss = gainLoss,
+            gainLossPercent = percent
+        )
+    }
 }

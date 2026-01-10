@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.Holding
 import com.financeapp.domain.model.HoldingLot
+import com.financeapp.domain.model.LotAnalytics
 import com.financeapp.ui.components.forms.DatePickerField
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
@@ -22,16 +23,18 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
+import kotlin.math.abs
 
 @Composable
 fun ManageLotsDialog(
     holding: Holding,
-    lots: List<HoldingLot>,
+    analytics: List<LotAnalytics>,
     onDismiss: () -> Unit,
     onAddLot: (LocalDate, String?, Double, Long, String?) -> Unit,
     onUpdateLot: (HoldingLot, LocalDate, String?, Double, Long, String?) -> Unit,
     onDeleteLot: (Long) -> Unit
 ) {
+    val lots = analytics.map { it.lot }
     var showEditor by remember { mutableStateOf(false) }
     var editingLot by remember { mutableStateOf<HoldingLot?>(null) }
 
@@ -45,7 +48,7 @@ fun ManageLotsDialog(
                     .heightIn(max = 420.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (lots.isEmpty()) {
+                if (analytics.isEmpty()) {
                     Text(
                         text = "No lots recorded for this holding yet.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -56,14 +59,14 @@ fun ManageLotsDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.weight(1f, fill = false)
                     ) {
-                        items(lots) { lot ->
+                        items(analytics) { analytic ->
                             LotRow(
-                                lot = lot,
+                                analytics = analytic,
                                 onEdit = {
-                                    editingLot = lot
+                                    editingLot = analytic.lot
                                     showEditor = true
                                 },
-                                onDelete = { onDeleteLot(lot.id) }
+                                onDelete = { onDeleteLot(analytic.lot.id) }
                             )
                         }
                     }
@@ -117,10 +120,11 @@ fun ManageLotsDialog(
 
 @Composable
 fun LotRow(
-    lot: HoldingLot,
+    analytics: LotAnalytics,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val lot = analytics.lot
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -170,6 +174,32 @@ fun LotRow(
                 Column(horizontalAlignment = Alignment.End) {
                     Text("Cost Basis", style = MaterialTheme.typography.labelSmall)
                     Text(formatHoldingCurrency(lot.costBasis), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+
+            analytics.marketValue?.let { marketValue ->
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Market Value", style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            formatHoldingCurrency(marketValue),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("Gain/Loss", style = MaterialTheme.typography.labelSmall)
+                        val gain = analytics.gainLoss ?: 0L
+                        val color = if (gain >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        Text(
+                            buildGainLossLabel(gain, analytics.gainLossPercent),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = color
+                        )
+                    }
                 }
             }
             lot.notes?.takeIf { it.isNotBlank() }?.let { note ->
@@ -273,6 +303,13 @@ fun LotEditorDialog(
             }
         }
     )
+}
+
+private fun buildGainLossLabel(gainLoss: Long, percent: Double?): String {
+    val sign = if (gainLoss >= 0) "+" else "-"
+    val absValue = formatHoldingCurrency(kotlin.math.abs(gainLoss))
+    val pct = percent?.let { " ${if (it >= 0) "+" else "-"}${"%.2f".format(kotlin.math.abs(it))}%" } ?: ""
+    return "$sign$absValue$pct"
 }
 
 internal fun formatHoldingCurrency(cents: Long): String {

@@ -15,6 +15,7 @@ import com.financeapp.domain.model.DividendEvent
 import com.financeapp.domain.model.Holding
 import com.financeapp.domain.model.HoldingLot
 import com.financeapp.domain.model.HoldingPerformance
+import com.financeapp.domain.model.LotAnalytics
 import com.financeapp.domain.model.PerformanceChartData
 import com.financeapp.domain.model.TimeRange
 import com.financeapp.ui.components.charts.LineChart
@@ -37,6 +38,7 @@ fun HoldingDetailScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val error by viewModel.error.collectAsState()
     val lots by viewModel.lots.collectAsState()
+    val lotAnalytics by viewModel.lotAnalytics.collectAsState()
     var showLotsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -108,6 +110,7 @@ fun HoldingDetailScreen(
                 item {
                     LotsSummaryCard(
                         lots = lots,
+                        analytics = lotAnalytics,
                         onManageLots = { showLotsDialog = true }
                     )
                 }
@@ -246,7 +249,7 @@ fun HoldingDetailScreen(
         )
         ManageLotsDialog(
             holding = dialogHolding,
-            lots = lots,
+            analytics = lotAnalytics,
             onDismiss = { showLotsDialog = false },
             onAddLot = { date, purpose, shares, costBasis, notes ->
                 viewModel.addLot(date, purpose, shares, costBasis, notes)
@@ -458,6 +461,7 @@ private fun DividendItem(dividend: DividendEvent) {
 @Composable
 private fun LotsSummaryCard(
     lots: List<HoldingLot>,
+    analytics: List<LotAnalytics>,
     onManageLots: () -> Unit
 ) {
     Card(
@@ -489,24 +493,62 @@ private fun LotsSummaryCard(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text("Total Shares", style = MaterialTheme.typography.labelSmall)
-                    Text(
-                        formatHoldingShares(lots.sumOf { it.shares }),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
+            val totalShares = lots.sumOf { it.shares }
+            val totalCostBasis = lots.sumOf { it.costBasis }
+            val totalMarketValue = analytics.sumOf { it.marketValue ?: 0L }
+            val totalGain = analytics.sumOf { it.gainLoss ?: 0L }
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Total Shares", style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            formatHoldingShares(totalShares),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("Cost Basis", style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            formatHoldingCurrency(totalCostBasis),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("Cost Basis", style = MaterialTheme.typography.labelSmall)
+                if (analytics.any { it.marketValue != null }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Market Value", style = MaterialTheme.typography.labelSmall)
+                            Text(
+                                formatHoldingCurrency(totalMarketValue),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Unrealized Gain", style = MaterialTheme.typography.labelSmall)
+                            val color = if (totalGain >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            Text(
+                                formatHoldingCurrency(totalGain),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = color,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                } else {
                     Text(
-                        formatHoldingCurrency(lots.sumOf { it.costBasis }),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
+                        text = "Price data unavailable for current lots.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -519,38 +561,16 @@ private fun LotsSummaryCard(
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    lots.take(3).forEach { lot ->
-                        Column(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = formatLotDate(lot.acquiredDate),
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = lot.purpose ?: "General lot",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Shares: ${formatHoldingShares(lot.shares)}",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Text(
-                                    text = formatHoldingCurrency(lot.costBasis),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
+                    analytics.take(3).forEach { analytic ->
+                        LotRow(
+                            analytics = analytic,
+                            onEdit = onManageLots,
+                            onDelete = onManageLots
+                        )
                     }
-                    if (lots.size > 3) {
+                    if (analytics.size > 3) {
                         Text(
-                            text = "+${lots.size - 3} more lots",
+                            text = "+${analytics.size - 3} more lots",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

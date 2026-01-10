@@ -45,6 +45,28 @@ class HoldingDetailViewModel(
     private val _lots = MutableStateFlow<List<HoldingLot>>(emptyList())
     val lots: StateFlow<List<HoldingLot>> = _lots.asStateFlow()
 
+    val lotAnalytics: StateFlow<List<LotAnalytics>> =
+        combine(_lots, _holdingPerformance) { lots, performance ->
+            val currentPrice = performance?.currentPrice
+            lots.map { lot ->
+                val marketValue = currentPrice?.let { (lot.shares * it).toLong() }
+                val gainLoss = marketValue?.minus(lot.costBasis)
+                val percent = if (gainLoss != null && lot.costBasis != 0L) {
+                    (gainLoss.toDouble() / lot.costBasis) * 100
+                } else null
+                LotAnalytics(
+                    lot = lot,
+                    marketValue = marketValue,
+                    gainLoss = gainLoss,
+                    gainLossPercent = percent
+                )
+            }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        )
+
     val isRefreshing: StateFlow<Boolean> = priceRefreshService.isRefreshing
 
     init {

@@ -101,7 +101,7 @@ val sharedModule = module {
     single { PriceRefreshService(get(), get()) }
     single { SnapshotScheduler(get()) }
 
-    single { AppViewModel(get(), get(), get()) }
+    single { AppViewModel(get(), get(), get(), get()) }
     single { AccountsViewModel(get()) }
     single { TransactionsViewModel(get(), get(), get(), get(), get()) }
     single { CategoriesViewModel(get()) }
@@ -113,7 +113,7 @@ val sharedModule = module {
     single { ReportsViewModel(get<TransactionRepository>(), get<AccountRepository>()) }
     single { BackupViewModel(get()) }
     factory { PayeeManagementViewModel(get(), get()) }
-    factory { InvestmentViewModel(get(), get()) }
+    factory { InvestmentViewModel(get(), get(), get()) }
     factory { PerformanceTabViewModel(get(), get()) }
     factory { TagsViewModel(get()) }
     factory { DashboardViewModel(get(), get(), get()) }

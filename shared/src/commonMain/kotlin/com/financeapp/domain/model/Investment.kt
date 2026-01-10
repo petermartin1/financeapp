@@ -19,6 +19,13 @@ data class HoldingLot(
     val notes: String? = null
 )
 
+data class LotAnalytics(
+    val lot: HoldingLot,
+    val marketValue: Long?,
+    val gainLoss: Long?,
+    val gainLossPercent: Double?
+)
+
 data class SecurityPrice(
     val id: Long = 0,
     val symbol: String,

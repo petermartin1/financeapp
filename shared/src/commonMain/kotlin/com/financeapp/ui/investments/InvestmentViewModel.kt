@@ -8,6 +8,7 @@ import com.financeapp.domain.model.HoldingWithPrice
 import com.financeapp.domain.model.PortfolioSummary
 import com.financeapp.domain.repository.AccountRepository
 import com.financeapp.domain.repository.InvestmentRepository
+import com.financeapp.domain.service.PriceRefreshService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,11 +37,15 @@ data class InvestmentUiState(
 
 class InvestmentViewModel(
     private val investmentRepository: InvestmentRepository,
-    private val accountRepository: AccountRepository
+    private val accountRepository: AccountRepository,
+    private val priceRefreshService: PriceRefreshService
 ) {
     private val scope = CoroutineScope(Dispatchers.Main)
     private val _uiState = MutableStateFlow(InvestmentUiState())
     val uiState: StateFlow<InvestmentUiState> = _uiState.asStateFlow()
+
+    val isRefreshing: StateFlow<Boolean> = priceRefreshService.isRefreshing
+    val lastRefreshTime: StateFlow<Long?> = priceRefreshService.lastRefreshTime
 
     init {
         loadData()
@@ -189,6 +194,12 @@ class InvestmentViewModel(
     fun deleteLot(lotId: Long) {
         scope.launch {
             investmentRepository.deleteHoldingLot(lotId)
+        }
+    }
+
+    fun refreshAllPrices() {
+        scope.launch {
+            priceRefreshService.refreshPrices()
         }
     }
 }

@@ -3,6 +3,7 @@ package com.financeapp.ui
 import com.financeapp.domain.model.AppLockState
 import com.financeapp.domain.repository.AppLockRepository
 import com.financeapp.domain.repository.PreferencesRepository
+import com.financeapp.domain.service.PriceRefreshService
 import com.financeapp.security.BiometricAuth
 import com.financeapp.security.BiometricResult
 import com.financeapp.security.BiometricType
@@ -17,7 +18,8 @@ import kotlinx.coroutines.launch
 class AppViewModel(
     private val appLockRepository: AppLockRepository,
     private val biometricAuth: BiometricAuth,
-    private val preferencesRepository: PreferencesRepository
+    private val preferencesRepository: PreferencesRepository,
+    private val priceRefreshService: PriceRefreshService
 ) {
     private val scope = CoroutineScope(Dispatchers.Main)
 
@@ -30,6 +32,12 @@ class AppViewModel(
     init {
         checkLockSetup()
         loadThemeMode()
+        startPriceRefreshService()
+    }
+
+    private fun startPriceRefreshService() {
+        // Start automatic price refresh every 15 minutes for investment holdings
+        priceRefreshService.startAutoRefresh(intervalMinutes = 15)
     }
 
     private fun loadThemeMode() {
