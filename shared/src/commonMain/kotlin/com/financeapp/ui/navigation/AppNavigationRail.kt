@@ -2,6 +2,7 @@ package com.financeapp.ui.navigation
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -44,84 +45,84 @@ object AppDestinations {
     val Accounts = NavigationDestination(
         route = "accounts",
         label = "Accounts",
-        icon = Icons.Default.AccountCircle,
+        icon = Icons.Default.AccountBalance,
         group = NavigationGroup.MAIN
     )
 
     val Budget = NavigationDestination(
         route = "budget",
         label = "Budget",
-        icon = Icons.Default.Star,
+        icon = Icons.Default.PieChart,
         group = NavigationGroup.TOOLS
     )
 
     val Reports = NavigationDestination(
         route = "reports",
         label = "Reports",
-        icon = Icons.Default.Star,
+        icon = Icons.Default.Assessment,
         group = NavigationGroup.TOOLS
     )
 
     val Scheduled = NavigationDestination(
         route = "scheduled",
         label = "Scheduled",
-        icon = Icons.Default.DateRange,
+        icon = Icons.Default.Schedule,
         group = NavigationGroup.TOOLS
     )
 
     val Templates = NavigationDestination(
         route = "templates",
         label = "Templates",
-        icon = Icons.Default.Star,
+        icon = Icons.Default.Description,
         group = NavigationGroup.TOOLS
     )
 
     val Categories = NavigationDestination(
         route = "categories",
         label = "Categories",
-        icon = Icons.Default.Menu,
+        icon = Icons.Default.Category,
         group = NavigationGroup.DATA
     )
 
     val Payees = NavigationDestination(
         route = "payees",
         label = "Payees",
-        icon = Icons.Default.Person,
+        icon = Icons.Default.People,
         group = NavigationGroup.DATA
     )
 
     val Tags = NavigationDestination(
         route = "tags",
         label = "Tags",
-        icon = Icons.Default.Star,
+        icon = Icons.Default.LocalOffer,
         group = NavigationGroup.DATA
     )
 
     val Investments = NavigationDestination(
         route = "investments",
         label = "Investments",
-        icon = Icons.Default.Add,
+        icon = Icons.AutoMirrored.Filled.TrendingUp,
         group = NavigationGroup.DATA
     )
 
     val Import = NavigationDestination(
         route = "import",
         label = "Import",
-        icon = Icons.Default.Add,
+        icon = Icons.Default.CloudUpload,
         group = NavigationGroup.SETTINGS
     )
 
     val Connections = NavigationDestination(
         route = "connections",
         label = "Connections",
-        icon = Icons.Default.Share,
+        icon = Icons.Default.Link,
         group = NavigationGroup.SETTINGS
     )
 
     val Backup = NavigationDestination(
         route = "backup",
         label = "Backup",
-        icon = Icons.Default.Settings,
+        icon = Icons.Default.Backup,
         group = NavigationGroup.SETTINGS
     )
 
