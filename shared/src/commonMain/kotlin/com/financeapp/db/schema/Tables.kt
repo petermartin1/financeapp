@@ -30,6 +30,20 @@ object Payees : IntIdTable("Payee") {
     val defaultCategoryId = reference("default_category_id", Categories).nullable()
 }
 
+// Payee aliases (for mapping imported payee names to canonical payees)
+object PayeeAliases : IntIdTable("PayeeAlias") {
+    val aliasName = varchar("alias_name", 255).uniqueIndex() // lowercase normalized
+    val canonicalPayeeId = reference("canonical_payee_id", Payees)
+    val matchType = varchar("match_type", 50) // EXACT, FUZZY, MANUAL
+    val confidence = double("confidence").nullable() // 0.0-1.0 for fuzzy matches
+    val createdAt = long("created_at")
+
+    init {
+        index(false, aliasName)
+        index(false, canonicalPayeeId)
+    }
+}
+
 // Transactions
 object Transactions : IntIdTable("TransactionRecord") {
     val accountId = reference("account_id", Accounts)

@@ -120,7 +120,7 @@ All core phases (1-10) are complete:
 - ✅ Core Features (Transactions, Categories, Payees, Reconciliation)
 - ✅ Security (Encryption, Secure credential storage, Rate limiting)
 - ✅ Bank Integration (OFX Direct Connect, File import)
-- ✅ Investments (Holdings, Performance tracking, Price refresh)
+- ✅ Investments (Holdings, Performance tracking, Price refresh) 
 - ✅ Budgeting (Budget setup, tracking, visualization)
 - ✅ Advanced Features (Dark mode, Backup/restore, Custom reports)
 - ✅ Professional UI Overhaul (Design system, Charts, Animations, Navigation)

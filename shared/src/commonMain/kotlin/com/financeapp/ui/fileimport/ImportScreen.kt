@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.financeapp.data.fileimport.CsvImportConfig
 import com.financeapp.data.fileimport.DateFormat
 import com.financeapp.data.fileimport.ImportedTransaction
@@ -291,6 +292,69 @@ fun ImportScreen(
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+            }
+        }
+
+        // Payee Mapping Dialog
+        when (uiState.payeeMappingStep) {
+            PayeeMappingStep.Analyzing -> {
+                // Show loading indicator
+                Dialog(
+                    onDismissRequest = { viewModel.cancelMapping() }
+                ) {
+                    Card {
+                        Column(
+                            modifier = Modifier.padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            CircularProgressIndicator()
+                            Text("Analyzing payee names...")
+                        }
+                    }
+                }
+            }
+            PayeeMappingStep.Reviewing -> {
+                // Show payee mapping dialog
+                PayeeMappingDialog(
+                    unresolvedPayees = uiState.unresolvedPayees,
+                    currentIndex = uiState.currentPayeeIndex,
+                    allPayees = uiState.allPayees,
+                    allCategories = uiState.allCategories,
+                    allTags = uiState.allTags,
+                    similarRecentlyCreated = uiState.similarRecentlyCreated,
+                    onMapToExisting = { payeeId, categoryId, tagIds, remember ->
+                        viewModel.mapToExistingPayee(payeeId, categoryId, tagIds, remember)
+                    },
+                    onCreateNew = { name, categoryId, tagIds, remember ->
+                        viewModel.createNewPayee(name, categoryId, tagIds, remember)
+                    },
+                    onNext = { viewModel.nextPayee() },
+                    onPrevious = { viewModel.previousPayee() },
+                    onSkip = { viewModel.skipPayee() },
+                    onSkipAll = { viewModel.skipAllPayees() },
+                    onDismiss = { viewModel.cancelMapping() }
+                )
+            }
+            PayeeMappingStep.Importing -> {
+                // Show importing progress
+                Dialog(
+                    onDismissRequest = { }
+                ) {
+                    Card {
+                        Column(
+                            modifier = Modifier.padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            CircularProgressIndicator()
+                            Text("Importing transactions...")
+                        }
+                    }
+                }
+            }
+            PayeeMappingStep.None -> {
+                // No dialog
             }
         }
     }

@@ -6,13 +6,16 @@ import com.financeapp.data.ofx.OfxRepository
 import com.financeapp.data.repository.AccountRepositoryImpl
 import com.financeapp.data.repository.AppLockRepositoryImpl
 import com.financeapp.data.repository.CategoryRepositoryImpl
+import com.financeapp.data.repository.PayeeMatchingRepositoryImpl
 import com.financeapp.data.repository.PayeeRepositoryImpl
 import com.financeapp.data.repository.PreferencesStore
 import com.financeapp.data.repository.TransactionRepositoryImpl
 import com.financeapp.data.repository.BudgetRepositoryImpl
+import com.financeapp.domain.matching.PayeeMatcher
 import com.financeapp.domain.repository.BudgetRepository
 import com.financeapp.db.DatabaseDriverFactory
 import com.financeapp.domain.repository.AccountRepository
+import com.financeapp.domain.repository.PayeeMatchingRepository
 import org.jetbrains.exposed.sql.Database
 import com.financeapp.domain.repository.AppLockRepository
 import com.financeapp.domain.repository.CategoryRepository
@@ -80,6 +83,8 @@ val sharedModule = module {
     single<TemplateRepository> { TemplateRepositoryImpl(get()) }
     single<BudgetRepository> { BudgetRepositoryImpl(get()) }
     single<ScheduledTransactionRepository> { ScheduledTransactionRepositoryImpl(get()) }
+    single { PayeeMatcher() }
+    single<PayeeMatchingRepository> { PayeeMatchingRepositoryImpl(get(), get()) }
     single {
         HttpClient {
             install(ContentNegotiation) {
@@ -93,7 +98,7 @@ val sharedModule = module {
     single { YahooFinanceClient(get()) }
     single<QuoteRepository> { QuoteRepositoryImpl(get(), get(), get()) }
     single<PerformanceRepository> { PerformanceRepositoryImpl(get(), get(), get()) }
-    single { ImportRepository(get(), get(), get()) }
+    single { ImportRepository(get(), get(), get(), get(), get()) }
     single { OfxClient() }
     single { SecureCredentialStore() }
     single { OfxRepository(get(), get(), get(), get()) }
@@ -105,7 +110,7 @@ val sharedModule = module {
     single { AccountsViewModel(get()) }
     single { TransactionsViewModel(get(), get(), get(), get(), get()) }
     single { CategoriesViewModel(get()) }
-    single { ImportViewModel(get(), get()) }
+    single { ImportViewModel(get(), get(), get(), get(), get(), get()) }
     single { ConnectionsViewModel(get()) }
     single { ReconcileViewModel(get<TransactionRepository>(), get<AccountRepository>()) }
     single { ScheduledViewModel(get<ScheduledTransactionRepository>(), get<TransactionRepository>()) }

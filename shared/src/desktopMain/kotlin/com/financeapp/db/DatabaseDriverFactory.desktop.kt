@@ -45,6 +45,7 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
                 Accounts,
                 Categories,
                 Payees,
+                PayeeAliases,
                 Transactions,
                 SplitItems,
                 Tags,
