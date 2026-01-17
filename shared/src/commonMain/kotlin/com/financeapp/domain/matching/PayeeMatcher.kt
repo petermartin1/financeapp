@@ -30,9 +30,12 @@ class PayeeMatcher {
      *
      * Matching pipeline:
      * 1. Exact match after normalization
-     * 2. Substring match
+     * 2. Substring match (only if first token passes gate)
      * 3. Token/word-based prefix match (for credit card transactions with suffixes)
-     * 4. Fuzzy match using Jaro-Winkler
+     * 4. Weighted token fuzzy match (prioritizes business name over location)
+     *
+     * The first-token gate prevents false matches where only the location suffix
+     * is similar (e.g., "DOMINO'S ARLINGTON HEI" vs "MARIANOS ARLINGTON HEI").
      *
      * @param importedName The payee name from the imported transaction
      * @param existingPayees List of existing payees to match against
@@ -56,24 +59,33 @@ class PayeeMatcher {
                 continue
             }
 
-            // Check substring match
+            // Check substring match - but only if first tokens are similar
+            // This prevents "IBJI ARLINGTON" matching "ARLINGTON HEIGHTS ANIM" just because one contains "ARLINGTON"
             if (normalizedImported.contains(normalizedPayee) || normalizedPayee.contains(normalizedImported)) {
-                val similarity = 0.95 // High but not perfect
-                matches.add(PayeeMatch(payee, similarity, MatchType.SUBSTRING))
-                continue
+                if (firstTokenPassesGate(normalizedImported, normalizedPayee, 0.6)) {
+                    val similarity = 0.95 // High but not perfect
+                    matches.add(PayeeMatch(payee, similarity, MatchType.SUBSTRING))
+                    continue
+                }
             }
 
             // Check token-based prefix match (for "ARLINGTON HEIGHTS ANIM 847" vs "ARLINGTON HEIGHTS ANIM ARLI")
-            val tokenSimilarity = tokenPrefixSimilarity(normalizedImported, normalizedPayee)
-            if (tokenSimilarity >= 0.85) {
-                matches.add(PayeeMatch(payee, tokenSimilarity, MatchType.SUBSTRING))
-                continue
+            // Only if first token passes gate
+            if (firstTokenPassesGate(normalizedImported, normalizedPayee, 0.6)) {
+                val tokenSim = tokenPrefixSimilarity(normalizedImported, normalizedPayee)
+                if (tokenSim >= 0.85) {
+                    matches.add(PayeeMatch(payee, tokenSim, MatchType.SUBSTRING))
+                    continue
+                }
             }
 
-            // Check fuzzy match using Jaro-Winkler (lowered threshold from 0.85 to 0.75)
-            val similarity = jaroWinklerSimilarity(normalizedImported, normalizedPayee)
-            if (similarity >= threshold) {
-                matches.add(PayeeMatch(payee, similarity, MatchType.FUZZY))
+            // Check weighted token fuzzy match - requires first token gate
+            // This uses weighted similarity that prioritizes business name (first tokens)
+            if (firstTokenPassesGate(normalizedImported, normalizedPayee, 0.6)) {
+                val similarity = weightedTokenSimilarity(normalizedImported, normalizedPayee)
+                if (similarity >= threshold) {
+                    matches.add(PayeeMatch(payee, similarity, MatchType.FUZZY))
+                }
             }
         }
 
@@ -84,6 +96,9 @@ class PayeeMatcher {
     /**
      * Find similar names among a list of strings
      * Used to find similar payee names within the same import batch
+     *
+     * Uses the same first-token gate and weighted matching as findSimilarPayees
+     * to ensure consistent behavior.
      *
      * @param targetName The name to find matches for
      * @param candidateNames List of candidate names to match against
@@ -107,23 +122,29 @@ class PayeeMatcher {
                 continue
             }
 
-            // Check substring match
+            // Check substring match - only if first tokens are similar
             if (normalizedTarget.contains(normalizedCandidate) || normalizedCandidate.contains(normalizedTarget)) {
-                similarities.add(candidateName to 0.95)
-                continue
+                if (firstTokenPassesGate(normalizedTarget, normalizedCandidate, 0.6)) {
+                    similarities.add(candidateName to 0.95)
+                    continue
+                }
             }
 
-            // Check token-based prefix match
-            val tokenSim = tokenPrefixSimilarity(normalizedTarget, normalizedCandidate)
-            if (tokenSim >= 0.85) {
-                similarities.add(candidateName to tokenSim)
-                continue
+            // Check token-based prefix match - only if first token passes gate
+            if (firstTokenPassesGate(normalizedTarget, normalizedCandidate, 0.6)) {
+                val tokenSim = tokenPrefixSimilarity(normalizedTarget, normalizedCandidate)
+                if (tokenSim >= 0.85) {
+                    similarities.add(candidateName to tokenSim)
+                    continue
+                }
             }
 
-            // Check fuzzy match using Jaro-Winkler
-            val similarity = jaroWinklerSimilarity(normalizedTarget, normalizedCandidate)
-            if (similarity >= threshold) {
-                similarities.add(candidateName to similarity)
+            // Check weighted token fuzzy match - requires first token gate
+            if (firstTokenPassesGate(normalizedTarget, normalizedCandidate, 0.6)) {
+                val similarity = weightedTokenSimilarity(normalizedTarget, normalizedCandidate)
+                if (similarity >= threshold) {
+                    similarities.add(candidateName to similarity)
+                }
             }
         }
 
@@ -169,6 +190,119 @@ class PayeeMatcher {
         // Calculate similarity as ratio of matching tokens to total unique tokens
         val totalTokens = maxOf(tokens1.size, tokens2.size)
         return matchingTokens.toDouble() / totalTokens
+    }
+
+    /**
+     * Calculate weighted token similarity that prioritizes business name (first tokens)
+     * over location suffixes commonly added by banks.
+     *
+     * Weighting scheme:
+     * - First token: 50% weight (the actual business name)
+     * - Second token: 25% weight (often part of business name or store number)
+     * - Remaining tokens: 25% weight combined (usually location/address noise)
+     *
+     * This prevents "DOMINO'S 2824 ARLINGTON HEI" from matching "MARIANOS #501 ARLINGTON HEI"
+     * just because they share the same location suffix.
+     *
+     * @param s1 First normalized string
+     * @param s2 Second normalized string
+     * @return Similarity score between 0.0 and 1.0
+     */
+    fun weightedTokenSimilarity(s1: String, s2: String): Double {
+        val tokens1 = s1.split(" ").filter { it.isNotEmpty() }
+        val tokens2 = s2.split(" ").filter { it.isNotEmpty() }
+
+        if (tokens1.isEmpty() || tokens2.isEmpty()) return 0.0
+
+        // Calculate similarity for first token (business name) - weight 50%
+        val firstTokenSim = if (tokens1.isNotEmpty() && tokens2.isNotEmpty()) {
+            tokenSimilarity(tokens1[0], tokens2[0])
+        } else 0.0
+
+        // Calculate similarity for second token - weight 25%
+        val secondTokenSim = if (tokens1.size > 1 && tokens2.size > 1) {
+            tokenSimilarity(tokens1[1], tokens2[1])
+        } else if (tokens1.size > 1 || tokens2.size > 1) {
+            0.0 // Penalize if one has a second token and the other doesn't
+        } else {
+            1.0 // Both only have one token, don't penalize
+        }
+
+        // Calculate similarity for remaining tokens - weight 25%
+        val remainingTokensSim = if (tokens1.size > 2 || tokens2.size > 2) {
+            val remaining1 = if (tokens1.size > 2) tokens1.subList(2, tokens1.size) else emptyList()
+            val remaining2 = if (tokens2.size > 2) tokens2.subList(2, tokens2.size) else emptyList()
+            calculateRemainingSimilarity(remaining1, remaining2)
+        } else {
+            1.0 // No remaining tokens to compare, don't penalize
+        }
+
+        // Weighted average: 50% first token, 25% second token, 25% remaining
+        return (firstTokenSim * 0.50) + (secondTokenSim * 0.25) + (remainingTokensSim * 0.25)
+    }
+
+    /**
+     * Calculate similarity between two individual tokens using Jaro-Winkler
+     */
+    private fun tokenSimilarity(t1: String, t2: String): Double {
+        if (t1 == t2) return 1.0
+        if (t1.isEmpty() || t2.isEmpty()) return 0.0
+
+        // Use Jaro-Winkler for token comparison
+        return jaroWinklerSimilarity(t1, t2)
+    }
+
+    /**
+     * Calculate similarity for remaining tokens (position 2+)
+     * Uses a bag-of-words approach since position matters less for these
+     */
+    private fun calculateRemainingSimilarity(tokens1: List<String>, tokens2: List<String>): Double {
+        if (tokens1.isEmpty() && tokens2.isEmpty()) return 1.0
+        if (tokens1.isEmpty() || tokens2.isEmpty()) return 0.5 // Partial penalty
+
+        // Count how many tokens from tokens1 have a good match in tokens2
+        var matchedCount = 0
+        val used = mutableSetOf<Int>()
+
+        for (t1 in tokens1) {
+            var bestMatch = 0.0
+            var bestIdx = -1
+            for ((idx, t2) in tokens2.withIndex()) {
+                if (idx in used) continue
+                val sim = tokenSimilarity(t1, t2)
+                if (sim > bestMatch) {
+                    bestMatch = sim
+                    bestIdx = idx
+                }
+            }
+            if (bestMatch >= 0.8 && bestIdx >= 0) {
+                matchedCount++
+                used.add(bestIdx)
+            }
+        }
+
+        val totalTokens = maxOf(tokens1.size, tokens2.size)
+        return matchedCount.toDouble() / totalTokens
+    }
+
+    /**
+     * Check if the first token (business name) meets a minimum similarity threshold.
+     * This acts as a gate - if the business names don't match, we reject the match
+     * regardless of how similar the rest of the string is.
+     *
+     * @param s1 First normalized string
+     * @param s2 Second normalized string
+     * @param minThreshold Minimum similarity for first token (default 0.6)
+     * @return true if first tokens are sufficiently similar
+     */
+    fun firstTokenPassesGate(s1: String, s2: String, minThreshold: Double = 0.6): Boolean {
+        val tokens1 = s1.split(" ").filter { it.isNotEmpty() }
+        val tokens2 = s2.split(" ").filter { it.isNotEmpty() }
+
+        if (tokens1.isEmpty() || tokens2.isEmpty()) return false
+
+        val firstTokenSim = tokenSimilarity(tokens1[0], tokens2[0])
+        return firstTokenSim >= minThreshold
     }
 
     /**
