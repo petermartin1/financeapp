@@ -1,5 +1,6 @@
 package com.financeapp.ui
 
+import com.financeapp.data.seed.DatabaseSeeder
 import com.financeapp.domain.model.AppLockState
 import com.financeapp.domain.repository.AppLockRepository
 import com.financeapp.domain.repository.PreferencesRepository
@@ -19,7 +20,8 @@ class AppViewModel(
     private val appLockRepository: AppLockRepository,
     private val biometricAuth: BiometricAuth,
     private val preferencesRepository: PreferencesRepository,
-    private val priceRefreshService: PriceRefreshService
+    private val priceRefreshService: PriceRefreshService,
+    private val databaseSeeder: DatabaseSeeder
 ) {
     private val scope = CoroutineScope(Dispatchers.Main)
 
@@ -30,9 +32,16 @@ class AppViewModel(
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
     init {
+        seedDatabaseIfNeeded()
         checkLockSetup()
         loadThemeMode()
         startPriceRefreshService()
+    }
+
+    private fun seedDatabaseIfNeeded() {
+        scope.launch {
+            databaseSeeder.seedIfEmpty()
+        }
     }
 
     private fun startPriceRefreshService() {

@@ -3,6 +3,7 @@ package com.financeapp.di
 import com.financeapp.data.fileimport.ImportRepository
 import com.financeapp.data.ofx.OfxClient
 import com.financeapp.data.ofx.OfxRepository
+import com.financeapp.data.seed.DatabaseSeeder
 import com.financeapp.data.repository.AccountRepositoryImpl
 import com.financeapp.data.repository.AppLockRepositoryImpl
 import com.financeapp.data.repository.CategoryRepositoryImpl
@@ -105,8 +106,9 @@ val sharedModule = module {
     single { ExportRepository(get()) }
     single { PriceRefreshService(get(), get()) }
     single { SnapshotScheduler(get()) }
+    single { DatabaseSeeder(get()) }
 
-    single { AppViewModel(get(), get(), get(), get()) }
+    single { AppViewModel(get(), get(), get(), get(), get()) }
     single { AccountsViewModel(get()) }
     single { TransactionsViewModel(get(), get(), get(), get(), get()) }
     single { CategoriesViewModel(get()) }
