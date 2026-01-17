@@ -148,11 +148,16 @@ class ImportViewModel(
 
                 if (resolutionResult.needsReview.isEmpty()) {
                     // No payees need review - import directly with auto-resolved mappings
+                    // Look up each payee's default category to apply it automatically
+                    val payeesById = _uiState.value.allPayees.associateBy { it.id }
                     val autoMappings = resolutionResult.autoResolved.map { (name, payeeId) ->
+                        val payee = payeesById[payeeId]
                         name to PayeeMapping(
                             importedName = name,
                             resolvedPayeeId = payeeId,
                             createNew = false,
+                            categoryId = payee?.defaultCategoryId,
+                            applyCategory = payee?.defaultCategoryId != null,
                             rememberMapping = false
                         )
                     }.toMap()
@@ -161,15 +166,20 @@ class ImportViewModel(
                 } else {
                     // Has payees needing review - show mapping dialog
                     // Already sorted alphabetically in repository
+                    // Look up each auto-resolved payee's default category to apply it automatically
+                    val payeesById = _uiState.value.allPayees.associateBy { it.id }
                     _uiState.value = _uiState.value.copy(
                         payeeMappingStep = PayeeMappingStep.Reviewing,
                         unresolvedPayees = resolutionResult.needsReview,
                         currentPayeeIndex = 0,
                         payeeMappings = resolutionResult.autoResolved.map { (name, payeeId) ->
+                            val payee = payeesById[payeeId]
                             name to PayeeMapping(
                                 importedName = name,
                                 resolvedPayeeId = payeeId,
                                 createNew = false,
+                                categoryId = payee?.defaultCategoryId,
+                                applyCategory = payee?.defaultCategoryId != null,
                                 rememberMapping = false
                             )
                         }.toMap().toMutableMap(),
@@ -288,27 +298,32 @@ class ImportViewModel(
             // This is a recently created payee - find its name and create a new mapping to that name
             val recentPayee = state.recentlyCreatedPayees.find { it.id == payeeId }
             if (recentPayee != null) {
+                // Use provided category, or fall back to the recently created payee's default category
+                val effectiveCategoryId = categoryId ?: recentPayee.defaultCategoryId
                 // Map to the same name as the recently created payee
                 updatedMappings[currentPayee.importedName] = PayeeMapping(
                     importedName = currentPayee.importedName,
                     resolvedPayeeId = null,
                     createNew = true,
                     newPayeeName = recentPayee.name,
-                    categoryId = categoryId ?: recentPayee.defaultCategoryId,
+                    categoryId = effectiveCategoryId,
                     tagIds = tagIds,
-                    applyCategory = categoryId != null,
+                    applyCategory = effectiveCategoryId != null,
                     rememberMapping = remember
                 )
             }
         } else {
             // Regular existing payee from database
+            // Use provided category, or fall back to the payee's default category
+            val existingPayee = state.allPayees.find { it.id == payeeId }
+            val effectiveCategoryId = categoryId ?: existingPayee?.defaultCategoryId
             updatedMappings[currentPayee.importedName] = PayeeMapping(
                 importedName = currentPayee.importedName,
                 resolvedPayeeId = payeeId,
                 createNew = false,
-                categoryId = categoryId,
+                categoryId = effectiveCategoryId,
                 tagIds = tagIds,
-                applyCategory = categoryId != null,
+                applyCategory = effectiveCategoryId != null,
                 rememberMapping = remember
             )
         }
