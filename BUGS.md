@@ -80,10 +80,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Added lookahead in `parseCsvLine()` to detect `""` and convert to single `"` per RFC 4180.
 
 ### 12. PerformanceRepository - Hardcoded holdingId
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PerformanceRepositoryImpl.kt:184`
 - **Issue:** `holdingId = 0L` hardcoded with TODO comment - breaks holding snapshot functionality.
-- **Fix:** Resolve holding ID from symbol or pass as parameter.
+- **Fix:** Added symbol-to-holdingId lookup map to resolve holdingId from Holdings table.
 
 ### 13. Investment Shares Type Mismatch
 - **Status:** Open
@@ -220,7 +220,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 9 | Temp ID collisions | Fixed | ImportViewModel.kt |
 | 10 | OFX unclosed tags | Fixed | ExportRepository.kt |
 | 11 | CSV escaped quotes | Fixed | CsvParser.kt |
-| 12 | Hardcoded holdingId | Open | |
+| 12 | Hardcoded holdingId | Fixed | PerformanceRepositoryImpl.kt |
 | 13 | Shares type mismatch | Open | |
 | 14 | Missing fields in update | Open | |
 | 15 | SearchViewModel updatedAt | Open | |
