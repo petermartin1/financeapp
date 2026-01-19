@@ -122,8 +122,6 @@ class ImportRepository(
 
             Result.success(result)
         } catch (e: Exception) {
-            println("Payee analysis error: ${e.message}")
-            e.printStackTrace()
             Result.failure(e)
         }
     }
@@ -272,8 +270,6 @@ class ImportRepository(
                 errors = 0
             ))
         } catch (e: Exception) {
-            println("Import with mappings error: ${e.message}")
-            e.printStackTrace()
             return@withContext Result.failure(e)
         }
     }
@@ -357,8 +353,6 @@ class ImportRepository(
                 errors = 0
             ))
         } catch (e: Exception) {
-            println("Import error: ${e.message}")
-            e.printStackTrace()
             return Result.failure(e)
         }
     }
