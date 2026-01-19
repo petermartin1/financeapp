@@ -116,10 +116,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Added check to treat both-false as both-true (show all), and updated isFilterActive to use XOR.
 
 ### 17. PayeeManagementViewModel - Missing Update Notification
-- **Status:** Open
+- **Status:** Not a bug
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/payees/PayeeManagementViewModel.kt:63-76`
 - **Issue:** `updatePayee()` and `setDefaultCategory()` don't trigger UI refresh.
-- **Fix:** Ensure repository notifies listeners after updates.
+- **Analysis:** The repository layer (`PayeeRepositoryImpl.updatePayee`) already calls `notifyPayeesChanged()` at line 131.
 
 ### 18. TemplatesViewModel - No Exception Handling
 - **Status:** Open
@@ -225,7 +225,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 14 | Missing fields in update | Fixed | TransactionRepositoryImpl.kt |
 | 15 | SearchViewModel updatedAt | Not a bug | N/A |
 | 16 | Filter logic mismatch | Fixed | TransactionsViewModel.kt |
-| 17 | PayeeManagement notification | Open | |
+| 17 | PayeeManagement notification | Not a bug | N/A |
 | 18 | Templates exception handling | Open | |
 | 19 | Snapshot scheduler delays | Open | |
 | 20 | String literal CategoryType | Open | |
