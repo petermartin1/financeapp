@@ -97,11 +97,11 @@ class ExportRepository(
 
             sb.appendLine("<STMTTRNRS>")
             sb.appendLine("<STMTRS>")
-            sb.appendLine("<CURDEF>USD")
+            sb.appendLine("<CURDEF>USD</CURDEF>")
             sb.appendLine("<BANKACCTFROM>")
-            sb.appendLine("<BANKID>000000000")
-            sb.appendLine("<ACCTID>$accountId")
-            sb.appendLine("<ACCTTYPE>${account[Accounts.type]}")
+            sb.appendLine("<BANKID>000000000</BANKID>")
+            sb.appendLine("<ACCTID>$accountId</ACCTID>")
+            sb.appendLine("<ACCTTYPE>${account[Accounts.type]}</ACCTTYPE>")
             sb.appendLine("</BANKACCTFROM>")
             sb.appendLine("<BANKTRANLIST>")
 
@@ -115,13 +115,13 @@ class ExportRepository(
                 val payeeName = tx[Transactions.payeeId]?.value?.toLong()?.let { payees[it] } ?: "Unknown"
 
                 sb.appendLine("<STMTTRN>")
-                sb.appendLine("<TRNTYPE>$trnType")
-                sb.appendLine("<DTPOSTED>$dateStr")
-                sb.appendLine("<TRNAMT>${amount / 100.0}")
-                sb.appendLine("<FITID>${tx[Transactions.id].value}")
-                sb.appendLine("<NAME>$payeeName")
+                sb.appendLine("<TRNTYPE>$trnType</TRNTYPE>")
+                sb.appendLine("<DTPOSTED>$dateStr</DTPOSTED>")
+                sb.appendLine("<TRNAMT>${amount / 100.0}</TRNAMT>")
+                sb.appendLine("<FITID>${tx[Transactions.id].value}</FITID>")
+                sb.appendLine("<NAME>$payeeName</NAME>")
                 tx[Transactions.memo]?.let {
-                    sb.appendLine("<MEMO>$it")
+                    sb.appendLine("<MEMO>$it</MEMO>")
                 }
                 sb.appendLine("</STMTTRN>")
                 totalCount++
