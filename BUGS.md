@@ -56,10 +56,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Load budget data using `budgetRepository.getBudgetsWithSpendingByMonth()`.
 
 ### 8. AppViewModel - Always Locks on Init
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/AppViewModel.kt:66-75`
 - **Issue:** `checkLockSetup()` sets `isLocked = true` every time ViewModel is created, even after user unlocked.
-- **Fix:** Only set `isLocked = true` on first app launch, not on ViewModel recreation.
+- **Fix:** Added companion object flag `hasUnlockedThisSession` that tracks unlock state across ViewModel recreations.
 
 ### 9. ImportViewModel - Temp ID Collisions
 - **Status:** Open
@@ -216,7 +216,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 5 | Reports not implemented | Fixed | ReportsViewModel.kt |
 | 6 | Case sensitivity in import | Not a bug | N/A |
 | 7 | Dashboard budget not loaded | Fixed | DashboardViewModel.kt |
-| 8 | AppViewModel always locks | Open | |
+| 8 | AppViewModel always locks | Fixed | AppViewModel.kt |
 | 9 | Temp ID collisions | Open | |
 | 10 | OFX unclosed tags | Open | |
 | 11 | CSV escaped quotes | Open | |
