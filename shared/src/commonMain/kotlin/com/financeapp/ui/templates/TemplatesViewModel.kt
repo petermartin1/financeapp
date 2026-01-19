@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -56,12 +57,17 @@ class TemplatesViewModel(
             )
 
             // Observe templates
-            templateRepository.getAllTemplates().collect { templates ->
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    templates = templates
-                )
-            }
+            templateRepository.getAllTemplates()
+                .catch { e ->
+                    // Log error and set loading to false to prevent UI from being stuck
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                }
+                .collect { templates ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        templates = templates
+                    )
+                }
         }
     }
 
