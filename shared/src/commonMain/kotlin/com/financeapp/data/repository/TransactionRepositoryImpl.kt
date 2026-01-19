@@ -225,6 +225,9 @@ class TransactionRepositoryImpl(
                 it[isCleared] = transaction.isCleared
                 it[isReconciled] = transaction.isReconciled
                 it[transferId] = transaction.transferId?.toInt()
+                it[importId] = transaction.importId
+                it[transactionType] = transaction.transactionType
+                it[sic] = transaction.sic
                 it[updatedAt] = now
             }
         }
