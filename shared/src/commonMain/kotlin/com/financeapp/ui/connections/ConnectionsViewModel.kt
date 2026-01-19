@@ -6,6 +6,8 @@ import com.financeapp.data.ofx.OfxRepository
 import com.financeapp.data.ofx.SyncSummary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,7 +21,7 @@ import kotlinx.datetime.toLocalDateTime
 class ConnectionsViewModel(
     private val ofxRepository: OfxRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val _uiState = MutableStateFlow(ConnectionsUiState())
     val uiState: StateFlow<ConnectionsUiState> = _uiState.asStateFlow()
@@ -102,6 +104,10 @@ class ConnectionsViewModel(
 
     fun clearSyncSummary() {
         _uiState.value = _uiState.value.copy(lastSyncSummary = null)
+    }
+
+    fun cleanup() {
+        scope.cancel()
     }
 }
 
