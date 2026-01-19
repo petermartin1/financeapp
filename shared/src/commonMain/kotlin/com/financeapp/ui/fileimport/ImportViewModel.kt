@@ -37,6 +37,10 @@ class ImportViewModel(
     private val _uiState = MutableStateFlow(ImportUiState())
     val uiState: StateFlow<ImportUiState> = _uiState.asStateFlow()
 
+    // Counter for generating unique temporary payee IDs (negative to distinguish from real IDs)
+    // Uses monotonically decreasing values to avoid collisions even if payees are removed
+    private var nextTempPayeeId = -1L
+
     init {
         loadAccounts()
         loadPayees()
@@ -168,6 +172,8 @@ class ImportViewModel(
                     // Already sorted alphabetically in repository
                     // Look up each auto-resolved payee's default category to apply it automatically
                     val payeesById = _uiState.value.allPayees.associateBy { it.id }
+                    // Reset temp ID counter for new import session
+                    nextTempPayeeId = -1L
                     _uiState.value = _uiState.value.copy(
                         payeeMappingStep = PayeeMappingStep.Reviewing,
                         unresolvedPayees = resolutionResult.needsReview,
@@ -352,7 +358,7 @@ class ImportViewModel(
 
         // Track this as a "recently created" payee (for suggesting to future payees)
         // Use a temporary ID (negative to distinguish from real IDs)
-        val tempId = -(state.recentlyCreatedPayees.size + 1).toLong()
+        val tempId = nextTempPayeeId--
         val newPayee = Payee(
             id = tempId,
             name = name,
@@ -386,6 +392,7 @@ class ImportViewModel(
             val result = importRepository.importWithMappings(transactions, accountId, mappings)
 
             if (result.isSuccess) {
+                nextTempPayeeId = -1L
                 _uiState.value = _uiState.value.copy(
                     payeeMappingStep = PayeeMappingStep.None,
                     isImporting = false,
@@ -398,6 +405,7 @@ class ImportViewModel(
                     recentlyCreatedPayees = emptyList()
                 )
             } else {
+                nextTempPayeeId = -1L
                 _uiState.value = _uiState.value.copy(
                     payeeMappingStep = PayeeMappingStep.None,
                     isImporting = false,
@@ -410,6 +418,7 @@ class ImportViewModel(
 
     // Cancel mapping and return to preview
     fun cancelMapping() {
+        nextTempPayeeId = -1L
         _uiState.value = _uiState.value.copy(
             payeeMappingStep = PayeeMappingStep.None,
             unresolvedPayees = emptyList(),
