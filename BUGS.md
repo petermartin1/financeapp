@@ -68,10 +68,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Added monotonically decreasing counter `nextTempPayeeId` that resets only at session boundaries.
 
 ### 10. OFX Export - Unclosed Tags
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/backup/ExportRepository.kt:118-124`
 - **Issue:** Writes `<TRNTYPE>value` without closing tags, producing invalid OFX format.
-- **Fix:** Add closing tags: `<TRNTYPE>value</TRNTYPE>`
+- **Fix:** Added closing tags to all OFX elements (CURDEF, BANKID, ACCTID, ACCTTYPE, TRNTYPE, DTPOSTED, TRNAMT, FITID, NAME, MEMO).
 
 ### 11. CSV Parser - Doesn't Handle Escaped Quotes
 - **Status:** Open
@@ -218,7 +218,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 7 | Dashboard budget not loaded | Fixed | DashboardViewModel.kt |
 | 8 | AppViewModel always locks | Fixed | AppViewModel.kt |
 | 9 | Temp ID collisions | Fixed | ImportViewModel.kt |
-| 10 | OFX unclosed tags | Open | |
+| 10 | OFX unclosed tags | Fixed | ExportRepository.kt |
 | 11 | CSV escaped quotes | Open | |
 | 12 | Hardcoded holdingId | Open | |
 | 13 | Shares type mismatch | Open | |
