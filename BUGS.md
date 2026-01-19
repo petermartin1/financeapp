@@ -44,10 +44,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 ## High Priority Bugs
 
 ### 6. Case Sensitivity in Import Payee Lookup
-- **Status:** Open
+- **Status:** Not a bug
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/ImportRepository.kt:316`
-- **Issue:** Filters with `it.lowercase() !in existingPayees.keys` but the map has original-case keys, causing duplicate payees.
-- **Fix:** Ensure `existingPayees` map uses lowercase keys consistently.
+- **Issue:** Code review flagged case sensitivity issues.
+- **Analysis:** The implementation already handles case sensitivity correctly. Both `getPayeesByNames()` and `batchInsertPayees()` return maps with lowercase keys, and lookups use `.lowercase()` consistently.
 
 ### 7. DashboardViewModel - Budget Never Loaded
 - **Status:** Open
@@ -214,7 +214,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 3 | AppLock missing return | Not a bug | N/A |
 | 4 | Nested transactions | Fixed | ScheduledTransactionRepositoryImpl.kt |
 | 5 | Reports not implemented | Fixed | ReportsViewModel.kt |
-| 6 | Case sensitivity in import | Open | |
+| 6 | Case sensitivity in import | Not a bug | N/A |
 | 7 | Dashboard budget not loaded | Open | |
 | 8 | AppViewModel always locks | Open | |
 | 9 | Temp ID collisions | Open | |
