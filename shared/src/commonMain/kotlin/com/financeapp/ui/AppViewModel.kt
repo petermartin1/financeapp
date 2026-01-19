@@ -23,6 +23,13 @@ class AppViewModel(
     private val priceRefreshService: PriceRefreshService,
     private val databaseSeeder: DatabaseSeeder
 ) {
+    companion object {
+        // Track if user has unlocked in this session.
+        // Using companion object so state survives ViewModel recreation
+        // but is lost when app process is killed (desired for security).
+        private var hasUnlockedThisSession = false
+    }
+
     private val scope = CoroutineScope(Dispatchers.Main)
 
     private val _lockState = MutableStateFlow(AppLockState())
@@ -68,7 +75,7 @@ class AppViewModel(
             val isSetUp = appLockRepository.isLockSetUp()
             _lockState.value = AppLockState(
                 isSetUp = isSetUp,
-                isLocked = true,
+                isLocked = isSetUp && !hasUnlockedThisSession,
                 failedAttempts = 0
             )
         }
@@ -77,6 +84,7 @@ class AppViewModel(
     fun setupPin(pin: String) {
         scope.launch {
             appLockRepository.setPin(pin)
+            hasUnlockedThisSession = true
             _lockState.value = AppLockState(
                 isSetUp = true,
                 isLocked = false,
@@ -90,6 +98,7 @@ class AppViewModel(
             val isValid = appLockRepository.verifyPin(pin)
             if (isValid) {
                 appLockRepository.resetFailedAttempts()
+                hasUnlockedThisSession = true
                 _lockState.value = _lockState.value.copy(
                     isLocked = false,
                     failedAttempts = 0
@@ -104,6 +113,7 @@ class AppViewModel(
     }
 
     fun lock() {
+        hasUnlockedThisSession = false
         _lockState.value = _lockState.value.copy(isLocked = true)
     }
 
@@ -122,6 +132,7 @@ class AppViewModel(
                 BiometricResult.SUCCESS -> {
                     scope.launch {
                         appLockRepository.resetFailedAttempts()
+                        hasUnlockedThisSession = true
                         _lockState.value = _lockState.value.copy(
                             isLocked = false,
                             failedAttempts = 0
