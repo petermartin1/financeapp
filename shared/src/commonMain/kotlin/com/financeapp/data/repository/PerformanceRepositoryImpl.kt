@@ -392,36 +392,32 @@ class PerformanceRepositoryImpl(
         }
 
         transaction(database) {
-            val snapshots = PortfolioSnapshots
+            val rows = PortfolioSnapshots
                 .selectAll().where { (PortfolioSnapshots.date greaterEq startDate) and (PortfolioSnapshots.date lessEq now) }
                 .orderBy(PortfolioSnapshots.date to SortOrder.ASC)
-                .mapIndexed { index, row ->
-                    val value = row[PortfolioSnapshots.totalValue]
-                    val previousValue = if (index > 0) {
-                        PortfolioSnapshots
-                            .selectAll()
-                            .orderBy(PortfolioSnapshots.date to SortOrder.DESC)
-                            .limit(1, offset = index.toLong() - 1)
-                            .firstOrNull()
-                            ?.get(PortfolioSnapshots.totalValue) ?: row[PortfolioSnapshots.totalCostBasis]
-                    } else {
-                        row[PortfolioSnapshots.totalCostBasis]
-                    }
+                .toList()
 
-                    val gainLoss = value - previousValue
-                    val gainLossPercent = if (previousValue > 0) {
-                        (gainLoss.toDouble() / previousValue.toDouble()) * 100.0
-                    } else {
-                        0.0
-                    }
+            var previousValue: Long? = null
+            val snapshots = rows.map { row ->
+                val value = row[PortfolioSnapshots.totalValue]
+                val baseValue = previousValue ?: row[PortfolioSnapshots.totalCostBasis]
 
-                    PerformanceDataPoint(
-                        date = row[PortfolioSnapshots.date],
-                        value = value,
-                        gainLoss = gainLoss,
-                        gainLossPercent = gainLossPercent
-                    )
+                val gainLoss = value - baseValue
+                val gainLossPercent = if (baseValue > 0) {
+                    (gainLoss.toDouble() / baseValue.toDouble()) * 100.0
+                } else {
+                    0.0
                 }
+
+                previousValue = value
+
+                PerformanceDataPoint(
+                    date = row[PortfolioSnapshots.date],
+                    value = value,
+                    gainLoss = gainLoss,
+                    gainLossPercent = gainLossPercent
+                )
+            }
 
             PerformanceChartData(
                 timeRange = timeRange,

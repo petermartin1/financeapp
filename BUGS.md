@@ -146,10 +146,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Handle null account names or use `innerJoin()`.
 
 ### 22. PerformanceRepositoryImpl - Incorrect Previous Value Logic
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PerformanceRepositoryImpl.kt:393-405`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PerformanceRepositoryImpl.kt:393-425`
 - **Issue:** Uses incorrect offset logic to find previous value - fetches wrong snapshot.
-- **Fix:** Use `zipWithNext()` or maintain previous value from prior iteration.
+- **Fix:** Maintain previous value from prior iteration using a mutable variable.
 
 ### 23. ImportViewModel - Auto-Mapping Ignores User Preference
 - **Status:** Open
@@ -230,7 +230,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 19 | Snapshot scheduler delays | Fixed | SnapshotScheduler.kt |
 | 20 | String literal CategoryType | Fixed | BudgetRepositoryImpl.kt |
 | 21 | Null in leftJoin | Open | |
-| 22 | Previous value logic | Open | |
+| 22 | Previous value logic | Fixed | PerformanceRepositoryImpl.kt |
 | 23 | Auto-mapping user preference | Open | |
 | 24 | Budget export performance | Open | |
 | 25 | QIF T/U fields | Open | |
