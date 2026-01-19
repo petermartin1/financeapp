@@ -34,7 +34,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Load payee/category names via JOIN in the original query or batch lookup before mapping.
 
 ### 5. ReportsViewModel - Not Implemented
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/reports/ReportsViewModel.kt:36-45`
 - **Issue:** `loadReport()` sets `isLoading = true` then immediately `false` without loading data. Reports page shows nothing.
 - **Fix:** Implement actual report loading logic.
@@ -213,7 +213,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 2 | Missing transaction notifications | Fixed | TransactionRepositoryImpl.kt |
 | 3 | AppLock missing return | Not a bug | N/A |
 | 4 | Nested transactions | Fixed | ScheduledTransactionRepositoryImpl.kt |
-| 5 | Reports not implemented | Open | |
+| 5 | Reports not implemented | Fixed | ReportsViewModel.kt |
 | 6 | Case sensitivity in import | Open | |
 | 7 | Dashboard budget not loaded | Open | |
 | 8 | AppViewModel always locks | Open | |
