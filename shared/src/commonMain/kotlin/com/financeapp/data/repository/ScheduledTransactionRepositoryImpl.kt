@@ -33,10 +33,26 @@ class ScheduledTransactionRepositoryImpl(
         scheduledTransactionRefreshTrigger.map { _ ->
             withContext(ioDispatcher) {
                 transaction(database) {
-                    ScheduledTransactions
+                    // Load all scheduled transactions with account names
+                    val scheduledRows = ScheduledTransactions
                         .join(Accounts, JoinType.INNER, ScheduledTransactions.accountId, Accounts.id)
                         .selectAll()
-                        .map { it.toScheduledTransactionWithDetails() }
+                        .toList()
+
+                    // Batch load all payees and categories once
+                    val payees = Payees.selectAll().associate { it[Payees.id].value.toLong() to it[Payees.name] }
+                    val categories = Categories.selectAll().associate { it[Categories.id].value.toLong() to it[Categories.name] }
+
+                    // Map results using lookup tables (no nested transactions)
+                    scheduledRows.map { row ->
+                        val scheduled = row.toScheduledTransaction()
+                        ScheduledTransactionWithDetails(
+                            scheduled = scheduled,
+                            accountName = row[Accounts.name],
+                            payeeName = scheduled.payeeId?.let { payees[it] },
+                            categoryName = scheduled.categoryId?.let { categories[it] }
+                        )
+                    }
                 }
             }
         }
@@ -122,35 +138,4 @@ class ScheduledTransactionRepositoryImpl(
         )
     }
 
-    private fun ResultRow.toScheduledTransactionWithDetails(): ScheduledTransactionWithDetails {
-        val scheduled = this.toScheduledTransaction()
-        val accountName = this[Accounts.name]
-
-        // Load payee name if exists
-        val payeeName = scheduled.payeeId?.let { payeeId ->
-            transaction(database) {
-                Payees
-                    .selectAll().where { Payees.id eq payeeId.toInt() }
-                    .singleOrNull()
-                    ?.get(Payees.name)
-            }
-        }
-
-        // Load category name if exists
-        val categoryName = scheduled.categoryId?.let { categoryId ->
-            transaction(database) {
-                Categories
-                    .selectAll().where { Categories.id eq categoryId.toInt() }
-                    .singleOrNull()
-                    ?.get(Categories.name)
-            }
-        }
-
-        return ScheduledTransactionWithDetails(
-            scheduled = scheduled,
-            accountName = accountName,
-            payeeName = payeeName,
-            categoryName = categoryName
-        )
-    }
 }

@@ -28,7 +28,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Analysis:** This is actually valid Kotlin. In expression-body lambdas, the last expression IS the return value. The code is correct.
 
 ### 4. Nested Database Transactions
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/ScheduledTransactionRepositoryImpl.kt:131-147`
 - **Issue:** Calls `transaction()` inside an already-running transaction when loading payee/category names.
 - **Fix:** Load payee/category names via JOIN in the original query or batch lookup before mapping.
@@ -212,7 +212,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 1 | Floating-point precision | Fixed | AmountParser.kt |
 | 2 | Missing transaction notifications | Fixed | TransactionRepositoryImpl.kt |
 | 3 | AppLock missing return | Not a bug | N/A |
-| 4 | Nested transactions | Open | |
+| 4 | Nested transactions | Fixed | ScheduledTransactionRepositoryImpl.kt |
 | 5 | Reports not implemented | Open | |
 | 6 | Case sensitivity in import | Open | |
 | 7 | Dashboard budget not loaded | Open | |
