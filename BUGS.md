@@ -74,10 +74,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Added closing tags to all OFX elements (CURDEF, BANKID, ACCTID, ACCTTYPE, TRNTYPE, DTPOSTED, TRNAMT, FITID, NAME, MEMO).
 
 ### 11. CSV Parser - Doesn't Handle Escaped Quotes
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/CsvParser.kt:69-87`
 - **Issue:** `"John ""Johnny"" Doe"` parses incorrectly - embedded quotes (`""`) not handled per RFC 4180.
-- **Fix:** Detect `""` sequences and convert to single `"` in output.
+- **Fix:** Added lookahead in `parseCsvLine()` to detect `""` and convert to single `"` per RFC 4180.
 
 ### 12. PerformanceRepository - Hardcoded holdingId
 - **Status:** Open
@@ -219,7 +219,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 8 | AppViewModel always locks | Fixed | AppViewModel.kt |
 | 9 | Temp ID collisions | Fixed | ImportViewModel.kt |
 | 10 | OFX unclosed tags | Fixed | ExportRepository.kt |
-| 11 | CSV escaped quotes | Open | |
+| 11 | CSV escaped quotes | Fixed | CsvParser.kt |
 | 12 | Hardcoded holdingId | Open | |
 | 13 | Shares type mismatch | Open | |
 | 14 | Missing fields in update | Open | |
