@@ -128,10 +128,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Added `.catch()` operator to handle exceptions and prevent UI from being stuck.
 
 ### 19. SnapshotScheduler - Hardcoded Delays
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/domain/service/SnapshotScheduler.kt:169-182`
 - **Issue:** `calculateDelayUntilWeeklyTime()` and `calculateDelayUntilMonthlyTime()` ignore parameters, always return 7 or 30 days.
-- **Fix:** Implement proper date calculations using kotlinx-datetime.
+- **Fix:** Implemented proper date calculations using kotlinx-datetime with edge case handling.
 
 ### 20. BudgetRepositoryImpl - String Literal for CategoryType
 - **Status:** Open
@@ -227,7 +227,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 16 | Filter logic mismatch | Fixed | TransactionsViewModel.kt |
 | 17 | PayeeManagement notification | Not a bug | N/A |
 | 18 | Templates exception handling | Fixed | TemplatesViewModel.kt |
-| 19 | Snapshot scheduler delays | Open | |
+| 19 | Snapshot scheduler delays | Fixed | SnapshotScheduler.kt |
 | 20 | String literal CategoryType | Open | |
 | 21 | Null in leftJoin | Open | |
 | 22 | Previous value logic | Open | |
