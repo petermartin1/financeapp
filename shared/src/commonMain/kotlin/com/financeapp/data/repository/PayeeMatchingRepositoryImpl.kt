@@ -116,8 +116,6 @@ class PayeeMatchingRepositoryImpl(
             // Also check for similar payees that were processed earlier in THIS import
             val similarInImport = if (processedPayeeNames.isNotEmpty()) {
                 payeeMatcher.findSimilarNames(importedName, processedPayeeNames, threshold)
-                    .also { similar ->
-                    }
             } else {
                 emptyList()
             }
