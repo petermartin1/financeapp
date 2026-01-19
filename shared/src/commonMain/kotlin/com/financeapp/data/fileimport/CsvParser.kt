@@ -70,9 +70,16 @@ class CsvParser {
         val result = mutableListOf<String>()
         var current = StringBuilder()
         var inQuotes = false
+        var i = 0
 
-        for (char in line) {
+        while (i < line.length) {
+            val char = line[i]
             when {
+                char == '"' && inQuotes && i + 1 < line.length && line[i + 1] == '"' -> {
+                    // Escaped quote ("") inside quoted field - convert to single quote
+                    current.append('"')
+                    i++ // Skip the second quote
+                }
                 char == '"' -> inQuotes = !inQuotes
                 char == ',' && !inQuotes -> {
                     result.add(current.toString().trim())
@@ -80,6 +87,7 @@ class CsvParser {
                 }
                 else -> current.append(char)
             }
+            i++
         }
         result.add(current.toString().trim())
 
