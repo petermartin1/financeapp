@@ -15,7 +15,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Use string-based conversion to preserve precision (split on decimal, pad zeros, combine).
 
 ### 2. Missing Transaction Change Notifications
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/TransactionRepositoryImpl.kt`
 - **Lines:** 172, 206, 231
 - **Issue:** `notifyTransactionsChanged()` not called in `insertTransaction()`, `batchInsertTransactions()`, and `deleteTransaction()`, causing stale UI data.
@@ -210,7 +210,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | Bug # | Description | Status | Fixed In |
 |-------|-------------|--------|----------|
 | 1 | Floating-point precision | Fixed | AmountParser.kt |
-| 2 | Missing transaction notifications | Open | |
+| 2 | Missing transaction notifications | Fixed | TransactionRepositoryImpl.kt |
 | 3 | AppLock missing return | Open | |
 | 4 | Nested transactions | Open | |
 | 5 | Reports not implemented | Open | |

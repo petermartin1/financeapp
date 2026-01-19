@@ -149,7 +149,7 @@ class TransactionRepositoryImpl(
         val now = Clock.System.now().toEpochMilliseconds()
         val dateMillis = transaction.date.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
 
-        transaction(database) {
+        val id = transaction(database) {
             Transactions.insert {
                 it[accountId] = transaction.accountId.toInt()
                 it[date] = dateMillis
@@ -168,6 +168,8 @@ class TransactionRepositoryImpl(
                 it[updatedAt] = now
             }[Transactions.id].value.toLong()
         }
+        notifyTransactionsChanged()
+        id
     }
 
     override suspend fun batchInsertTransactions(transactions: List<Transaction>): List<Long> = withContext(ioDispatcher) {
@@ -175,7 +177,7 @@ class TransactionRepositoryImpl(
 
         val now = Clock.System.now().toEpochMilliseconds()
 
-        transaction(database) {
+        val ids = transaction(database) {
             transactions.map { transaction ->
                 try {
                     val dateMillis = transaction.date.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
@@ -203,6 +205,8 @@ class TransactionRepositoryImpl(
                 }
             }
         }
+        notifyTransactionsChanged()
+        ids
     }
 
     override suspend fun updateTransaction(transaction: Transaction): Unit = withContext(ioDispatcher) {
@@ -224,12 +228,14 @@ class TransactionRepositoryImpl(
                 it[updatedAt] = now
             }
         }
+        notifyTransactionsChanged()
     }
 
     override suspend fun deleteTransaction(id: Long): Unit = withContext(ioDispatcher) {
         org.jetbrains.exposed.sql.transactions.transaction(database) {
             Transactions.deleteWhere { Transactions.id eq id.toInt() }
         }
+        notifyTransactionsChanged()
     }
 
     override suspend fun getRecentTransactions(limit: Int): List<TransactionWithDetails> = withContext(ioDispatcher) {
@@ -320,6 +326,7 @@ class TransactionRepositoryImpl(
                 it[Transactions.isReconciled] = isReconciled
             }
         }
+        notifyTransactionsChanged()
     }
 
     private fun ResultRow.toDomain(): Transaction {
