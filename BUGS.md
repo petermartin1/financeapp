@@ -186,10 +186,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Removed the empty `.also` block.
 
 ### 28. ConnectionsViewModel - Missing Cleanup Method
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/connections/ConnectionsViewModel.kt`
 - **Issue:** No `cleanup()` method to cancel coroutines - potential memory leak.
-- **Fix:** Add cleanup method like other ViewModels.
+- **Fix:** Added SupervisorJob to scope and cleanup() method to cancel coroutines.
 
 ### 29. BackupViewModel - Duplicate Error Handling
 - **Status:** Open
@@ -236,6 +236,6 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 25 | QIF T/U fields | Open | |
 | 26 | Debug print statements | Fixed | ImportRepository.kt |
 | 27 | Empty .also block | Fixed | PayeeMatchingRepositoryImpl.kt |
-| 28 | Missing cleanup method | Open | |
+| 28 | Missing cleanup method | Fixed | ConnectionsViewModel.kt |
 | 29 | Duplicate error handling | Open | |
 | 30 | Race condition | Open | |
