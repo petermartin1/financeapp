@@ -110,10 +110,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Analysis:** The repository layer (`TransactionRepositoryImpl.updateTransaction`) already sets `updatedAt = now` at line 231. The ViewModel doesn't need to set it.
 
 ### 16. TransactionsViewModel - Filter Logic Mismatch
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/transactions/TransactionsViewModel.kt:155-162`
 - **Issue:** If both `showCleared` and `showUncleared` are false, `isFilterActive()` returns true but all transactions are filtered out.
-- **Fix:** Validate that at least one option is selected.
+- **Fix:** Added check to treat both-false as both-true (show all), and updated isFilterActive to use XOR.
 
 ### 17. PayeeManagementViewModel - Missing Update Notification
 - **Status:** Open
@@ -224,7 +224,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 13 | Shares type mismatch | Fixed | Performance.kt |
 | 14 | Missing fields in update | Fixed | TransactionRepositoryImpl.kt |
 | 15 | SearchViewModel updatedAt | Not a bug | N/A |
-| 16 | Filter logic mismatch | Open | |
+| 16 | Filter logic mismatch | Fixed | TransactionsViewModel.kt |
 | 17 | PayeeManagement notification | Open | |
 | 18 | Templates exception handling | Open | |
 | 19 | Snapshot scheduler delays | Open | |
