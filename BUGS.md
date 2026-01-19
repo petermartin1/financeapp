@@ -174,10 +174,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 ## Low Priority / Code Quality
 
 ### 26. Debug Print Statements in Production Code
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/ImportRepository.kt:125,275,360`
 - **Issue:** `println()` and `printStackTrace()` calls should use proper logging.
-- **Fix:** Use logging framework or remove debug statements.
+- **Fix:** Removed debug print statements. Exceptions are propagated via Result.failure().
 
 ### 27. PayeeMatchingRepositoryImpl - Empty .also Block
 - **Status:** Fixed
@@ -234,7 +234,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 23 | Auto-mapping user preference | Open | |
 | 24 | Budget export performance | Open | |
 | 25 | QIF T/U fields | Open | |
-| 26 | Debug print statements | Open | |
+| 26 | Debug print statements | Fixed | ImportRepository.kt |
 | 27 | Empty .also block | Fixed | PayeeMatchingRepositoryImpl.kt |
 | 28 | Missing cleanup method | Open | |
 | 29 | Duplicate error handling | Open | |
