@@ -180,10 +180,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Use logging framework or remove debug statements.
 
 ### 27. PayeeMatchingRepositoryImpl - Empty .also Block
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PayeeMatchingRepositoryImpl.kt:119`
 - **Issue:** `.also { similar -> }` block is empty and serves no purpose.
-- **Fix:** Remove empty block.
+- **Fix:** Removed the empty `.also` block.
 
 ### 28. ConnectionsViewModel - Missing Cleanup Method
 - **Status:** Open
@@ -235,7 +235,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 24 | Budget export performance | Open | |
 | 25 | QIF T/U fields | Open | |
 | 26 | Debug print statements | Open | |
-| 27 | Empty .also block | Open | |
+| 27 | Empty .also block | Fixed | PayeeMatchingRepositoryImpl.kt |
 | 28 | Missing cleanup method | Open | |
 | 29 | Duplicate error handling | Open | |
 | 30 | Race condition | Open | |
