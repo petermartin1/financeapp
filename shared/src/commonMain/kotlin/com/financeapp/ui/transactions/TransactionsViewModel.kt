@@ -135,7 +135,9 @@ class TransactionsViewModel(
                 txn.transaction.categoryId == filter.categoryId
 
             // Cleared status
+            // If both showCleared and showUncleared are false, show all (prevent empty results)
             val matchesCleared = when {
+                !filter.showCleared && !filter.showUncleared -> true
                 txn.transaction.isCleared -> filter.showCleared
                 else -> filter.showUncleared
             }
@@ -153,10 +155,11 @@ class TransactionsViewModel(
     }
 
     private fun isFilterActive(filter: TransactionFilter): Boolean {
+        // If both showCleared and showUncleared are false, treat as if both true (no filter)
+        val clearedFilterActive = (filter.showCleared xor filter.showUncleared)
         return filter.searchQuery.isNotBlank() ||
             filter.categoryId != null ||
-            !filter.showCleared ||
-            !filter.showUncleared ||
+            clearedFilterActive ||
             filter.minAmount != null ||
             filter.maxAmount != null
     }
