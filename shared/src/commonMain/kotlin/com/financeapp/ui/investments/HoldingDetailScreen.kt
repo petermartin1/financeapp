@@ -586,8 +586,7 @@ private fun formatCurrency(cents: Long): String {
     return "${'$'}${"%,.2f".format(kotlin.math.abs(dollars))}"
 }
 
-private fun formatShares(quantity: Long): String {
-    val shares = quantity / 10000.0
+private fun formatShares(shares: Double): String {
     return "%,.4f".format(shares)
 }
 

@@ -154,7 +154,7 @@ class HoldingDetailViewModelTest {
                 holdingId = holdingId,
                 symbol = "TEST",
                 name = "Test",
-                quantity = 10000,
+                quantity = 1.0,
                 costBasis = 100_00,
                 currentPrice = 120_00,
                 currentValue = 120_00,

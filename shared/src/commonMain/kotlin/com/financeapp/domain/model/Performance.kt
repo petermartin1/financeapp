@@ -71,7 +71,7 @@ data class HoldingSnapshot(
     val id: Long = 0,
     val holdingId: Long,
     val date: Long,
-    val quantity: Long, // In 1/10000 shares
+    val quantity: Double, // Number of shares (consistent with Holding.shares)
     val price: Long, // In cents
     val value: Long, // In cents
     val costBasis: Long, // In cents
@@ -86,7 +86,7 @@ data class HoldingPerformance(
     val holdingId: Long,
     val symbol: String,
     val name: String,
-    val quantity: Long, // In 1/10000 shares
+    val quantity: Double, // Number of shares (consistent with Holding.shares)
     val costBasis: Long, // Total cost basis in cents
     val currentPrice: Long, // Current price in cents
     val currentValue: Long, // Current total value in cents
