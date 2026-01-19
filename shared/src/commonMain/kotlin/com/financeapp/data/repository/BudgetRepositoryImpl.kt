@@ -5,6 +5,7 @@ import com.financeapp.db.schema.Categories
 import com.financeapp.db.schema.Transactions
 import com.financeapp.domain.model.Budget
 import com.financeapp.domain.model.BudgetWithSpending
+import com.financeapp.domain.model.CategoryType
 import com.financeapp.domain.repository.BudgetRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -181,7 +182,7 @@ class BudgetRepositoryImpl(
     override suspend fun getExpenseCategories(): List<Pair<Long, String>> = withContext(ioDispatcher) {
         transaction(database) {
             Categories
-                .selectAll().where { Categories.type eq "EXPENSE" }
+                .selectAll().where { Categories.type eq CategoryType.EXPENSE.name }
                 .map { it[Categories.id].value.toLong() to it[Categories.name] }
         }
     }
