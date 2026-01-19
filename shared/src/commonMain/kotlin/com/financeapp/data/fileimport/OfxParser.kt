@@ -164,9 +164,7 @@ class OfxParser {
     }
 
     private fun parseAmount(amountStr: String): Long {
-        // Convert to cents
-        val amount = amountStr.trim().toDouble()
-        return (amount * 100).toLong()
+        return AmountParser.parseToCentsOrZero(amountStr)
     }
 
     private fun parseTransactionType(typeStr: String): TransactionType {

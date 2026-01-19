@@ -112,30 +112,14 @@ class CsvParser {
     }
 
     private fun parseAmount(amountStr: String, config: CsvImportConfig): Long {
-        // Remove currency symbols, parentheses, spaces
-        var cleaned = amountStr
-            .replace("$", "")
-            .replace(",", "")
-            .replace(" ", "")
-            .trim()
-
-        // Handle parentheses as negative (accounting format)
-        val isNegative = cleaned.startsWith("(") && cleaned.endsWith(")")
-        if (isNegative) {
-            cleaned = cleaned.drop(1).dropLast(1)
-        }
-
-        var amount = cleaned.toDouble()
-        if (isNegative) {
-            amount = -amount
-        }
+        var amount = AmountParser.parseToCentsOrZero(amountStr)
 
         // Apply sign inversion if configured
         if (config.invertAmount) {
             amount = -amount
         }
 
-        return (amount * 100).toLong()
+        return amount
     }
 }
 

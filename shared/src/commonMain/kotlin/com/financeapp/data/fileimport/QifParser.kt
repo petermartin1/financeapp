@@ -97,16 +97,7 @@ class QifParser {
     }
 
     private fun parseQifAmount(amountStr: String): Long? {
-        return try {
-            val cleaned = amountStr
-                .replace(",", "")
-                .replace("$", "")
-                .trim()
-
-            (cleaned.toDouble() * 100).toLong()
-        } catch (e: Exception) {
-            null
-        }
+        return AmountParser.parseToCents(amountStr)
     }
 
     private data class QifTransaction(
