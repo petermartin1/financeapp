@@ -86,12 +86,12 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Added symbol-to-holdingId lookup map to resolve holdingId from Holdings table.
 
 ### 13. Investment Shares Type Mismatch
-- **Status:** Open
+- **Status:** Fixed
 - **Files:**
   - `shared/src/commonMain/kotlin/com/financeapp/domain/model/Investment.kt:8,15`
   - `shared/src/commonMain/kotlin/com/financeapp/domain/model/Performance.kt:74,89`
 - **Issue:** `Holding.shares` is `Double` but `HoldingSnapshot.quantity` is `Long` (1/10000 units) - inconsistent precision across models.
-- **Fix:** Standardize on `Long` in 1/10000 units for all share quantities.
+- **Fix:** Standardized on `Double` for all share quantities to match existing Holding.shares convention.
 
 ### 14. TransactionRepositoryImpl - Missing Fields in Update
 - **Status:** Open
@@ -221,7 +221,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 10 | OFX unclosed tags | Fixed | ExportRepository.kt |
 | 11 | CSV escaped quotes | Fixed | CsvParser.kt |
 | 12 | Hardcoded holdingId | Fixed | PerformanceRepositoryImpl.kt |
-| 13 | Shares type mismatch | Open | |
+| 13 | Shares type mismatch | Fixed | Performance.kt |
 | 14 | Missing fields in update | Open | |
 | 15 | SearchViewModel updatedAt | Open | |
 | 16 | Filter logic mismatch | Open | |
