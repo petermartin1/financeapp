@@ -94,10 +94,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Standardized on `Double` for all share quantities to match existing Holding.shares convention.
 
 ### 14. TransactionRepositoryImpl - Missing Fields in Update
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/TransactionRepositoryImpl.kt:208-227`
 - **Issue:** `updateTransaction()` doesn't update `importId`, `transactionType`, and `sic` fields.
-- **Fix:** Add missing fields to update statement.
+- **Fix:** Added importId, transactionType, and sic to the update statement.
 
 ---
 
@@ -222,7 +222,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 11 | CSV escaped quotes | Fixed | CsvParser.kt |
 | 12 | Hardcoded holdingId | Fixed | PerformanceRepositoryImpl.kt |
 | 13 | Shares type mismatch | Fixed | Performance.kt |
-| 14 | Missing fields in update | Open | |
+| 14 | Missing fields in update | Fixed | TransactionRepositoryImpl.kt |
 | 15 | SearchViewModel updatedAt | Open | |
 | 16 | Filter logic mismatch | Open | |
 | 17 | PayeeManagement notification | Open | |
