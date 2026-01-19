@@ -152,10 +152,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Maintain previous value from prior iteration using a mutable variable.
 
 ### 23. ImportViewModel - Auto-Mapping Ignores User Preference
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/fileimport/ImportViewModel.kt:149-165`
 - **Issue:** Auto-resolved payees always use payee's default category, ignoring user's previous import preferences.
-- **Fix:** Check saved alias for category preference before defaulting.
+- **Fix:** Added `preferredCategoryId` field to PayeeAlias schema/model. Aliases now store category preference from import, which takes priority over payee default.
 
 ### 24. ExportRepository - Budget Export Performance
 - **Status:** Open
@@ -231,7 +231,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 20 | String literal CategoryType | Fixed | BudgetRepositoryImpl.kt |
 | 21 | Null in leftJoin | Open | |
 | 22 | Previous value logic | Fixed | PerformanceRepositoryImpl.kt |
-| 23 | Auto-mapping user preference | Open | |
+| 23 | Auto-mapping user preference | Fixed | PayeeAlias, ImportViewModel.kt |
 | 24 | Budget export performance | Open | |
 | 25 | QIF T/U fields | Open | |
 | 26 | Debug print statements | Fixed | ImportRepository.kt |

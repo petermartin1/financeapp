@@ -6,6 +6,7 @@ import com.financeapp.domain.model.MatchType
 import com.financeapp.domain.model.Payee
 import com.financeapp.domain.model.PayeeAlias
 import com.financeapp.domain.model.PayeeResolutionResult
+import com.financeapp.domain.model.ResolvedAlias
 import com.financeapp.domain.model.UnresolvedPayee
 import com.financeapp.domain.repository.PayeeMatchingRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -64,6 +65,7 @@ class PayeeMatchingRepositoryImpl(
                     it[canonicalPayeeId] = alias.canonicalPayeeId.toInt()
                     it[matchType] = alias.matchType.name
                     it[confidence] = alias.confidence
+                    it[preferredCategoryId] = alias.preferredCategoryId?.toInt()
                     it[createdAt] = alias.createdAt.toEpochMilliseconds()
                 }.value.toLong()
             }
@@ -81,7 +83,7 @@ class PayeeMatchingRepositoryImpl(
         existingPayees: List<Payee>,
         threshold: Double
     ): PayeeResolutionResult = withContext(ioDispatcher) {
-        val autoResolved = mutableMapOf<String, Long>()
+        val autoResolved = mutableMapOf<String, ResolvedAlias>()
         val needsReview = mutableListOf<UnresolvedPayee>()
 
         // Group imported names by count (how many transactions have each name)
@@ -105,7 +107,10 @@ class PayeeMatchingRepositoryImpl(
             val normalizedName = payeeMatcher.normalize(importedName)
             val alias = aliasMap[normalizedName]
             if (alias != null) {
-                autoResolved[importedName] = alias.canonicalPayeeId
+                autoResolved[importedName] = ResolvedAlias(
+                    payeeId = alias.canonicalPayeeId,
+                    preferredCategoryId = alias.preferredCategoryId
+                )
                 // Don't add to processedPayeeNames since it's auto-resolved
                 continue
             }
@@ -150,6 +155,7 @@ class PayeeMatchingRepositoryImpl(
         canonicalPayeeId = this[PayeeAliases.canonicalPayeeId].value.toLong(),
         matchType = MatchType.valueOf(this[PayeeAliases.matchType]),
         confidence = this[PayeeAliases.confidence],
+        preferredCategoryId = this[PayeeAliases.preferredCategoryId]?.value?.toLong(),
         createdAt = Instant.fromEpochMilliseconds(this[PayeeAliases.createdAt])
     )
 }

@@ -36,6 +36,7 @@ object PayeeAliases : IntIdTable("PayeeAlias") {
     val canonicalPayeeId = reference("canonical_payee_id", Payees)
     val matchType = varchar("match_type", 50) // EXACT, FUZZY, MANUAL
     val confidence = double("confidence").nullable() // 0.0-1.0 for fuzzy matches
+    val preferredCategoryId = reference("preferred_category_id", Categories).nullable() // Category preference from import
     val createdAt = long("created_at")
 
     init {

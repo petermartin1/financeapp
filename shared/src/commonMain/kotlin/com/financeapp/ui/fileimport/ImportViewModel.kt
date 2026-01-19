@@ -152,16 +152,18 @@ class ImportViewModel(
 
                 if (resolutionResult.needsReview.isEmpty()) {
                     // No payees need review - import directly with auto-resolved mappings
-                    // Look up each payee's default category to apply it automatically
+                    // Use alias's preferred category if available, otherwise payee's default
                     val payeesById = _uiState.value.allPayees.associateBy { it.id }
-                    val autoMappings = resolutionResult.autoResolved.map { (name, payeeId) ->
-                        val payee = payeesById[payeeId]
+                    val autoMappings = resolutionResult.autoResolved.map { (name, resolved) ->
+                        val payee = payeesById[resolved.payeeId]
+                        // Prefer alias's saved category preference, fall back to payee default
+                        val categoryId = resolved.preferredCategoryId ?: payee?.defaultCategoryId
                         name to PayeeMapping(
                             importedName = name,
-                            resolvedPayeeId = payeeId,
+                            resolvedPayeeId = resolved.payeeId,
                             createNew = false,
-                            categoryId = payee?.defaultCategoryId,
-                            applyCategory = payee?.defaultCategoryId != null,
+                            categoryId = categoryId,
+                            applyCategory = categoryId != null,
                             rememberMapping = false
                         )
                     }.toMap()
@@ -170,7 +172,7 @@ class ImportViewModel(
                 } else {
                     // Has payees needing review - show mapping dialog
                     // Already sorted alphabetically in repository
-                    // Look up each auto-resolved payee's default category to apply it automatically
+                    // Use alias's preferred category if available, otherwise payee's default
                     val payeesById = _uiState.value.allPayees.associateBy { it.id }
                     // Reset temp ID counter for new import session
                     nextTempPayeeId = -1L
@@ -178,14 +180,16 @@ class ImportViewModel(
                         payeeMappingStep = PayeeMappingStep.Reviewing,
                         unresolvedPayees = resolutionResult.needsReview,
                         currentPayeeIndex = 0,
-                        payeeMappings = resolutionResult.autoResolved.map { (name, payeeId) ->
-                            val payee = payeesById[payeeId]
+                        payeeMappings = resolutionResult.autoResolved.map { (name, resolved) ->
+                            val payee = payeesById[resolved.payeeId]
+                            // Prefer alias's saved category preference, fall back to payee default
+                            val categoryId = resolved.preferredCategoryId ?: payee?.defaultCategoryId
                             name to PayeeMapping(
                                 importedName = name,
-                                resolvedPayeeId = payeeId,
+                                resolvedPayeeId = resolved.payeeId,
                                 createNew = false,
-                                categoryId = payee?.defaultCategoryId,
-                                applyCategory = payee?.defaultCategoryId != null,
+                                categoryId = categoryId,
+                                applyCategory = categoryId != null,
                                 rememberMapping = false
                             )
                         }.toMap().toMutableMap(),

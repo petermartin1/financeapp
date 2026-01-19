@@ -35,9 +35,17 @@ data class UnresolvedPayee(
 )
 
 /**
+ * Auto-resolved alias information
+ */
+data class ResolvedAlias(
+    val payeeId: Long,
+    val preferredCategoryId: Long? = null // Category from previous import preference
+)
+
+/**
  * Result of analyzing imported payee names
  */
 data class PayeeResolutionResult(
-    val autoResolved: Map<String, Long>, // importedName → payeeId (from saved aliases)
+    val autoResolved: Map<String, ResolvedAlias>, // importedName → resolved alias info
     val needsReview: List<UnresolvedPayee> // names that need user decision
 )

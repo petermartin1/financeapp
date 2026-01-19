@@ -215,6 +215,7 @@ class ImportRepository(
                                 canonicalPayeeId = payeeId,
                                 matchType = MatchType.MANUAL,
                                 confidence = null,
+                                preferredCategoryId = if (mapping.applyCategory) mapping.categoryId else null,
                                 createdAt = now
                             )
                         )

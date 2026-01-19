@@ -12,6 +12,7 @@ data class PayeeAlias(
     val canonicalPayeeId: Long,
     val matchType: MatchType,
     val confidence: Double?,
+    val preferredCategoryId: Long? = null,
     val createdAt: Instant
 )
 
