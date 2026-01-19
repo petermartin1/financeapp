@@ -104,10 +104,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 ## Medium Priority Issues
 
 ### 15. SearchViewModel - Missing updatedAt on Edit
-- **Status:** Open
+- **Status:** Not a bug
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/search/SearchViewModel.kt:95-114`
 - **Issue:** `editTransaction()` doesn't update `updatedAt` timestamp, breaking audit trails.
-- **Fix:** Add `updatedAt = Clock.System.now()` to the copy operation.
+- **Analysis:** The repository layer (`TransactionRepositoryImpl.updateTransaction`) already sets `updatedAt = now` at line 231. The ViewModel doesn't need to set it.
 
 ### 16. TransactionsViewModel - Filter Logic Mismatch
 - **Status:** Open
@@ -223,7 +223,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 12 | Hardcoded holdingId | Fixed | PerformanceRepositoryImpl.kt |
 | 13 | Shares type mismatch | Fixed | Performance.kt |
 | 14 | Missing fields in update | Fixed | TransactionRepositoryImpl.kt |
-| 15 | SearchViewModel updatedAt | Open | |
+| 15 | SearchViewModel updatedAt | Not a bug | N/A |
 | 16 | Filter logic mismatch | Open | |
 | 17 | PayeeManagement notification | Open | |
 | 18 | Templates exception handling | Open | |
