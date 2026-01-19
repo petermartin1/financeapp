@@ -7,6 +7,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * Service for scheduling and creating portfolio snapshots
@@ -164,22 +170,59 @@ class SnapshotScheduler(
 
     /**
      * Calculate delay until a specific day of week and hour
-     * Simplified version - in production you'd use a proper date/time library
+     * @param dayOfWeek 1 = Monday, 7 = Sunday (ISO-8601)
+     * @param hourOfDay Hour in 24-hour format (0-23)
      */
     private fun calculateDelayUntilWeeklyTime(dayOfWeek: Int, hourOfDay: Int): Long {
-        // Simplified: just schedule for 7 days from now
-        // In production, calculate actual day of week
-        return 7 * 24 * 60 * 60 * 1000L
+        val now = Clock.System.now()
+        val tz = TimeZone.currentSystemDefault()
+        val nowLocal = now.toLocalDateTime(tz)
+        val targetDayOfWeek = DayOfWeek.of(dayOfWeek)
+
+        // Calculate days until target day of week
+        val currentDayValue = nowLocal.dayOfWeek.value
+        var daysUntilTarget = targetDayOfWeek.value - currentDayValue
+        if (daysUntilTarget < 0) daysUntilTarget += 7
+        // If same day but past the hour, schedule for next week
+        if (daysUntilTarget == 0 && nowLocal.hour >= hourOfDay) daysUntilTarget = 7
+
+        // Calculate target instant
+        val targetDate = nowLocal.date.plus(daysUntilTarget, DateTimeUnit.DAY)
+        val targetMillis = targetDate.atStartOfDayIn(tz).toEpochMilliseconds() + (hourOfDay * 60 * 60 * 1000L)
+
+        return targetMillis - now.toEpochMilliseconds()
     }
 
     /**
      * Calculate delay until a specific day of month and hour
-     * Simplified version - in production you'd use a proper date/time library
+     * @param dayOfMonth Day of month (1-31)
+     * @param hourOfDay Hour in 24-hour format (0-23)
      */
     private fun calculateDelayUntilMonthlyTime(dayOfMonth: Int, hourOfDay: Int): Long {
-        // Simplified: just schedule for 30 days from now
-        // In production, calculate actual day of month
-        return 30 * 24 * 60 * 60 * 1000L
+        val now = Clock.System.now()
+        val tz = TimeZone.currentSystemDefault()
+        val nowLocal = now.toLocalDateTime(tz)
+
+        // Determine target month
+        var targetYear = nowLocal.year
+        var targetMonth = nowLocal.monthNumber
+        val effectiveDay = minOf(dayOfMonth, 28) // Clamp to avoid invalid dates
+
+        // If we're past the target day this month (or same day but past hour), go to next month
+        if (nowLocal.dayOfMonth > effectiveDay ||
+            (nowLocal.dayOfMonth == effectiveDay && nowLocal.hour >= hourOfDay)) {
+            targetMonth++
+            if (targetMonth > 12) {
+                targetMonth = 1
+                targetYear++
+            }
+        }
+
+        // Calculate target instant
+        val targetDate = kotlinx.datetime.LocalDate(targetYear, targetMonth, effectiveDay)
+        val targetMillis = targetDate.atStartOfDayIn(tz).toEpochMilliseconds() + (hourOfDay * 60 * 60 * 1000L)
+
+        return targetMillis - now.toEpochMilliseconds()
     }
 
     /**
