@@ -134,10 +134,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Implemented proper date calculations using kotlinx-datetime with edge case handling.
 
 ### 20. BudgetRepositoryImpl - String Literal for CategoryType
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/BudgetRepositoryImpl.kt:184`
 - **Issue:** Uses hardcoded string `"EXPENSE"` instead of `CategoryType.EXPENSE.name`.
-- **Fix:** Use enum reference for type safety.
+- **Fix:** Changed to `CategoryType.EXPENSE.name` for type safety.
 
 ### 21. InvestmentRepositoryImpl - Potential Null in leftJoin
 - **Status:** Open
@@ -228,7 +228,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 17 | PayeeManagement notification | Not a bug | N/A |
 | 18 | Templates exception handling | Fixed | TemplatesViewModel.kt |
 | 19 | Snapshot scheduler delays | Fixed | SnapshotScheduler.kt |
-| 20 | String literal CategoryType | Open | |
+| 20 | String literal CategoryType | Fixed | BudgetRepositoryImpl.kt |
 | 21 | Null in leftJoin | Open | |
 | 22 | Previous value logic | Open | |
 | 23 | Auto-mapping user preference | Open | |
