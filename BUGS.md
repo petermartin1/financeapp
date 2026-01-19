@@ -122,10 +122,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Analysis:** The repository layer (`PayeeRepositoryImpl.updatePayee`) already calls `notifyPayeesChanged()` at line 131.
 
 ### 18. TemplatesViewModel - No Exception Handling
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/templates/TemplatesViewModel.kt:59-64`
 - **Issue:** Flow collect block has no exception handling - ViewModel will crash on error.
-- **Fix:** Wrap in try-catch or use `.catch()` on the flow.
+- **Fix:** Added `.catch()` operator to handle exceptions and prevent UI from being stuck.
 
 ### 19. SnapshotScheduler - Hardcoded Delays
 - **Status:** Open
@@ -226,7 +226,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 15 | SearchViewModel updatedAt | Not a bug | N/A |
 | 16 | Filter logic mismatch | Fixed | TransactionsViewModel.kt |
 | 17 | PayeeManagement notification | Not a bug | N/A |
-| 18 | Templates exception handling | Open | |
+| 18 | Templates exception handling | Fixed | TemplatesViewModel.kt |
 | 19 | Snapshot scheduler delays | Open | |
 | 20 | String literal CategoryType | Open | |
 | 21 | Null in leftJoin | Open | |
