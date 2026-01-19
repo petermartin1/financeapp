@@ -62,10 +62,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Added companion object flag `hasUnlockedThisSession` that tracks unlock state across ViewModel recreations.
 
 ### 9. ImportViewModel - Temp ID Collisions
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/fileimport/ImportViewModel.kt:354-355`
 - **Issue:** Negative temp IDs for recently created payees use `-(size + 1)` which can collide if payees are removed from state.
-- **Fix:** Use monotonically decreasing counter or UUID-based approach.
+- **Fix:** Added monotonically decreasing counter `nextTempPayeeId` that resets only at session boundaries.
 
 ### 10. OFX Export - Unclosed Tags
 - **Status:** Open
@@ -217,7 +217,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 6 | Case sensitivity in import | Not a bug | N/A |
 | 7 | Dashboard budget not loaded | Fixed | DashboardViewModel.kt |
 | 8 | AppViewModel always locks | Fixed | AppViewModel.kt |
-| 9 | Temp ID collisions | Open | |
+| 9 | Temp ID collisions | Fixed | ImportViewModel.kt |
 | 10 | OFX unclosed tags | Open | |
 | 11 | CSV escaped quotes | Open | |
 | 12 | Hardcoded holdingId | Open | |
