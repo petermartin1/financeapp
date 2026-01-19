@@ -5,6 +5,7 @@ import com.financeapp.domain.model.DashboardWidget
 import com.financeapp.domain.model.DashboardWidgetType
 import com.financeapp.domain.model.defaultWidgets
 import com.financeapp.domain.repository.AccountRepository
+import com.financeapp.domain.repository.BudgetRepository
 import com.financeapp.domain.repository.TransactionRepository
 import com.financeapp.domain.repository.PreferencesRepository
 import com.financeapp.domain.model.AccountWithBalance
@@ -16,6 +17,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -34,7 +38,8 @@ data class DashboardUiState(
 class DashboardViewModel(
     private val accountRepository: AccountRepository,
     private val transactionRepository: TransactionRepository,
-    private val preferencesRepository: PreferencesRepository
+    private val preferencesRepository: PreferencesRepository,
+    private val budgetRepository: BudgetRepository
 ) {
     private val scope = CoroutineScope(Dispatchers.Main)
     private val json = Json { ignoreUnknownKeys = true }
@@ -72,13 +77,21 @@ class DashboardViewModel(
             // Calculate spending by category for current month
             val spending = transactionRepository.getSpendingByCategory()
 
+            // Load budget data for current month
+            val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+            val budgetsWithSpending = budgetRepository.getBudgetsWithSpendingByMonth(now.year, now.monthNumber).first()
+            val monthlyBudgetTotal = budgetsWithSpending.sumOf { it.budget.amount }
+            val monthlyBudgetSpent = budgetsWithSpending.sumOf { it.spent }
+
             _uiState.value = DashboardUiState(
                 isLoading = false,
                 accounts = accounts,
                 totalBalance = totalBalance,
                 recentTransactions = recentTransactions,
                 dashboardConfig = config,
-                spendingByCategory = spending
+                spendingByCategory = spending,
+                monthlyBudgetSpent = monthlyBudgetSpent,
+                monthlyBudgetTotal = monthlyBudgetTotal
             )
         }
     }

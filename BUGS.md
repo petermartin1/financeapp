@@ -50,7 +50,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Analysis:** The implementation already handles case sensitivity correctly. Both `getPayeesByNames()` and `batchInsertPayees()` return maps with lowercase keys, and lookups use `.lowercase()` consistently.
 
 ### 7. DashboardViewModel - Budget Never Loaded
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/dashboard/DashboardViewModel.kt:49-84`
 - **Issue:** `monthlyBudgetSpent` and `monthlyBudgetTotal` always show 0 - never populated from repository.
 - **Fix:** Load budget data using `budgetRepository.getBudgetsWithSpendingByMonth()`.
@@ -215,7 +215,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 4 | Nested transactions | Fixed | ScheduledTransactionRepositoryImpl.kt |
 | 5 | Reports not implemented | Fixed | ReportsViewModel.kt |
 | 6 | Case sensitivity in import | Not a bug | N/A |
-| 7 | Dashboard budget not loaded | Open | |
+| 7 | Dashboard budget not loaded | Fixed | DashboardViewModel.kt |
 | 8 | AppViewModel always locks | Open | |
 | 9 | Temp ID collisions | Open | |
 | 10 | OFX unclosed tags | Open | |

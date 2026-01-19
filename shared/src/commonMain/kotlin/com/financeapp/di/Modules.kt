@@ -123,7 +123,7 @@ val sharedModule = module {
     factory { InvestmentViewModel(get(), get(), get()) }
     factory { PerformanceTabViewModel(get(), get()) }
     factory { TagsViewModel(get()) }
-    factory { DashboardViewModel(get(), get(), get()) }
+    factory { DashboardViewModel(get(), get(), get(), get()) }
     factory { TemplatesViewModel(get(), get(), get(), get()) }
     factory { SearchViewModel(get(), get()) }
 }
