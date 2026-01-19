@@ -22,10 +22,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Add `notifyTransactionsChanged()` call at end of each method.
 
 ### 3. AppLockRepositoryImpl - Missing Return Statement
-- **Status:** Open
+- **Status:** Not a bug
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/AppLockRepositoryImpl.kt:27`
-- **Issue:** `storedHash == inputHash` comparison result is not returned - PIN verification likely always fails.
-- **Fix:** Change to `return@withContext storedHash == inputHash`
+- **Issue:** Code review flagged `storedHash == inputHash` as not returning.
+- **Analysis:** This is actually valid Kotlin. In expression-body lambdas, the last expression IS the return value. The code is correct.
 
 ### 4. Nested Database Transactions
 - **Status:** Open
@@ -211,7 +211,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 |-------|-------------|--------|----------|
 | 1 | Floating-point precision | Fixed | AmountParser.kt |
 | 2 | Missing transaction notifications | Fixed | TransactionRepositoryImpl.kt |
-| 3 | AppLock missing return | Open | |
+| 3 | AppLock missing return | Not a bug | N/A |
 | 4 | Nested transactions | Open | |
 | 5 | Reports not implemented | Open | |
 | 6 | Case sensitivity in import | Open | |
