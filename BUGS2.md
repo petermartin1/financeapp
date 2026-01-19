@@ -1,0 +1,157 @@
+# Known Bugs and Issues (Review Pass 2)
+
+This document tracks bugs discovered during deep code review. Issues are prioritized by severity.
+
+## Critical Bugs (Fix Immediately)
+
+### 1. Holding Snapshots Collapse Across Accounts
+- **Status:** Open
+- **Files:**
+  - `shared/src/commonMain/kotlin/com/financeapp/db/schema/Tables.kt:205-213`
+  - `shared/src/commonMain/kotlin/com/financeapp/data/repository/PerformanceRepositoryImpl.kt:140-193`
+- **Issue:** Holding snapshots are stored by `symbol` only (no holding/account ID). If multiple accounts hold the same symbol, snapshots merge and get misattributed. `getHoldingSnapshotsForDate()` returns `holdingId = 0L`, so snapshots cannot be mapped back to a real holding.
+- **Fix:** Store `holding_id` (or account + symbol) in `HoldingSnapshots` and populate it in snapshot creation. Replace symbol-only joins with `holding_id`, and resolve IDs properly in `getHoldingSnapshotsForDate()`.
+
+## High Priority Bugs
+
+### 2. Account Delete Leaves Orphan Data
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/AccountRepositoryImpl.kt:136-142`
+- **Issue:** Deleting an account only deletes transactions; holdings, scheduled transactions, templates, reconciliations, connected accounts, and related data remain.
+- **Fix:** Either cascade deletes for all related tables, or prevent account deletion when related records exist.
+
+### 3. Tag Delete Can Leave Orphans or Fail
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/TagRepositoryImpl.kt:83-87`
+- **Issue:** `TransactionTag` rows are not cleared when deleting a tag; this can violate FK constraints or leave orphan rows.
+- **Fix:** Delete `TransactionTag` entries for the tag before deleting the tag.
+
+### 4. Payee Delete Can Leave Orphans or Fail
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PayeeRepositoryImpl.kt:134-138`
+- **Issue:** Transactions still reference the payee; deleting it can violate FK constraints or leave orphan IDs.
+- **Fix:** Nullify `payee_id` on transactions before delete, or block delete if referenced.
+
+### 5. Transaction Update Drops Imported Metadata
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/TransactionRepositoryImpl.kt:216-228`
+- **Issue:** `updateTransaction()` does not persist `importId`, `transactionType`, or `sic`. Editing a transaction silently clears these fields.
+- **Fix:** Include missing fields in the update statement.
+
+### 6. Share Precision Mismatch Across Models
+- **Status:** Open
+- **Files:**
+  - `shared/src/commonMain/kotlin/com/financeapp/domain/model/Investment.kt:3-18`
+  - `shared/src/commonMain/kotlin/com/financeapp/domain/model/Performance.kt:70-111`
+- **Issue:** Holdings use `Double` shares while performance models use `Long` in 1/10000 units. Conversions truncate and drift.
+- **Fix:** Standardize on integer shares (1/10000) in all models and storage.
+
+## Medium Priority Issues
+
+### 7. Performance Chart Uses Incorrect Previous Value Logic
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PerformanceRepositoryImpl.kt:381-425`
+- **Issue:** Per-point query with `offset` is incorrect for previous values and is O(n^2). Chart deltas can be wrong.
+- **Fix:** Use `zipWithNext()` on the in-memory snapshot list, or query once and compute previous values sequentially.
+
+### 8. Holding Chart Uses Cost Basis as Prior Value
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PerformanceRepositoryImpl.kt:428-466`
+- **Issue:** For index > 0, `previousValue` uses `cost_basis`, not the previous snapshot value.
+- **Fix:** Track previous `marketValue` or compute deltas based on consecutive snapshots.
+
+### 9. Date Range End Uses Fixed 24h Window (DST Risk)
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/TransactionRepositoryImpl.kt:110-121`
+- **Issue:** `endMillis = startOfDay + 86400000 - 1` fails on DST days (23/25 hours), leading to missing or extra transactions.
+- **Fix:** Compute `endMillis` using `endDate.plus(1 day)` in local time and subtract 1 ms, or query by LocalDate boundaries.
+
+### 10. Snapshot Scheduler Ignores Weekly/Monthly Parameters
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/domain/service/SnapshotScheduler.kt:165-182`
+- **Issue:** Weekly and monthly delay calculations ignore day/hour parameters and always return 7 or 30 days.
+- **Fix:** Implement proper next-occurrence calculation using kotlinx-datetime.
+
+### 11. Export Escaping Gaps (CSV/OFX)
+- **Status:** Open
+- **Files:**
+  - `shared/src/commonMain/kotlin/com/financeapp/data/backup/ExportRepository.kt:30-58`
+  - `shared/src/commonMain/kotlin/com/financeapp/data/backup/ExportRepository.kt:65-126`
+- **Issue:** CSV export only escapes memo, not account/payee/category. OFX export doesn’t escape memo/payee for XML/SGML-sensitive characters.
+- **Fix:** Escape all string fields in CSV; sanitize/escape `<`, `&`, `>` in OFX text fields.
+
+### 12. Yahoo Price Conversion Truncates Instead of Rounding
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/quotes/YahooFinanceClient.kt:40-98`
+- **Issue:** `(price * 100).toLong()` truncates and biases values low.
+- **Fix:** Use rounding (e.g., `kotlin.math.round`).
+
+## Low Priority / Code Quality
+
+### 13. App Lock PIN Hash Uses Unsalted SHA-256
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/AppLockRepositoryImpl.kt:45-48`
+- **Issue:** PIN hashing uses a fast, unsalted hash.
+- **Fix:** Use PBKDF2/Argon2 with per-user salt (consistent with security docs).
+
+### 14. Transactions Filter Can Hide All Rows
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/transactions/TransactionsViewModel.kt:137-162`
+- **Issue:** If both `showCleared` and `showUncleared` are false, filter is active but yields no results.
+- **Fix:** Validate and force at least one option selected.
+
+### 15. Search Edit Doesn’t Update `updatedAt`
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/search/SearchViewModel.kt:95-110`
+- **Issue:** `updatedAt` isn’t touched on edit, breaking audit trails.
+- **Fix:** Set `updatedAt = Clock.System.now()` on edit.
+
+### 16. Templates ViewModel Missing Error Handling
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/templates/TemplatesViewModel.kt:43-64`
+- **Issue:** No `catch` or try-catch around initial loads; errors can leave UI stuck in loading state.
+- **Fix:** Add error handling and set `isLoading = false` on failure.
+
+### 17. SQLDelight Schema Diverges From Exposed
+- **Status:** Open
+- **File:** `shared/src/commonMain/sqldelight/com/financeapp/db/Finance.sq:433-436`
+- **Issue:** SQLDelight schema includes a `password` column that does not exist in Exposed schema, and the app uses Exposed only.
+- **Fix:** Align schemas or remove unused SQLDelight file.
+
+### 18. Connections ViewModel Lacks Cleanup
+- **Status:** Open
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/connections/ConnectionsViewModel.kt:31-37`
+- **Issue:** Flow collection runs in a scope that is never canceled.
+- **Fix:** Add `cleanup()` method and cancel the scope when ViewModel is disposed.
+
+### 19. Database Encryption Config Iterations Ignored
+- **Status:** Open
+- **File:** `shared/src/desktopMain/kotlin/com/financeapp/db/DatabaseDriverFactory.desktop.kt:87-126`
+- **Issue:** Config stores iteration/algorithm but `deriveEncryptionKey()` always uses hardcoded values, making the config misleading and preventing future iteration upgrades.
+- **Fix:** Pass `iterations`/`algorithm` into `deriveEncryptionKey()` and use config values consistently.
+
+---
+
+## Progress Tracking
+
+| Bug # | Description | Status | Fixed In |
+|-------|-------------|--------|----------|
+| 1 | Holding snapshots collapse across accounts | Open | |
+| 2 | Account delete leaves orphan data | Open | |
+| 3 | Tag delete can leave orphans | Open | |
+| 4 | Payee delete can leave orphans | Open | |
+| 5 | Transaction update drops metadata | Open | |
+| 6 | Share precision mismatch | Open | |
+| 7 | Performance chart previous value logic | Open | |
+| 8 | Holding chart uses cost basis as prior | Open | |
+| 9 | Date range DST risk | Open | |
+| 10 | Snapshot weekly/monthly scheduling ignores inputs | Open | |
+| 11 | Export escaping gaps | Open | |
+| 12 | Yahoo price truncation | Open | |
+| 13 | Unsalted PIN hash | Open | |
+| 14 | Filter can hide all rows | Open | |
+| 15 | Search edit missing updatedAt | Open | |
+| 16 | Templates ViewModel missing error handling | Open | |
+| 17 | SQLDelight schema divergence | Open | |
+| 18 | Connections ViewModel lacks cleanup | Open | |
+| 19 | Database encryption config iterations ignored | Open | |

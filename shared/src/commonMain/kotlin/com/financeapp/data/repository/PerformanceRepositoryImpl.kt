@@ -174,14 +174,19 @@ class PerformanceRepositoryImpl(
 
     override suspend fun getHoldingSnapshotsForDate(date: Long): List<HoldingSnapshot> = withContext(Dispatchers.IO) {
         transaction(database) {
+            // Build lookup map of symbol to holdingId (takes first if multiple accounts have same symbol)
+            val holdingsBySymbol = Holdings.selectAll()
+                .associate { it[Holdings.symbol] to it[Holdings.id].value.toLong() }
+
             (HoldingSnapshots innerJoin PortfolioSnapshots)
                 .selectAll().where { PortfolioSnapshots.date eq date }
                 .map { row ->
                     val costBasis = row[HoldingSnapshots.costBasis]
                     val marketValue = row[HoldingSnapshots.marketValue]
+                    val symbol = row[HoldingSnapshots.symbol]
                     HoldingSnapshot(
                         id = row[HoldingSnapshots.id].value.toLong(),
-                        holdingId = 0L, // Will need to resolve from symbol
+                        holdingId = holdingsBySymbol[symbol] ?: 0L,
                         date = row[PortfolioSnapshots.date],
                         quantity = (row[HoldingSnapshots.shares] * 10000).toLong(),
                         price = row[HoldingSnapshots.price],
