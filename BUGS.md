@@ -192,10 +192,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Added SupervisorJob to scope and cleanup() method to cancel coroutines.
 
 ### 29. BackupViewModel - Duplicate Error Handling
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/backup/BackupViewModel.kt:30-158`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/backup/BackupViewModel.kt:30-102`
 - **Issue:** Four nearly identical export functions with copy-pasted error handling.
-- **Fix:** Extract common error handling logic.
+- **Fix:** Extracted common logic into `performExport()` helper function.
 
 ### 30. PerformanceTabViewModel - Race Condition
 - **Status:** Open
@@ -237,5 +237,5 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 26 | Debug print statements | Fixed | ImportRepository.kt |
 | 27 | Empty .also block | Fixed | PayeeMatchingRepositoryImpl.kt |
 | 28 | Missing cleanup method | Fixed | ConnectionsViewModel.kt |
-| 29 | Duplicate error handling | Open | |
+| 29 | Duplicate error handling | Fixed | BackupViewModel.kt |
 | 30 | Race condition | Open | |
