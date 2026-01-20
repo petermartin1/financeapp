@@ -140,10 +140,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Changed to `CategoryType.EXPENSE.name` for type safety.
 
 ### 21. InvestmentRepositoryImpl - Potential Null in leftJoin
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/InvestmentRepositoryImpl.kt:69`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/InvestmentRepositoryImpl.kt:53`
 - **Issue:** `leftJoin` means `Accounts.name` could be null, but assigned to non-null field.
-- **Fix:** Handle null account names or use `innerJoin()`.
+- **Fix:** Changed to `innerJoin()` since every holding must have an account.
 
 ### 22. PerformanceRepositoryImpl - Incorrect Previous Value Logic
 - **Status:** Fixed
@@ -229,7 +229,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 18 | Templates exception handling | Fixed | TemplatesViewModel.kt |
 | 19 | Snapshot scheduler delays | Fixed | SnapshotScheduler.kt |
 | 20 | String literal CategoryType | Fixed | BudgetRepositoryImpl.kt |
-| 21 | Null in leftJoin | Open | |
+| 21 | Null in leftJoin | Fixed | InvestmentRepositoryImpl.kt |
 | 22 | Previous value logic | Fixed | PerformanceRepositoryImpl.kt |
 | 23 | Auto-mapping user preference | Fixed | PayeeAlias, ImportViewModel.kt |
 | 24 | Budget export performance | Fixed | ExportRepository.kt |

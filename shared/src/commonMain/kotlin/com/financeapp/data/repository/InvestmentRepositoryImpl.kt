@@ -48,9 +48,9 @@ class InvestmentRepositoryImpl(
             .map { _ ->
                 withContext(ioDispatcher) {
                     transaction(database) {
-                        // Join Holdings with latest SecurityPrices and Accounts
+                        // Join Holdings with Accounts (innerJoin since every holding must have an account)
                         Holdings
-                            .leftJoin(Accounts, { accountId }, { Accounts.id })
+                            .innerJoin(Accounts, { accountId }, { Accounts.id })
                             .selectAll()
                             .map { row ->
                                 val holding = row.toHoldingDomain()
