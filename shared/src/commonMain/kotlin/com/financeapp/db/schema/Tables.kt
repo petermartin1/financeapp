@@ -206,6 +206,7 @@ object PortfolioSnapshots : IntIdTable("PortfolioSnapshot") {
 // Individual holding snapshots (detailed tracking)
 object HoldingSnapshots : IntIdTable("HoldingSnapshot") {
     val portfolioSnapshotId = reference("portfolio_snapshot_id", PortfolioSnapshots)
+    val holdingId = reference("holding_id", Holdings).nullable() // nullable for migration compatibility
     val symbol = varchar("symbol", 20)
     val shares = double("shares")
     val costBasis = long("cost_basis") // in cents

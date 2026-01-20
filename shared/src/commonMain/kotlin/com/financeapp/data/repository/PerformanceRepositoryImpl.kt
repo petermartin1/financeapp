@@ -60,6 +60,7 @@ class PerformanceRepositoryImpl(
 
                 HoldingSnapshots.insert {
                     it[portfolioSnapshotId] = snapshotId
+                    it[holdingId] = holding.id.toInt()
                     it[symbol] = holding.symbol
                     it[shares] = holding.shares
                     it[costBasis] = costBasisValue
@@ -138,55 +139,45 @@ class PerformanceRepositoryImpl(
     }
 
     override fun getHoldingSnapshots(holdingId: Long, startDate: Long, endDate: Long): Flow<List<HoldingSnapshot>> = flow {
-        val holding = investmentRepository.getHoldingById(holdingId)
-        if (holding != null) {
-            val snapshots = withContext(Dispatchers.IO) {
-                transaction(database) {
-                    (HoldingSnapshots innerJoin PortfolioSnapshots)
-                        .selectAll().where {
-                            (HoldingSnapshots.symbol eq holding.symbol) and
-                            (PortfolioSnapshots.date greaterEq startDate) and
-                            (PortfolioSnapshots.date lessEq endDate)
-                        }
-                        .orderBy(PortfolioSnapshots.date to SortOrder.ASC)
-                        .map { row ->
-                            val costBasis = row[HoldingSnapshots.costBasis]
-                            val marketValue = row[HoldingSnapshots.marketValue]
-                            HoldingSnapshot(
-                                id = row[HoldingSnapshots.id].value.toLong(),
-                                holdingId = holdingId,
-                                date = row[PortfolioSnapshots.date],
-                                quantity = row[HoldingSnapshots.shares],
-                                price = row[HoldingSnapshots.price],
-                                value = marketValue,
-                                costBasis = costBasis,
-                                gainLoss = marketValue - costBasis,
-                                snapshotType = SnapshotType.valueOf(row[PortfolioSnapshots.snapshotType])
-                            )
-                        }
-                }
+        val snapshots = withContext(Dispatchers.IO) {
+            transaction(database) {
+                (HoldingSnapshots innerJoin PortfolioSnapshots)
+                    .selectAll().where {
+                        (HoldingSnapshots.holdingId eq holdingId.toInt()) and
+                        (PortfolioSnapshots.date greaterEq startDate) and
+                        (PortfolioSnapshots.date lessEq endDate)
+                    }
+                    .orderBy(PortfolioSnapshots.date to SortOrder.ASC)
+                    .map { row ->
+                        val costBasis = row[HoldingSnapshots.costBasis]
+                        val marketValue = row[HoldingSnapshots.marketValue]
+                        HoldingSnapshot(
+                            id = row[HoldingSnapshots.id].value.toLong(),
+                            holdingId = holdingId,
+                            date = row[PortfolioSnapshots.date],
+                            quantity = row[HoldingSnapshots.shares],
+                            price = row[HoldingSnapshots.price],
+                            value = marketValue,
+                            costBasis = costBasis,
+                            gainLoss = marketValue - costBasis,
+                            snapshotType = SnapshotType.valueOf(row[PortfolioSnapshots.snapshotType])
+                        )
+                    }
             }
-            emit(snapshots)
-        } else {
-            emit(emptyList())
         }
+        emit(snapshots)
     }
 
     override suspend fun getHoldingSnapshotsForDate(date: Long): List<HoldingSnapshot> = withContext(Dispatchers.IO) {
         transaction(database) {
-            // Build lookup map of symbol to holdingId (takes first if multiple accounts have same symbol)
-            val holdingsBySymbol = Holdings.selectAll()
-                .associate { it[Holdings.symbol] to it[Holdings.id].value.toLong() }
-
             (HoldingSnapshots innerJoin PortfolioSnapshots)
                 .selectAll().where { PortfolioSnapshots.date eq date }
                 .map { row ->
                     val costBasis = row[HoldingSnapshots.costBasis]
                     val marketValue = row[HoldingSnapshots.marketValue]
-                    val symbol = row[HoldingSnapshots.symbol]
                     HoldingSnapshot(
                         id = row[HoldingSnapshots.id].value.toLong(),
-                        holdingId = holdingsBySymbol[symbol] ?: 0L,
+                        holdingId = row[HoldingSnapshots.holdingId]?.value?.toLong() ?: 0L,
                         date = row[PortfolioSnapshots.date],
                         quantity = row[HoldingSnapshots.shares],
                         price = row[HoldingSnapshots.price],
@@ -427,11 +418,6 @@ class PerformanceRepositoryImpl(
     }
 
     override suspend fun getHoldingChartData(holdingId: Long, timeRange: TimeRange): PerformanceChartData = withContext(Dispatchers.IO) {
-        val holding = investmentRepository.getHoldingById(holdingId)
-        if (holding == null) {
-            return@withContext PerformanceChartData(timeRange, emptyList())
-        }
-
         val now = Clock.System.now().toEpochMilliseconds()
         val startDate = if (timeRange == TimeRange.ALL_TIME) {
             0L
@@ -442,7 +428,7 @@ class PerformanceRepositoryImpl(
         transaction(database) {
             val rows = (HoldingSnapshots innerJoin PortfolioSnapshots)
                 .selectAll().where {
-                    (HoldingSnapshots.symbol eq holding.symbol) and
+                    (HoldingSnapshots.holdingId eq holdingId.toInt()) and
                     (PortfolioSnapshots.date greaterEq startDate) and
                     (PortfolioSnapshots.date lessEq now)
                 }

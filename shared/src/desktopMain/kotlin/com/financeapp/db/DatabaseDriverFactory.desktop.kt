@@ -65,6 +65,16 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
             )
         }
 
+        // Run migrations for existing databases
+        transaction(db) {
+            try {
+                // Migration: Add holding_id column to HoldingSnapshot table (Bug #1 fix)
+                exec("ALTER TABLE ${HoldingSnapshots.tableName} ADD COLUMN IF NOT EXISTS holding_id INT REFERENCES ${Holdings.tableName}(id)")
+            } catch (e: Exception) {
+                println("Warning: Migration may have already been applied: ${e.message}")
+            }
+        }
+
         // Create indexes for better performance
         // Note: Exposed automatically creates indexes for foreign key columns
         // We only need to create indexes for non-FK columns that are frequently queried

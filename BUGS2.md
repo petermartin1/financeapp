@@ -5,12 +5,12 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 ## Critical Bugs (Fix Immediately)
 
 ### 1. Holding Snapshots Collapse Across Accounts
-- **Status:** Open
+- **Status:** Fixed
 - **Files:**
   - `shared/src/commonMain/kotlin/com/financeapp/db/schema/Tables.kt:205-213`
   - `shared/src/commonMain/kotlin/com/financeapp/data/repository/PerformanceRepositoryImpl.kt:140-193`
 - **Issue:** Holding snapshots are stored by `symbol` only (no holding/account ID). If multiple accounts hold the same symbol, snapshots merge and get misattributed. `getHoldingSnapshotsForDate()` returns `holdingId = 0L`, so snapshots cannot be mapped back to a real holding.
-- **Fix:** Store `holding_id` (or account + symbol) in `HoldingSnapshots` and populate it in snapshot creation. Replace symbol-only joins with `holding_id`, and resolve IDs properly in `getHoldingSnapshotsForDate()`.
+- **Fix:** Added `holding_id` column to `HoldingSnapshots` table. Updated `createPortfolioSnapshot()` to populate `holding_id`. Changed all queries to use `holdingId` instead of symbol-based lookups. Added database migration for existing databases.
 
 ## High Priority Bugs
 
@@ -136,7 +136,7 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 
 | Bug # | Description | Status | Fixed In |
 |-------|-------------|--------|----------|
-| 1 | Holding snapshots collapse across accounts | Open | |
+| 1 | Holding snapshots collapse across accounts | Fixed | Tables.kt, PerformanceRepositoryImpl.kt |
 | 2 | Account delete leaves orphan data | Fixed | AccountRepositoryImpl.kt |
 | 3 | Tag delete can leave orphans | Fixed | TagRepositoryImpl.kt |
 | 4 | Payee delete can leave orphans | Fixed | PayeeRepositoryImpl.kt |

@@ -23,6 +23,7 @@ fun createTestDatabase(): Database {
             Accounts,
             Categories,
             Payees,
+            PayeeAliases,
             Transactions,
             SplitItems,
             Tags,
@@ -35,7 +36,10 @@ fun createTestDatabase(): Database {
             TransactionTemplates,
             BankConnections,
             ConnectedAccounts,
-            ReconciliationSessions
+            ReconciliationSessions,
+            PortfolioSnapshots,
+            HoldingSnapshots,
+            DividendEvents
         )
     }
 
@@ -52,6 +56,9 @@ fun Database.clearAllTables() {
     transaction(this) {
         // Drop tables in reverse order to handle foreign key constraints
         SchemaUtils.drop(
+            DividendEvents,
+            HoldingSnapshots,
+            PortfolioSnapshots,
             ReconciliationSessions,
             ConnectedAccounts,
             BankConnections,
@@ -65,6 +72,7 @@ fun Database.clearAllTables() {
             Tags,
             SplitItems,
             Transactions,
+            PayeeAliases,
             Payees,
             Categories,
             Accounts
@@ -75,6 +83,7 @@ fun Database.clearAllTables() {
             Accounts,
             Categories,
             Payees,
+            PayeeAliases,
             Transactions,
             SplitItems,
             Tags,
@@ -87,7 +96,10 @@ fun Database.clearAllTables() {
             TransactionTemplates,
             BankConnections,
             ConnectedAccounts,
-            ReconciliationSessions
+            ReconciliationSessions,
+            PortfolioSnapshots,
+            HoldingSnapshots,
+            DividendEvents
         )
     }
 }
