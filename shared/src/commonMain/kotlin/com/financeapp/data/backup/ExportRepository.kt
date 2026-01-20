@@ -11,6 +11,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.selectAll
@@ -174,29 +175,25 @@ class ExportRepository(
     fun exportBudgets(): Pair<String, Int> = transaction(database) {
         val categories = Categories.selectAll().associate { it[Categories.id].value.toLong() to it[Categories.name] }
 
-        // Get all budgets by querying each month - simplified approach
+        // Query all budgets at once and sort in code
+        val allBudgets = Budgets
+            .selectAll()
+            .orderBy(Budgets.year to SortOrder.ASC, Budgets.month to SortOrder.ASC, Budgets.categoryId to SortOrder.ASC)
+            .toList()
+
         val sb = StringBuilder()
         sb.appendLine("Category,Amount,Year,Month")
 
-        var count = 0
-        // Export budgets for recent years
-        for (year in 2020..2030) {
-            for (month in 1..12) {
-                val budgets = Budgets
-                    .selectAll().where { (Budgets.year eq year) and (Budgets.month eq month) }
-                    .toList()
-
-                budgets.forEach { budget ->
-                    val categoryId = budget[Budgets.categoryId].value.toLong()
-                    val categoryName = escapeCsv(categories[categoryId] ?: "Unknown")
-                    val amount = budget[Budgets.amount] / 100.0
-                    sb.appendLine("$categoryName,$amount,$year,$month")
-                    count++
-                }
-            }
+        allBudgets.forEach { budget ->
+            val categoryId = budget[Budgets.categoryId].value.toLong()
+            val categoryName = escapeCsv(categories[categoryId] ?: "Unknown")
+            val amount = budget[Budgets.amount] / 100.0
+            val year = budget[Budgets.year]
+            val month = budget[Budgets.month]
+            sb.appendLine("$categoryName,$amount,$year,$month")
         }
 
-        sb.toString() to count
+        sb.toString() to allBudgets.size
     }
 
     private fun formatDate(millis: Long): String {

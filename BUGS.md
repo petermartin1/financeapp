@@ -158,10 +158,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Added `preferredCategoryId` field to PayeeAlias schema/model. Aliases now store category preference from import, which takes priority over payee default.
 
 ### 24. ExportRepository - Budget Export Performance
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/backup/ExportRepository.kt:183-184`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/backup/ExportRepository.kt:174-196`
 - **Issue:** Iterates years 2020-2030 making 132 queries even if only 2 budgets exist.
-- **Fix:** Query all budgets once and group in code.
+- **Fix:** Query all budgets once with ORDER BY, reducing 132 queries to 1.
 
 ### 25. QIF Parser - T and U Fields Overwrite
 - **Status:** Open
@@ -232,7 +232,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 21 | Null in leftJoin | Open | |
 | 22 | Previous value logic | Fixed | PerformanceRepositoryImpl.kt |
 | 23 | Auto-mapping user preference | Fixed | PayeeAlias, ImportViewModel.kt |
-| 24 | Budget export performance | Open | |
+| 24 | Budget export performance | Fixed | ExportRepository.kt |
 | 25 | QIF T/U fields | Open | |
 | 26 | Debug print statements | Fixed | ImportRepository.kt |
 | 27 | Empty .also block | Fixed | PayeeMatchingRepositoryImpl.kt |
