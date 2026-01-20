@@ -431,8 +431,8 @@ selectConnectionById:
 SELECT * FROM BankConnection WHERE id = ?;
 
 insertConnection:
-INSERT INTO BankConnection(bank_name, user_id, password, last_synced, created_at)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO BankConnection(bank_name, user_id, last_synced, created_at)
+VALUES (?, ?, ?, ?);
 
 updateConnectionLastSynced:
 UPDATE BankConnection SET last_synced = ? WHERE id = ?;

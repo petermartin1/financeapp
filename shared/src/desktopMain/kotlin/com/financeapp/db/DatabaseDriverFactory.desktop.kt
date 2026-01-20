@@ -25,7 +25,7 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
         val config = loadOrCreateConfig()
 
         // Derive encryption key from password + salt
-        val derivedKey = deriveEncryptionKey(encryptionKey, config.salt)
+        val derivedKey = deriveEncryptionKey(encryptionKey, config.salt, config.iterations, config.algorithm)
 
         // Connect to H2 with AES encryption
         val url = "jdbc:h2:${databasePath.absolutePath};CIPHER=AES"
@@ -129,11 +129,21 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
         }
     }
 
-    private fun deriveEncryptionKey(password: String, salt: ByteArray): String {
-        val spec = PBEKeySpec(password.toCharArray(), salt, 100000, 256)
-        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val keyBytes = factory.generateSecret(spec).encoded
-        return Base64.getEncoder().encodeToString(keyBytes)
+    private fun deriveEncryptionKey(password: String, salt: ByteArray, iterations: Int, algorithm: String): String {
+        val safeIterations = if (iterations > 0) iterations else DEFAULT_ITERATIONS
+        val safeAlgorithm = if (algorithm.isNotBlank()) algorithm else DEFAULT_ALGORITHM
+
+        return try {
+            val spec = PBEKeySpec(password.toCharArray(), salt, safeIterations, DERIVED_KEY_LENGTH_BITS)
+            val factory = SecretKeyFactory.getInstance(safeAlgorithm)
+            val keyBytes = factory.generateSecret(spec).encoded
+            Base64.getEncoder().encodeToString(keyBytes)
+        } catch (e: Exception) {
+            val spec = PBEKeySpec(password.toCharArray(), salt, DEFAULT_ITERATIONS, DERIVED_KEY_LENGTH_BITS)
+            val factory = SecretKeyFactory.getInstance(DEFAULT_ALGORITHM)
+            val keyBytes = factory.generateSecret(spec).encoded
+            Base64.getEncoder().encodeToString(keyBytes)
+        }
     }
 
     private data class DatabaseConfig(
@@ -141,4 +151,10 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
         val iterations: Int,
         val algorithm: String
     )
+
+    private companion object {
+        private const val DEFAULT_ITERATIONS = 100000
+        private const val DEFAULT_ALGORITHM = "PBKDF2WithHmacSHA256"
+        private const val DERIVED_KEY_LENGTH_BITS = 256
+    }
 }
