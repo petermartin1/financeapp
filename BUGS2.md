@@ -55,10 +55,10 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 - **Fix:** Now maintains previous value from prior iteration.
 
 ### 8. Holding Chart Uses Cost Basis as Prior Value
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PerformanceRepositoryImpl.kt:428-466`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PerformanceRepositoryImpl.kt:442-478`
 - **Issue:** For index > 0, `previousValue` uses `cost_basis`, not the previous snapshot value.
-- **Fix:** Track previous `marketValue` or compute deltas based on consecutive snapshots.
+- **Fix:** Now maintains previous market value from prior iteration.
 
 ### 9. Date Range End Uses Fixed 24h Window (DST Risk)
 - **Status:** Open
@@ -81,10 +81,10 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 - **Fix:** Escape all string fields in CSV; sanitize/escape `<`, `&`, `>` in OFX text fields.
 
 ### 12. Yahoo Price Conversion Truncates Instead of Rounding
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/quotes/YahooFinanceClient.kt:40-98`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/quotes/YahooFinanceClient.kt:43,98`
 - **Issue:** `(price * 100).toLong()` truncates and biases values low.
-- **Fix:** Use rounding (e.g., `kotlin.math.round`).
+- **Fix:** Changed to `roundToLong()` for proper rounding.
 
 ## Low Priority / Code Quality
 
@@ -143,11 +143,11 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 | 5 | Transaction update drops metadata | Fixed | BUGS.md #14 |
 | 6 | Share precision mismatch | Fixed | BUGS.md #13 |
 | 7 | Performance chart previous value logic | Fixed | BUGS.md #22 |
-| 8 | Holding chart uses cost basis as prior | Open | |
+| 8 | Holding chart uses cost basis as prior | Fixed | PerformanceRepositoryImpl.kt |
 | 9 | Date range DST risk | Open | |
 | 10 | Snapshot weekly/monthly scheduling ignores inputs | Fixed | BUGS.md #19 |
 | 11 | Export escaping gaps | Open | |
-| 12 | Yahoo price truncation | Open | |
+| 12 | Yahoo price truncation | Fixed | YahooFinanceClient.kt |
 | 13 | Unsalted PIN hash | Open | |
 | 14 | Filter can hide all rows | Fixed | BUGS.md #16 |
 | 15 | Search edit missing updatedAt | Not a bug | BUGS.md #15 |

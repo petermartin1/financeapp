@@ -4,6 +4,7 @@ import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.http.*
+import kotlin.math.roundToLong
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.datetime.Clock
@@ -39,7 +40,7 @@ class YahooFinanceClient(
                 val meta = result.meta
                 val quote = StockQuote(
                     symbol = symbol,
-                    price = (meta.regularMarketPrice * 100).toLong(), // Convert to cents
+                    price = (meta.regularMarketPrice * 100).roundToLong(), // Convert to cents with rounding
                     timestamp = Clock.System.now().toEpochMilliseconds(),
                     currency = meta.currency
                 )
@@ -94,7 +95,7 @@ class YahooFinanceClient(
                         HistoricalPrice(
                             symbol = symbol,
                             date = timestamp * 1000, // Convert to milliseconds
-                            price = (it * 100).toLong() // Convert to cents
+                            price = (it * 100).roundToLong() // Convert to cents with rounding
                         )
                     }
                 }

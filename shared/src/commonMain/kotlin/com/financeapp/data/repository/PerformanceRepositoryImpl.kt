@@ -440,31 +440,36 @@ class PerformanceRepositoryImpl(
         }
 
         transaction(database) {
-            val snapshots = (HoldingSnapshots innerJoin PortfolioSnapshots)
+            val rows = (HoldingSnapshots innerJoin PortfolioSnapshots)
                 .selectAll().where {
                     (HoldingSnapshots.symbol eq holding.symbol) and
                     (PortfolioSnapshots.date greaterEq startDate) and
                     (PortfolioSnapshots.date lessEq now)
                 }
                 .orderBy(PortfolioSnapshots.date to SortOrder.ASC)
-                .mapIndexed { index, row ->
-                    val value = row[HoldingSnapshots.marketValue]
-                    val previousValue = if (index > 0) row[HoldingSnapshots.costBasis] else value
+                .toList()
 
-                    val gainLoss = value - previousValue
-                    val gainLossPercent = if (previousValue > 0) {
-                        (gainLoss.toDouble() / previousValue.toDouble()) * 100.0
-                    } else {
-                        0.0
-                    }
+            var previousValue: Long? = null
+            val snapshots = rows.map { row ->
+                val value = row[HoldingSnapshots.marketValue]
+                val baseValue = previousValue ?: row[HoldingSnapshots.costBasis]
 
-                    PerformanceDataPoint(
-                        date = row[PortfolioSnapshots.date],
-                        value = value,
-                        gainLoss = gainLoss,
-                        gainLossPercent = gainLossPercent
-                    )
+                val gainLoss = value - baseValue
+                val gainLossPercent = if (baseValue > 0) {
+                    (gainLoss.toDouble() / baseValue.toDouble()) * 100.0
+                } else {
+                    0.0
                 }
+
+                previousValue = value
+
+                PerformanceDataPoint(
+                    date = row[PortfolioSnapshots.date],
+                    value = value,
+                    gainLoss = gainLoss,
+                    gainLossPercent = gainLossPercent
+                )
+            }
 
             PerformanceChartData(
                 timeRange = timeRange,
