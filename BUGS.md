@@ -198,10 +198,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Extracted common logic into `performExport()` helper function.
 
 ### 30. PerformanceTabViewModel - Race Condition
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/investments/PerformanceTabViewModel.kt:77-83`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/investments/PerformanceTabViewModel.kt:76-98`
 - **Issue:** `loadPerformanceMetrics()` and `loadChartData()` called without waiting - can complete out of order.
-- **Fix:** Use `combine()` or sequential loading.
+- **Fix:** Extracted into single `loadTimeRangeData()` suspend function that executes both operations sequentially.
 
 ---
 
@@ -238,4 +238,4 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 27 | Empty .also block | Fixed | PayeeMatchingRepositoryImpl.kt |
 | 28 | Missing cleanup method | Fixed | ConnectionsViewModel.kt |
 | 29 | Duplicate error handling | Fixed | BackupViewModel.kt |
-| 30 | Race condition | Open | |
+| 30 | Race condition | Fixed | PerformanceTabViewModel.kt |

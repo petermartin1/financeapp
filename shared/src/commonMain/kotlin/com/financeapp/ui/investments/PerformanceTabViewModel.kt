@@ -63,9 +63,8 @@ class PerformanceTabViewModel(
                         _allHoldingPerformance.value = holdings
                     }
 
-                // Load performance metrics for selected time range
-                loadPerformanceMetrics()
-                loadChartData()
+                // Load performance metrics and chart data sequentially
+                loadTimeRangeData()
             } catch (e: Exception) {
                 _error.value = e.message ?: "Failed to load performance data"
             } finally {
@@ -77,30 +76,24 @@ class PerformanceTabViewModel(
     fun selectTimeRange(timeRange: TimeRange) {
         if (_selectedTimeRange.value != timeRange) {
             _selectedTimeRange.value = timeRange
-            loadPerformanceMetrics()
-            loadChartData()
-        }
-    }
-
-    private fun loadPerformanceMetrics() {
-        viewModelScope.launch {
-            try {
-                val metrics = performanceRepository.calculatePerformanceMetrics(_selectedTimeRange.value)
-                _performanceMetrics.value = metrics
-            } catch (e: Exception) {
-                _error.value = e.message ?: "Failed to load performance metrics"
+            viewModelScope.launch {
+                loadTimeRangeData()
             }
         }
     }
 
-    private fun loadChartData() {
-        viewModelScope.launch {
-            try {
-                val data = performanceRepository.getPerformanceChartData(_selectedTimeRange.value)
-                _chartData.value = data
-            } catch (e: Exception) {
-                _error.value = e.message ?: "Failed to load chart data"
-            }
+    /**
+     * Loads both performance metrics and chart data sequentially to avoid race conditions.
+     */
+    private suspend fun loadTimeRangeData() {
+        try {
+            val metrics = performanceRepository.calculatePerformanceMetrics(_selectedTimeRange.value)
+            _performanceMetrics.value = metrics
+
+            val data = performanceRepository.getPerformanceChartData(_selectedTimeRange.value)
+            _chartData.value = data
+        } catch (e: Exception) {
+            _error.value = e.message ?: "Failed to load time range data"
         }
     }
 
