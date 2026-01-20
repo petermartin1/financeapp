@@ -48,9 +48,9 @@ class ExportRepository(
             if (!options.includeReconciled && tx[Transactions.isReconciled]) return@forEach
 
             val date = formatDate(tx[Transactions.date])
-            val account = accounts[tx[Transactions.accountId].value.toLong()] ?: ""
-            val payee = tx[Transactions.payeeId]?.value?.toLong()?.let { payees[it] } ?: ""
-            val category = tx[Transactions.categoryId]?.value?.toLong()?.let { categories[it] } ?: ""
+            val account = escapeCsv(accounts[tx[Transactions.accountId].value.toLong()] ?: "")
+            val payee = escapeCsv(tx[Transactions.payeeId]?.value?.toLong()?.let { payees[it] } ?: "")
+            val category = escapeCsv(tx[Transactions.categoryId]?.value?.toLong()?.let { categories[it] } ?: "")
             val amount = formatAmount(tx[Transactions.amount])
             val memo = escapeCsv(tx[Transactions.memo] ?: "")
             val cleared = if (tx[Transactions.isCleared]) "Y" else "N"
@@ -113,7 +113,7 @@ class ExportRepository(
                 val dateStr = formatOfxDate(tx[Transactions.date])
                 val amount = tx[Transactions.amount]
                 val trnType = if (amount >= 0) "CREDIT" else "DEBIT"
-                val payeeName = tx[Transactions.payeeId]?.value?.toLong()?.let { payees[it] } ?: "Unknown"
+                val payeeName = escapeXml(tx[Transactions.payeeId]?.value?.toLong()?.let { payees[it] } ?: "Unknown")
 
                 sb.appendLine("<STMTTRN>")
                 sb.appendLine("<TRNTYPE>$trnType</TRNTYPE>")
@@ -122,7 +122,7 @@ class ExportRepository(
                 sb.appendLine("<FITID>${tx[Transactions.id].value}</FITID>")
                 sb.appendLine("<NAME>$payeeName</NAME>")
                 tx[Transactions.memo]?.let {
-                    sb.appendLine("<MEMO>$it</MEMO>")
+                    sb.appendLine("<MEMO>${escapeXml(it)}</MEMO>")
                 }
                 sb.appendLine("</STMTTRN>")
                 totalCount++
@@ -219,6 +219,15 @@ class ExportRepository(
         } else {
             value
         }
+    }
+
+    private fun escapeXml(value: String): String {
+        return value
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&apos;")
     }
 
     private fun String.format(vararg args: Any?): String {

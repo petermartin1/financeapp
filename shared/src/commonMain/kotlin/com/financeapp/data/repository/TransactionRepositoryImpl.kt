@@ -16,10 +16,12 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -111,8 +113,10 @@ class TransactionRepositoryImpl(
         startDate: LocalDate,
         endDate: LocalDate
     ): Flow<List<Transaction>> = flow {
-        val startMillis = startDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
-        val endMillis = endDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds() + 86400000 - 1
+        val tz = TimeZone.currentSystemDefault()
+        val startMillis = startDate.atStartOfDayIn(tz).toEpochMilliseconds()
+        // Use proper date arithmetic to handle DST (23/25 hour days)
+        val endMillis = endDate.plus(1, DateTimeUnit.DAY).atStartOfDayIn(tz).toEpochMilliseconds() - 1
 
         val transactions = withContext(ioDispatcher) {
             transaction(database) {

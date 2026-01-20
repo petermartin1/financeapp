@@ -61,10 +61,10 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 - **Fix:** Now maintains previous market value from prior iteration.
 
 ### 9. Date Range End Uses Fixed 24h Window (DST Risk)
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/TransactionRepositoryImpl.kt:110-121`
 - **Issue:** `endMillis = startOfDay + 86400000 - 1` fails on DST days (23/25 hours), leading to missing or extra transactions.
-- **Fix:** Compute `endMillis` using `endDate.plus(1 day)` in local time and subtract 1 ms, or query by LocalDate boundaries.
+- **Fix:** Now uses `endDate.plus(1, DateTimeUnit.DAY).atStartOfDayIn(tz).toEpochMilliseconds() - 1` to properly handle DST transitions.
 
 ### 10. Snapshot Scheduler Ignores Weekly/Monthly Parameters
 - **Status:** Fixed (BUGS.md #19)
@@ -73,12 +73,12 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 - **Fix:** Implemented proper date calculations using kotlinx-datetime.
 
 ### 11. Export Escaping Gaps (CSV/OFX)
-- **Status:** Open
+- **Status:** Fixed
 - **Files:**
   - `shared/src/commonMain/kotlin/com/financeapp/data/backup/ExportRepository.kt:30-58`
   - `shared/src/commonMain/kotlin/com/financeapp/data/backup/ExportRepository.kt:65-126`
-- **Issue:** CSV export only escapes memo, not account/payee/category. OFX export doesn’t escape memo/payee for XML/SGML-sensitive characters.
-- **Fix:** Escape all string fields in CSV; sanitize/escape `<`, `&`, `>` in OFX text fields.
+- **Issue:** CSV export only escapes memo, not account/payee/category. OFX export doesn't escape memo/payee for XML/SGML-sensitive characters.
+- **Fix:** Now escapes all string fields in CSV (account, payee, category, memo); added escapeXml() function to sanitize `<`, `&`, `>`, `"`, `'` in OFX text fields (payeeName, memo).
 
 ### 12. Yahoo Price Conversion Truncates Instead of Rounding
 - **Status:** Fixed
@@ -144,9 +144,9 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 | 6 | Share precision mismatch | Fixed | BUGS.md #13 |
 | 7 | Performance chart previous value logic | Fixed | BUGS.md #22 |
 | 8 | Holding chart uses cost basis as prior | Fixed | PerformanceRepositoryImpl.kt |
-| 9 | Date range DST risk | Open | |
+| 9 | Date range DST risk | Fixed | TransactionRepositoryImpl.kt |
 | 10 | Snapshot weekly/monthly scheduling ignores inputs | Fixed | BUGS.md #19 |
-| 11 | Export escaping gaps | Open | |
+| 11 | Export escaping gaps | Fixed | ExportRepository.kt |
 | 12 | Yahoo price truncation | Fixed | YahooFinanceClient.kt |
 | 13 | Unsalted PIN hash | Open | |
 | 14 | Filter can hide all rows | Fixed | BUGS.md #16 |
