@@ -33,8 +33,12 @@ class QifParser {
                     line.startsWith("D") -> {
                         currentTransaction.date = parseQifDate(line.substring(1))
                     }
-                    line.startsWith("T") || line.startsWith("U") -> {
-                        currentTransaction.amount = parseQifAmount(line.substring(1))
+                    line.startsWith("T") -> {
+                        currentTransaction.amountT = parseQifAmount(line.substring(1))
+                    }
+                    line.startsWith("U") -> {
+                        // U field is typically higher precision, prefer it over T
+                        currentTransaction.amountU = parseQifAmount(line.substring(1))
                     }
                     line.startsWith("P") -> {
                         currentTransaction.payee = line.substring(1).trim()
@@ -55,7 +59,7 @@ class QifParser {
             }
 
             // Handle last transaction if file doesn't end with ^
-            if (currentTransaction.date != null && currentTransaction.amount != null) {
+            if (currentTransaction.date != null && (currentTransaction.amountT != null || currentTransaction.amountU != null)) {
                 val imported = currentTransaction.toImportedTransaction()
                 if (imported != null) {
                     transactions.add(imported)
@@ -102,7 +106,8 @@ class QifParser {
 
     private data class QifTransaction(
         var date: LocalDate? = null,
-        var amount: Long? = null,
+        var amountT: Long? = null,  // T field - standard amount
+        var amountU: Long? = null,  // U field - higher precision amount
         var payee: String? = null,
         var memo: String? = null,
         var checkNumber: String? = null,
@@ -111,7 +116,8 @@ class QifParser {
     ) {
         fun toImportedTransaction(): ImportedTransaction? {
             val d = date ?: return null
-            val a = amount ?: return null
+            // Prefer U (higher precision) over T when both are present
+            val a = amountU ?: amountT ?: return null
             val name = payee ?: memo ?: "Unknown"
 
             // Generate unique ID

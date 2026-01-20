@@ -164,10 +164,10 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 - **Fix:** Query all budgets once with ORDER BY, reducing 132 queries to 1.
 
 ### 25. QIF Parser - T and U Fields Overwrite
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/QifParser.kt:36-37`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/QifParser.kt:36-42`
 - **Issue:** Both "T" and "U" prefixes set the same amount field - last one wins.
-- **Fix:** Handle T and U separately or document precedence.
+- **Fix:** Store T and U amounts separately, prefer U (higher precision) when both present.
 
 ---
 
@@ -233,7 +233,7 @@ This document tracks bugs discovered during code review. Issues are prioritized 
 | 22 | Previous value logic | Fixed | PerformanceRepositoryImpl.kt |
 | 23 | Auto-mapping user preference | Fixed | PayeeAlias, ImportViewModel.kt |
 | 24 | Budget export performance | Fixed | ExportRepository.kt |
-| 25 | QIF T/U fields | Open | |
+| 25 | QIF T/U fields | Fixed | QifParser.kt |
 | 26 | Debug print statements | Fixed | ImportRepository.kt |
 | 27 | Empty .also block | Fixed | PayeeMatchingRepositoryImpl.kt |
 | 28 | Missing cleanup method | Fixed | ConnectionsViewModel.kt |
