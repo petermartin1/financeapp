@@ -1,6 +1,9 @@
 package com.financeapp.data.repository
 
+import com.financeapp.db.schema.PayeeAliases
 import com.financeapp.db.schema.Payees
+import com.financeapp.db.schema.ScheduledTransactions
+import com.financeapp.db.schema.TransactionTemplates
 import com.financeapp.db.schema.Transactions
 import com.financeapp.domain.model.Payee
 import com.financeapp.domain.model.PayeeWithStats
@@ -133,6 +136,21 @@ class PayeeRepositoryImpl(
 
     override suspend fun deletePayee(id: Long): Unit = withContext(ioDispatcher) {
         transaction(database) {
+            // Nullify payee references in transactions
+            Transactions.update({ Transactions.payeeId eq id.toInt() }) {
+                it[payeeId] = null
+            }
+            // Nullify payee references in scheduled transactions
+            ScheduledTransactions.update({ ScheduledTransactions.payeeId eq id.toInt() }) {
+                it[payeeId] = null
+            }
+            // Nullify payee references in templates
+            TransactionTemplates.update({ TransactionTemplates.payeeId eq id.toInt() }) {
+                it[payeeId] = null
+            }
+            // Delete payee aliases
+            PayeeAliases.deleteWhere { PayeeAliases.canonicalPayeeId eq id.toInt() }
+            // Delete the payee
             Payees.deleteWhere { Payees.id eq id.toInt() }
         }
         notifyPayeesChanged()

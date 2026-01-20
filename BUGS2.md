@@ -15,44 +15,44 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 ## High Priority Bugs
 
 ### 2. Account Delete Leaves Orphan Data
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/AccountRepositoryImpl.kt:136-142`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/AccountRepositoryImpl.kt:143-194`
 - **Issue:** Deleting an account only deletes transactions; holdings, scheduled transactions, templates, reconciliations, connected accounts, and related data remain.
-- **Fix:** Either cascade deletes for all related tables, or prevent account deletion when related records exist.
+- **Fix:** Now deletes all related data: transaction tags, split items, transactions, holding lots, holdings, scheduled transactions, reconciliation sessions, connected accounts, and nullifies template references.
 
 ### 3. Tag Delete Can Leave Orphans or Fail
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/TagRepositoryImpl.kt:83-87`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/TagRepositoryImpl.kt:83-90`
 - **Issue:** `TransactionTag` rows are not cleared when deleting a tag; this can violate FK constraints or leave orphan rows.
-- **Fix:** Delete `TransactionTag` entries for the tag before deleting the tag.
+- **Fix:** Now deletes TransactionTag entries before deleting the tag.
 
 ### 4. Payee Delete Can Leave Orphans or Fail
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PayeeRepositoryImpl.kt:134-138`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PayeeRepositoryImpl.kt:137-157`
 - **Issue:** Transactions still reference the payee; deleting it can violate FK constraints or leave orphan IDs.
-- **Fix:** Nullify `payee_id` on transactions before delete, or block delete if referenced.
+- **Fix:** Now nullifies payee references in transactions, scheduled transactions, and templates, and deletes payee aliases before deleting the payee.
 
 ### 5. Transaction Update Drops Imported Metadata
-- **Status:** Open
+- **Status:** Fixed (BUGS.md #14)
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/TransactionRepositoryImpl.kt:216-228`
 - **Issue:** `updateTransaction()` does not persist `importId`, `transactionType`, or `sic`. Editing a transaction silently clears these fields.
 - **Fix:** Include missing fields in the update statement.
 
 ### 6. Share Precision Mismatch Across Models
-- **Status:** Open
+- **Status:** Fixed (BUGS.md #13)
 - **Files:**
   - `shared/src/commonMain/kotlin/com/financeapp/domain/model/Investment.kt:3-18`
   - `shared/src/commonMain/kotlin/com/financeapp/domain/model/Performance.kt:70-111`
 - **Issue:** Holdings use `Double` shares while performance models use `Long` in 1/10000 units. Conversions truncate and drift.
-- **Fix:** Standardize on integer shares (1/10000) in all models and storage.
+- **Fix:** Standardized on Double for all share quantities.
 
 ## Medium Priority Issues
 
 ### 7. Performance Chart Uses Incorrect Previous Value Logic
-- **Status:** Open
+- **Status:** Fixed (BUGS.md #22)
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PerformanceRepositoryImpl.kt:381-425`
 - **Issue:** Per-point query with `offset` is incorrect for previous values and is O(n^2). Chart deltas can be wrong.
-- **Fix:** Use `zipWithNext()` on the in-memory snapshot list, or query once and compute previous values sequentially.
+- **Fix:** Now maintains previous value from prior iteration.
 
 ### 8. Holding Chart Uses Cost Basis as Prior Value
 - **Status:** Open
@@ -67,10 +67,10 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 - **Fix:** Compute `endMillis` using `endDate.plus(1 day)` in local time and subtract 1 ms, or query by LocalDate boundaries.
 
 ### 10. Snapshot Scheduler Ignores Weekly/Monthly Parameters
-- **Status:** Open
+- **Status:** Fixed (BUGS.md #19)
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/domain/service/SnapshotScheduler.kt:165-182`
 - **Issue:** Weekly and monthly delay calculations ignore day/hour parameters and always return 7 or 30 days.
-- **Fix:** Implement proper next-occurrence calculation using kotlinx-datetime.
+- **Fix:** Implemented proper date calculations using kotlinx-datetime.
 
 ### 11. Export Escaping Gaps (CSV/OFX)
 - **Status:** Open
@@ -95,22 +95,22 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 - **Fix:** Use PBKDF2/Argon2 with per-user salt (consistent with security docs).
 
 ### 14. Transactions Filter Can Hide All Rows
-- **Status:** Open
+- **Status:** Fixed (BUGS.md #16)
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/transactions/TransactionsViewModel.kt:137-162`
 - **Issue:** If both `showCleared` and `showUncleared` are false, filter is active but yields no results.
-- **Fix:** Validate and force at least one option selected.
+- **Fix:** Treats both-false as both-true (show all).
 
-### 15. Search Edit Doesn’t Update `updatedAt`
-- **Status:** Open
+### 15. Search Edit Doesn't Update `updatedAt`
+- **Status:** Not a bug (BUGS.md #15)
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/search/SearchViewModel.kt:95-110`
-- **Issue:** `updatedAt` isn’t touched on edit, breaking audit trails.
-- **Fix:** Set `updatedAt = Clock.System.now()` on edit.
+- **Issue:** `updatedAt` isn't touched on edit, breaking audit trails.
+- **Analysis:** The repository layer (TransactionRepositoryImpl.updateTransaction) already sets updatedAt automatically.
 
 ### 16. Templates ViewModel Missing Error Handling
-- **Status:** Open
+- **Status:** Fixed (BUGS.md #18)
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/templates/TemplatesViewModel.kt:43-64`
 - **Issue:** No `catch` or try-catch around initial loads; errors can leave UI stuck in loading state.
-- **Fix:** Add error handling and set `isLoading = false` on failure.
+- **Fix:** Added .catch() operator to handle exceptions.
 
 ### 17. SQLDelight Schema Diverges From Exposed
 - **Status:** Open
@@ -119,10 +119,10 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 - **Fix:** Align schemas or remove unused SQLDelight file.
 
 ### 18. Connections ViewModel Lacks Cleanup
-- **Status:** Open
+- **Status:** Fixed (BUGS.md #28)
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/connections/ConnectionsViewModel.kt:31-37`
 - **Issue:** Flow collection runs in a scope that is never canceled.
-- **Fix:** Add `cleanup()` method and cancel the scope when ViewModel is disposed.
+- **Fix:** Added SupervisorJob to scope and cleanup() method.
 
 ### 19. Database Encryption Config Iterations Ignored
 - **Status:** Open
@@ -137,21 +137,21 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 | Bug # | Description | Status | Fixed In |
 |-------|-------------|--------|----------|
 | 1 | Holding snapshots collapse across accounts | Open | |
-| 2 | Account delete leaves orphan data | Open | |
-| 3 | Tag delete can leave orphans | Open | |
-| 4 | Payee delete can leave orphans | Open | |
-| 5 | Transaction update drops metadata | Open | |
-| 6 | Share precision mismatch | Open | |
-| 7 | Performance chart previous value logic | Open | |
+| 2 | Account delete leaves orphan data | Fixed | AccountRepositoryImpl.kt |
+| 3 | Tag delete can leave orphans | Fixed | TagRepositoryImpl.kt |
+| 4 | Payee delete can leave orphans | Fixed | PayeeRepositoryImpl.kt |
+| 5 | Transaction update drops metadata | Fixed | BUGS.md #14 |
+| 6 | Share precision mismatch | Fixed | BUGS.md #13 |
+| 7 | Performance chart previous value logic | Fixed | BUGS.md #22 |
 | 8 | Holding chart uses cost basis as prior | Open | |
 | 9 | Date range DST risk | Open | |
-| 10 | Snapshot weekly/monthly scheduling ignores inputs | Open | |
+| 10 | Snapshot weekly/monthly scheduling ignores inputs | Fixed | BUGS.md #19 |
 | 11 | Export escaping gaps | Open | |
 | 12 | Yahoo price truncation | Open | |
 | 13 | Unsalted PIN hash | Open | |
-| 14 | Filter can hide all rows | Open | |
-| 15 | Search edit missing updatedAt | Open | |
-| 16 | Templates ViewModel missing error handling | Open | |
+| 14 | Filter can hide all rows | Fixed | BUGS.md #16 |
+| 15 | Search edit missing updatedAt | Not a bug | BUGS.md #15 |
+| 16 | Templates ViewModel missing error handling | Fixed | BUGS.md #18 |
 | 17 | SQLDelight schema divergence | Open | |
-| 18 | Connections ViewModel lacks cleanup | Open | |
+| 18 | Connections ViewModel lacks cleanup | Fixed | BUGS.md #28 |
 | 19 | Database encryption config iterations ignored | Open | |

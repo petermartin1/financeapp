@@ -1,7 +1,14 @@
 package com.financeapp.data.repository
 
 import com.financeapp.db.schema.Accounts
+import com.financeapp.db.schema.ConnectedAccounts
+import com.financeapp.db.schema.Holdings
+import com.financeapp.db.schema.HoldingLots
 import com.financeapp.db.schema.ReconciliationSessions
+import com.financeapp.db.schema.ScheduledTransactions
+import com.financeapp.db.schema.SplitItems
+import com.financeapp.db.schema.TransactionTags
+import com.financeapp.db.schema.TransactionTemplates
 import com.financeapp.db.schema.Transactions
 import com.financeapp.domain.model.Account
 import com.financeapp.domain.model.AccountType
@@ -135,9 +142,48 @@ class AccountRepositoryImpl(
 
     override suspend fun deleteAccount(id: Long): Unit = withContext(ioDispatcher) {
         transaction(database) {
-            // Delete all transactions for this account first
-            Transactions.deleteWhere { accountId eq id.toInt() }
-            // Then delete the account
+            // Delete transaction tags and split items for transactions in this account
+            val transactionIds = Transactions
+                .select(Transactions.id)
+                .where { Transactions.accountId eq id.toInt() }
+                .map { it[Transactions.id].value }
+
+            for (txnId in transactionIds) {
+                TransactionTags.deleteWhere { TransactionTags.transactionId eq txnId }
+                SplitItems.deleteWhere { SplitItems.transactionId eq txnId }
+            }
+
+            // Delete all transactions for this account
+            Transactions.deleteWhere { Transactions.accountId eq id.toInt() }
+
+            // Delete holding lots for holdings in this account
+            val holdingIds = Holdings
+                .select(Holdings.id)
+                .where { Holdings.accountId eq id.toInt() }
+                .map { it[Holdings.id].value }
+
+            for (holdingId in holdingIds) {
+                HoldingLots.deleteWhere { HoldingLots.holdingId eq holdingId }
+            }
+
+            // Delete holdings for this account
+            Holdings.deleteWhere { Holdings.accountId eq id.toInt() }
+
+            // Delete scheduled transactions for this account
+            ScheduledTransactions.deleteWhere { ScheduledTransactions.accountId eq id.toInt() }
+
+            // Nullify account references in templates (don't delete templates entirely)
+            TransactionTemplates.update({ TransactionTemplates.accountId eq id.toInt() }) {
+                it[accountId] = null
+            }
+
+            // Delete reconciliation sessions for this account
+            ReconciliationSessions.deleteWhere { ReconciliationSessions.accountId eq id.toInt() }
+
+            // Delete connected accounts for this account
+            ConnectedAccounts.deleteWhere { ConnectedAccounts.localAccountId eq id.toInt() }
+
+            // Finally delete the account
             Accounts.deleteWhere { Accounts.id eq id.toInt() }
         }
         refreshAccounts()

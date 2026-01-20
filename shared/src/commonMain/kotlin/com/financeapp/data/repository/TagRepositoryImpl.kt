@@ -82,6 +82,8 @@ class TagRepositoryImpl(
 
     override suspend fun deleteTag(id: Long): Unit = withContext(ioDispatcher) {
         transaction(database) {
+            // Delete TransactionTag entries first to avoid FK constraint violations
+            TransactionTags.deleteWhere { TransactionTags.tagId eq id.toInt() }
             Tags.deleteWhere { Tags.id eq id.toInt() }
         }
         notifyTagsChanged()
