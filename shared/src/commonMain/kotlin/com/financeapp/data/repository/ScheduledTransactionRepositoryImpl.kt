@@ -71,7 +71,8 @@ class ScheduledTransactionRepositoryImpl(
             ScheduledTransactions
                 .selectAll().where {
                     (ScheduledTransactions.isActive eq true) and
-                    (ScheduledTransactions.nextDate lessEq currentDateMillis)
+                    (ScheduledTransactions.nextDate lessEq currentDateMillis) and
+                    (ScheduledTransactions.endDate.isNull() or (ScheduledTransactions.nextDate lessEq ScheduledTransactions.endDate))
                 }
                 .map { it.toScheduledTransaction() }
         }
