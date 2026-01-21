@@ -99,8 +99,8 @@ class OfxParser {
     private fun parseTransactions(content: String): List<ImportedTransaction> {
         val transactions = mutableListOf<ImportedTransaction>()
 
-        // Find all STMTTRN blocks
-        val stmtTrnRegex = Regex("<STMTTRN>(.*?)</STMTTRN>", RegexOption.DOT_MATCHES_ALL)
+        // Find all STMTTRN blocks (case-insensitive for compatibility)
+        val stmtTrnRegex = Regex("<STMTTRN>(.*?)</STMTTRN>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
         val matches = stmtTrnRegex.findAll(content)
 
         for (match in matches) {
