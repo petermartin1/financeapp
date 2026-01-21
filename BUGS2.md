@@ -89,10 +89,10 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 ## Low Priority / Code Quality
 
 ### 13. App Lock PIN Hash Uses Unsalted SHA-256
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/AppLockRepositoryImpl.kt:45-48`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/AppLockRepositoryImpl.kt:60-126`
 - **Issue:** PIN hashing uses a fast, unsalted hash.
-- **Fix:** Use PBKDF2/Argon2 with per-user salt (consistent with security docs).
+- **Fix:** Now uses PBKDF2WithHmacSHA256 with 100,000 iterations and random 16-byte salt. Legacy SHA-256 hashes are auto-migrated on successful verification.
 
 ### 14. Transactions Filter Can Hide All Rows
 - **Status:** Fixed (BUGS.md #16)
@@ -113,10 +113,10 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 - **Fix:** Added .catch() operator to handle exceptions.
 
 ### 17. SQLDelight Schema Diverges From Exposed
-- **Status:** Open
-- **File:** `shared/src/commonMain/sqldelight/com/financeapp/db/Finance.sq:433-436`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/sqldelight/com/financeapp/db/Finance.sq:409-415`
 - **Issue:** SQLDelight schema includes a `password` column that does not exist in Exposed schema, and the app uses Exposed only.
-- **Fix:** Align schemas or remove unused SQLDelight file.
+- **Fix:** Removed password column from BankConnection table. Passwords are now stored in platform-specific keychain/encrypted storage. Schemas are aligned.
 
 ### 18. Connections ViewModel Lacks Cleanup
 - **Status:** Fixed (BUGS.md #28)
@@ -125,10 +125,10 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 - **Fix:** Added SupervisorJob to scope and cleanup() method.
 
 ### 19. Database Encryption Config Iterations Ignored
-- **Status:** Open
-- **File:** `shared/src/desktopMain/kotlin/com/financeapp/db/DatabaseDriverFactory.desktop.kt:87-126`
+- **Status:** Fixed
+- **File:** `shared/src/desktopMain/kotlin/com/financeapp/db/DatabaseDriverFactory.desktop.kt:132-147`
 - **Issue:** Config stores iteration/algorithm but `deriveEncryptionKey()` always uses hardcoded values, making the config misleading and preventing future iteration upgrades.
-- **Fix:** Pass `iterations`/`algorithm` into `deriveEncryptionKey()` and use config values consistently.
+- **Fix:** `deriveEncryptionKey()` now accepts and uses `iterations` and `algorithm` parameters from config, with safe fallbacks.
 
 ---
 
@@ -148,10 +148,10 @@ This document tracks bugs discovered during deep code review. Issues are priorit
 | 10 | Snapshot weekly/monthly scheduling ignores inputs | Fixed | BUGS.md #19 |
 | 11 | Export escaping gaps | Fixed | ExportRepository.kt |
 | 12 | Yahoo price truncation | Fixed | YahooFinanceClient.kt |
-| 13 | Unsalted PIN hash | Open | |
+| 13 | Unsalted PIN hash | Fixed | AppLockRepositoryImpl.kt |
 | 14 | Filter can hide all rows | Fixed | BUGS.md #16 |
 | 15 | Search edit missing updatedAt | Not a bug | BUGS.md #15 |
 | 16 | Templates ViewModel missing error handling | Fixed | BUGS.md #18 |
-| 17 | SQLDelight schema divergence | Open | |
+| 17 | SQLDelight schema divergence | Fixed | Finance.sq |
 | 18 | Connections ViewModel lacks cleanup | Fixed | BUGS.md #28 |
-| 19 | Database encryption config iterations ignored | Open | |
+| 19 | Database encryption config iterations ignored | Fixed | DatabaseDriverFactory.desktop.kt |
