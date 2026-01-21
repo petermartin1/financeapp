@@ -236,6 +236,19 @@ class TransactionsViewModel(
         }
     }
 
+    fun setCleared(transaction: Transaction, cleared: Boolean) {
+        scope.launch {
+            transactionRepository.updateTransaction(
+                transaction.copy(
+                    isCleared = cleared,
+                    updatedAt = Clock.System.now()
+                )
+            )
+            transactionRepository.notifyTransactionsChanged()
+            accountRepository.notifyBalancesChanged()
+        }
+    }
+
     fun editTransaction(
         transaction: Transaction,
         categoryId: Long?,

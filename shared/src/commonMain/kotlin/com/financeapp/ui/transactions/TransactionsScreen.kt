@@ -171,7 +171,7 @@ fun TransactionsScreen(
                 onMarkCleared = {
                     selectedTransactionIds.forEach { id ->
                         uiState.filteredTransactions.find { it.transaction.id == id }?.let { txn ->
-                            viewModel.toggleCleared(txn.transaction.copy(isCleared = true))
+                            viewModel.setCleared(txn.transaction, true)
                         }
                     }
                     selectedTransactionIds = emptySet()
@@ -179,7 +179,7 @@ fun TransactionsScreen(
                 onMarkUncleared = {
                     selectedTransactionIds.forEach { id ->
                         uiState.filteredTransactions.find { it.transaction.id == id }?.let { txn ->
-                            viewModel.toggleCleared(txn.transaction.copy(isCleared = false))
+                            viewModel.setCleared(txn.transaction, false)
                         }
                     }
                     selectedTransactionIds = emptySet()
