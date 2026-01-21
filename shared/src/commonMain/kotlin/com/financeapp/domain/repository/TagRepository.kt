@@ -19,6 +19,7 @@ interface TagRepository {
 
     // Split operations
     suspend fun getSplitsForTransaction(transactionId: Long): List<SplitItem>
+    suspend fun getSplitTransactionIds(transactionIds: List<Long>): Set<Long>
     suspend fun setSplitsForTransaction(transactionId: Long, splits: List<SplitItem>)
     suspend fun clearSplitsForTransaction(transactionId: Long)
 

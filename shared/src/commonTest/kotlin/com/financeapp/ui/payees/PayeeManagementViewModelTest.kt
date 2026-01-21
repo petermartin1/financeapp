@@ -2,6 +2,7 @@ package com.financeapp.ui.payees
 
 import com.financeapp.test.*
 import com.financeapp.data.repository.*
+import com.financeapp.domain.matching.PayeeMatcher
 import com.financeapp.domain.model.CategoryType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -29,6 +30,8 @@ class PayeeManagementViewModelTest {
     private lateinit var categoryRepository: CategoryRepositoryImpl
     private lateinit var transactionRepository: TransactionRepositoryImpl
     private lateinit var accountRepository: AccountRepositoryImpl
+    private lateinit var tagRepository: TagRepositoryImpl
+    private lateinit var payeeMatchingRepository: PayeeMatchingRepositoryImpl
     private lateinit var viewModel: PayeeManagementViewModel
     private val testDispatcher = StandardTestDispatcher()
     // Helper function to wait for a specific state condition
@@ -60,8 +63,16 @@ class PayeeManagementViewModelTest {
         categoryRepository = CategoryRepositoryImpl(database, testDispatcher)
         transactionRepository = TransactionRepositoryImpl(database, testDispatcher)
         accountRepository = AccountRepositoryImpl(database, testDispatcher)
+        tagRepository = TagRepositoryImpl(database, testDispatcher)
+        payeeMatchingRepository = PayeeMatchingRepositoryImpl(database, PayeeMatcher(), testDispatcher)
 
-        viewModel = PayeeManagementViewModel(payeeRepository, categoryRepository)
+        viewModel = PayeeManagementViewModel(
+            payeeRepository,
+            categoryRepository,
+            transactionRepository,
+            tagRepository,
+            payeeMatchingRepository
+        )
     }
 
     @AfterTest

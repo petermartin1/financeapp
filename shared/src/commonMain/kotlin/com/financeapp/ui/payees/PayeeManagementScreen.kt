@@ -11,8 +11,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.PayeeWithStats
+import com.financeapp.domain.model.TransactionWithDetails
+import kotlinx.datetime.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,10 +25,16 @@ fun PayeeManagementScreen(
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var selectedPayee by remember { mutableStateOf<PayeeWithStats?>(null) }
+    val transactionsState by viewModel.transactionsUiState.collectAsState()
+    var selectedPayeeId by remember { mutableStateOf<Long?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showMergeDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    val selectedPayee = uiState.payees.find { it.payee.id == selectedPayeeId }
+
+    LaunchedEffect(selectedPayeeId) {
+        viewModel.selectPayee(selectedPayeeId)
+    }
 
     Scaffold(
         topBar = {
@@ -77,26 +87,125 @@ fun PayeeManagementScreen(
                         )
                     }
                 } else {
-                    LazyColumn(
+                    BoxWithConstraints(
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(filteredPayees) { payeeWithStats ->
-                            PayeeItem(
-                                payeeWithStats = payeeWithStats,
-                                categoryName = viewModel.getCategoryName(payeeWithStats.payee.defaultCategoryId),
-                                onEdit = {
-                                    selectedPayee = payeeWithStats
-                                    showEditDialog = true
-                                },
-                                onMerge = {
-                                    selectedPayee = payeeWithStats
-                                    showMergeDialog = true
-                                },
-                                onDelete = {
-                                    selectedPayee = payeeWithStats
-                                    showDeleteDialog = true
+                        val isNarrow = maxWidth < 900.dp
+                        val hasSelection = selectedPayeeId != null
+                        if (isNarrow) {
+                            if (hasSelection) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    PayeeList(
+                                        payees = filteredPayees,
+                                        selectedPayeeId = selectedPayeeId,
+                                        categoryNameFor = { viewModel.getCategoryName(it) },
+                                        onSelect = { selectedPayeeId = it.payee.id },
+                                        onEdit = {
+                                            selectedPayeeId = it.payee.id
+                                            showEditDialog = true
+                                        },
+                                        onMerge = {
+                                            selectedPayeeId = it.payee.id
+                                            showMergeDialog = true
+                                        },
+                                        onDelete = {
+                                            selectedPayeeId = it.payee.id
+                                            showDeleteDialog = true
+                                        },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxWidth()
+                                    )
+                                    HorizontalDivider()
+                                    PayeeTransactionsPanel(
+                                        payee = selectedPayee,
+                                        transactions = transactionsState.transactions,
+                                        onClose = { selectedPayeeId = null },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxWidth()
+                                    )
                                 }
-                            )
+                            } else {
+                                PayeeList(
+                                    payees = filteredPayees,
+                                    selectedPayeeId = selectedPayeeId,
+                                    categoryNameFor = { viewModel.getCategoryName(it) },
+                                    onSelect = { selectedPayeeId = it.payee.id },
+                                    onEdit = {
+                                        selectedPayeeId = it.payee.id
+                                        showEditDialog = true
+                                    },
+                                    onMerge = {
+                                        selectedPayeeId = it.payee.id
+                                        showMergeDialog = true
+                                    },
+                                    onDelete = {
+                                        selectedPayeeId = it.payee.id
+                                        showDeleteDialog = true
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        } else {
+                            if (hasSelection) {
+                                Row(
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    PayeeList(
+                                        payees = filteredPayees,
+                                        selectedPayeeId = selectedPayeeId,
+                                        categoryNameFor = { viewModel.getCategoryName(it) },
+                                        onSelect = { selectedPayeeId = it.payee.id },
+                                        onEdit = {
+                                            selectedPayeeId = it.payee.id
+                                            showEditDialog = true
+                                        },
+                                        onMerge = {
+                                            selectedPayeeId = it.payee.id
+                                            showMergeDialog = true
+                                        },
+                                        onDelete = {
+                                            selectedPayeeId = it.payee.id
+                                            showDeleteDialog = true
+                                        },
+                                        modifier = Modifier
+                                            .weight(0.6f)
+                                            .fillMaxHeight()
+                                    )
+                                    VerticalDivider()
+                                    PayeeTransactionsPanel(
+                                        payee = selectedPayee,
+                                        transactions = transactionsState.transactions,
+                                        onClose = { selectedPayeeId = null },
+                                        modifier = Modifier
+                                            .weight(0.4f)
+                                            .fillMaxHeight()
+                                    )
+                                }
+                            } else {
+                                PayeeList(
+                                    payees = filteredPayees,
+                                    selectedPayeeId = selectedPayeeId,
+                                    categoryNameFor = { viewModel.getCategoryName(it) },
+                                    onSelect = { selectedPayeeId = it.payee.id },
+                                    onEdit = {
+                                        selectedPayeeId = it.payee.id
+                                        showEditDialog = true
+                                    },
+                                    onMerge = {
+                                        selectedPayeeId = it.payee.id
+                                        showMergeDialog = true
+                                    },
+                                    onDelete = {
+                                        selectedPayeeId = it.payee.id
+                                        showDeleteDialog = true
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         }
                     }
                 }
@@ -126,6 +235,7 @@ fun PayeeManagementScreen(
             onDismiss = { showMergeDialog = false },
             onConfirm = { targetId ->
                 viewModel.mergePayees(selectedPayee!!.payee.id, targetId)
+                selectedPayeeId = null
                 showMergeDialog = false
             }
         )
@@ -143,6 +253,7 @@ fun PayeeManagementScreen(
                 TextButton(
                     onClick = {
                         viewModel.deletePayee(selectedPayee!!.payee.id)
+                        selectedPayeeId = null
                         showDeleteDialog = false
                     }
                 ) {
@@ -159,9 +270,39 @@ fun PayeeManagementScreen(
 }
 
 @Composable
+private fun PayeeList(
+    payees: List<PayeeWithStats>,
+    selectedPayeeId: Long?,
+    categoryNameFor: (Long?) -> String,
+    onSelect: (PayeeWithStats) -> Unit,
+    onEdit: (PayeeWithStats) -> Unit,
+    onMerge: (PayeeWithStats) -> Unit,
+    onDelete: (PayeeWithStats) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize()
+    ) {
+        items(payees) { payeeWithStats ->
+            PayeeItem(
+                payeeWithStats = payeeWithStats,
+                categoryName = categoryNameFor(payeeWithStats.payee.defaultCategoryId),
+                isSelected = payeeWithStats.payee.id == selectedPayeeId,
+                onSelect = { onSelect(payeeWithStats) },
+                onEdit = { onEdit(payeeWithStats) },
+                onMerge = { onMerge(payeeWithStats) },
+                onDelete = { onDelete(payeeWithStats) }
+            )
+        }
+    }
+}
+
+@Composable
 private fun PayeeItem(
     payeeWithStats: PayeeWithStats,
     categoryName: String,
+    isSelected: Boolean,
+    onSelect: () -> Unit,
     onEdit: () -> Unit,
     onMerge: () -> Unit,
     onDelete: () -> Unit
@@ -218,7 +359,145 @@ private fun PayeeItem(
                 }
             }
         },
-        modifier = Modifier.clickable { onEdit() }
+        colors = ListItemDefaults.colors(
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        ),
+        modifier = Modifier.clickable { onSelect() }
+    )
+    HorizontalDivider()
+}
+
+@Composable
+private fun PayeeTransactionsPanel(
+    payee: PayeeWithStats?,
+    transactions: List<TransactionWithDetails>,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxHeight(),
+        tonalElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = payee?.payee?.name ?: "Payee Transactions",
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (payee != null) {
+                        Text(
+                            text = "${transactions.size} transactions",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (payee != null) {
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+            }
+            HorizontalDivider()
+
+            when {
+                payee == null -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Select a payee to view transactions",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                transactions.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No non-split, non-transfer transactions for this payee",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(transactions) { transaction ->
+                            PayeeTransactionRow(transaction = transaction)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PayeeTransactionRow(transaction: TransactionWithDetails) {
+    val memo = transaction.transaction.memo?.takeIf { it.isNotBlank() }
+    val categoryLabel = transaction.categoryName ?: "Uncategorized"
+    val primaryLabel = memo ?: transaction.categoryName ?: "Transaction"
+    val secondaryParts = mutableListOf<String>()
+
+    secondaryParts.add(transaction.accountName)
+    if (primaryLabel != categoryLabel) {
+        secondaryParts.add(categoryLabel)
+    }
+    secondaryParts.add(formatDate(transaction.transaction.date))
+
+    val amountColor = if (transaction.transaction.amount >= 0) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.error
+    }
+
+    ListItem(
+        headlineContent = {
+            Text(
+                text = primaryLabel,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        supportingContent = {
+            Text(
+                text = secondaryParts.joinToString(" - "),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        trailingContent = {
+            Text(
+                text = formatCurrency(transaction.transaction.amount),
+                color = amountColor,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
     )
     HorizontalDivider()
 }
@@ -391,4 +670,15 @@ private fun MergePayeeDialog(
             }
         }
     )
+}
+
+private fun formatDate(date: LocalDate): String {
+    val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    return "${months[date.monthNumber - 1]} ${date.dayOfMonth}, ${date.year}"
+}
+
+private fun formatCurrency(cents: Long): String {
+    val dollars = cents / 100.0
+    val sign = if (cents < 0) "-" else ""
+    return "$sign\$${String.format("%.2f", kotlin.math.abs(dollars))}"
 }

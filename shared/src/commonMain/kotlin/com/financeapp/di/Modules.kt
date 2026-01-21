@@ -119,7 +119,7 @@ val sharedModule = module {
     single { BudgetViewModel(get()) }
     single { ReportsViewModel(get<TransactionRepository>(), get<AccountRepository>()) }
     single { BackupViewModel(get()) }
-    factory { PayeeManagementViewModel(get(), get()) }
+    factory { PayeeManagementViewModel(get(), get(), get(), get(), get()) }
     factory { InvestmentViewModel(get(), get(), get()) }
     factory { PerformanceTabViewModel(get(), get()) }
     factory { TagsViewModel(get()) }

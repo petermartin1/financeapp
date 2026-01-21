@@ -74,6 +74,14 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
                 println("Warning: Migration may have already been applied: ${e.message}")
             }
         }
+        transaction(db) {
+            try {
+                // Migration: Add preferred_category_id to PayeeAlias for alias category hints
+                exec("ALTER TABLE ${PayeeAliases.tableName} ADD COLUMN IF NOT EXISTS preferred_category_id INT REFERENCES ${Categories.tableName}(id)")
+            } catch (e: Exception) {
+                println("Warning: Migration may have already been applied: ${e.message}")
+            }
+        }
 
         // Create indexes for better performance
         // Note: Exposed automatically creates indexes for foreign key columns
@@ -82,9 +90,11 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
         // as defined in the Exposed column definitions (the string parameter, not the property name)
         transaction(db) {
             try {
-                exec("CREATE INDEX IF NOT EXISTS idx_transaction_date ON ${Transactions.tableName}(date)")
+                exec("CREATE INDEX IF NOT EXISTS idx_transaction_date ON ${Transactions.tableName}(\"${Transactions.date.name}\")")
                 exec("CREATE INDEX IF NOT EXISTS idx_transaction_cleared ON ${Transactions.tableName}(is_cleared)")
-                exec("CREATE INDEX IF NOT EXISTS idx_budget_month_year ON ${Budgets.tableName}(month, year)")
+                exec(
+                    "CREATE INDEX IF NOT EXISTS idx_budget_month_year ON ${Budgets.tableName}(\"${Budgets.month.name}\", \"${Budgets.year.name}\")"
+                )
                 exec("CREATE INDEX IF NOT EXISTS idx_scheduled_date_active ON ${ScheduledTransactions.tableName}(next_date, is_active)")
             } catch (e: Exception) {
                 println("Warning: Could not create some indexes: ${e.message}")

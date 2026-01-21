@@ -1,10 +1,15 @@
 package com.financeapp.ui.payees
 
+import com.financeapp.domain.matching.PayeeMatcher
 import com.financeapp.domain.model.Category
 import com.financeapp.domain.model.Payee
 import com.financeapp.domain.model.PayeeWithStats
+import com.financeapp.domain.model.TransactionWithDetails
 import com.financeapp.domain.repository.CategoryRepository
+import com.financeapp.domain.repository.PayeeMatchingRepository
 import com.financeapp.domain.repository.PayeeRepository
+import com.financeapp.domain.repository.TagRepository
+import com.financeapp.domain.repository.TransactionRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -12,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -22,13 +28,22 @@ data class PayeeManagementUiState(
     val searchQuery: String = ""
 )
 
+data class PayeeTransactionsUiState(
+    val transactions: List<TransactionWithDetails> = emptyList()
+)
+
 class PayeeManagementViewModel(
     private val payeeRepository: PayeeRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val transactionRepository: TransactionRepository,
+    private val tagRepository: TagRepository,
+    private val payeeMatchingRepository: PayeeMatchingRepository
 ) {
     private val scope = CoroutineScope(Dispatchers.Main)
+    private val payeeMatcher = PayeeMatcher()
 
     private val _searchQuery = MutableStateFlow("")
+    private val _selectedPayeeId = MutableStateFlow<Long?>(null)
 
     val uiState: StateFlow<PayeeManagementUiState> = combine(
         payeeRepository.getPayeesWithStats(),
@@ -47,8 +62,45 @@ class PayeeManagementViewModel(
         initialValue = PayeeManagementUiState()
     )
 
+    private val selectedPayeeIds = combine(
+        _selectedPayeeId,
+        payeeRepository.getAllPayees()
+    ) { selectedPayeeId, allPayees ->
+        selectedPayeeId to allPayees
+    }.mapLatest { (selectedPayeeId, allPayees) ->
+        if (selectedPayeeId == null) {
+            emptySet()
+        } else {
+            resolvePayeeIds(selectedPayeeId, allPayees)
+        }
+    }
+
+    val transactionsUiState: StateFlow<PayeeTransactionsUiState> = combine(
+        _selectedPayeeId,
+        selectedPayeeIds,
+        transactionRepository.getAllTransactionsWithDetails()
+    ) { selectedPayeeId, payeeIds, transactions ->
+        Triple(selectedPayeeId, payeeIds, transactions)
+    }.mapLatest { (selectedPayeeId, payeeIds, transactions) ->
+        if (selectedPayeeId == null) {
+            PayeeTransactionsUiState()
+        } else {
+            PayeeTransactionsUiState(
+                transactions = filterTransactionsForPayee(transactions, payeeIds)
+            )
+        }
+    }.stateIn(
+        scope = scope,
+        started = SharingStarted.Lazily,
+        initialValue = PayeeTransactionsUiState()
+    )
+
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
+    }
+
+    fun selectPayee(payeeId: Long?) {
+        _selectedPayeeId.value = payeeId
     }
 
     fun getFilteredPayees(): List<PayeeWithStats> {
@@ -99,6 +151,41 @@ class PayeeManagementViewModel(
     fun getCategoryName(categoryId: Long?): String {
         if (categoryId == null) return "None"
         return uiState.value.categories.find { it.id == categoryId }?.name ?: "Unknown"
+    }
+
+    private suspend fun resolvePayeeIds(selectedPayeeId: Long, allPayees: List<Payee>): Set<Long> {
+        val aliasNames = payeeMatchingRepository.getAliasesByPayeeId(selectedPayeeId)
+            .map { it.aliasName }
+            .toSet()
+
+        if (aliasNames.isEmpty()) {
+            return setOf(selectedPayeeId)
+        }
+
+        val aliasPayeeIds = allPayees
+            .filter { payeeMatcher.normalize(it.name) in aliasNames }
+            .map { it.id }
+
+        return (aliasPayeeIds + selectedPayeeId).toSet()
+    }
+
+    private suspend fun filterTransactionsForPayee(
+        transactions: List<TransactionWithDetails>,
+        payeeIds: Set<Long>
+    ): List<TransactionWithDetails> {
+        if (payeeIds.isEmpty()) return emptyList()
+
+        val payeeTransactions = transactions.filter { txn ->
+            val payeeId = txn.transaction.payeeId
+            payeeId != null && payeeId in payeeIds
+        }
+
+        val nonTransfers = payeeTransactions.filterNot { txn ->
+            txn.transaction.transferId != null || txn.transaction.transactionType == "TRANSFER"
+        }
+
+        val splitIds = tagRepository.getSplitTransactionIds(nonTransfers.map { it.transaction.id })
+        return nonTransfers.filterNot { it.transaction.id in splitIds }
     }
 
     /**

@@ -132,6 +132,18 @@ class TagRepositoryImpl(
         }
     }
 
+    override suspend fun getSplitTransactionIds(transactionIds: List<Long>): Set<Long> = withContext(ioDispatcher) {
+        if (transactionIds.isEmpty()) return@withContext emptySet()
+
+        transaction(database) {
+            SplitItems
+                .slice(SplitItems.transactionId)
+                .select { SplitItems.transactionId inList transactionIds.map { it.toInt() } }
+                .map { it[SplitItems.transactionId].value.toLong() }
+                .toSet()
+        }
+    }
+
     override suspend fun setSplitsForTransaction(transactionId: Long, splits: List<SplitItem>): Unit = withContext(ioDispatcher) {
         transaction(database) {
             // Clear existing splits
