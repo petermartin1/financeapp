@@ -107,7 +107,7 @@ data class DividendEvent(
     val paymentDate: Long,
     val amount: Long, // Total dividend in cents
     val perShare: Long, // Dividend per share in cents
-    val shares: Long, // Number of shares at time of dividend (in 1/10000)
+    val shares: Double, // Number of shares at time of dividend
     val isReinvested: Boolean = false
 )
 

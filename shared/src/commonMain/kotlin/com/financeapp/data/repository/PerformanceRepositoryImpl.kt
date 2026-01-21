@@ -472,7 +472,7 @@ class PerformanceRepositoryImpl(
                 it[paymentDate] = dividend.paymentDate
                 it[amount] = dividend.amount
                 it[perShare] = dividend.perShare
-                it[shares] = dividend.shares.toDouble()
+                it[shares] = dividend.shares
                 it[isReinvested] = dividend.isReinvested
             }.value.toLong()
         }
@@ -492,7 +492,7 @@ class PerformanceRepositoryImpl(
                             paymentDate = row[DividendEvents.paymentDate],
                             amount = row[DividendEvents.amount],
                             perShare = row[DividendEvents.perShare],
-                            shares = (row[DividendEvents.shares] * 10000).toLong(),
+                            shares = row[DividendEvents.shares],
                             isReinvested = row[DividendEvents.isReinvested]
                         )
                     }
@@ -515,7 +515,7 @@ class PerformanceRepositoryImpl(
                             paymentDate = row[DividendEvents.paymentDate],
                             amount = row[DividendEvents.amount],
                             perShare = row[DividendEvents.perShare],
-                            shares = (row[DividendEvents.shares] * 10000).toLong(),
+                            shares = row[DividendEvents.shares],
                             isReinvested = row[DividendEvents.isReinvested]
                         )
                     }
