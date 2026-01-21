@@ -197,15 +197,15 @@ class OfxRepository(
                 }
             }
 
-            // Update last synced
+            if (syncErrors == connectedAccounts.size) {
+                return@withContext Result.failure(Exception("Failed to sync - check your connection"))
+            }
+
+            // Only update last synced if at least one account succeeded
             transaction(database) {
                 BankConnections.update({ BankConnections.id eq connectionId.toInt() }) {
                     it[lastSynced] = Clock.System.now().toEpochMilliseconds()
                 }
-            }
-
-            if (syncErrors == connectedAccounts.size) {
-                return@withContext Result.failure(Exception("Failed to sync - check your connection"))
             }
 
             Result.success(SyncSummary(
