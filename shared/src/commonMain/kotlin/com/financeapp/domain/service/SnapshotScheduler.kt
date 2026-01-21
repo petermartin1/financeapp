@@ -152,20 +152,23 @@ class SnapshotScheduler(
     }
 
     /**
-     * Calculate delay until a specific hour of the day
+     * Calculate delay until a specific hour of the day (timezone-aware for DST)
      */
     private fun calculateDelayUntilTime(hourOfDay: Int): Long {
-        val now = Clock.System.now().toEpochMilliseconds()
-        val currentHourMillis = now % (24 * 60 * 60 * 1000L)
-        val targetHourMillis = hourOfDay * 60 * 60 * 1000L
+        val now = Clock.System.now()
+        val tz = TimeZone.currentSystemDefault()
+        val nowLocal = now.toLocalDateTime(tz)
 
-        var delay = targetHourMillis - currentHourMillis
-        if (delay <= 0) {
+        // Determine if we need today or tomorrow
+        var targetDate = nowLocal.date
+        if (nowLocal.hour >= hourOfDay) {
             // Target time has passed today, schedule for tomorrow
-            delay += 24 * 60 * 60 * 1000L
+            targetDate = targetDate.plus(1, DateTimeUnit.DAY)
         }
 
-        return delay
+        // Calculate target instant using timezone-aware arithmetic
+        val targetMillis = targetDate.atStartOfDayIn(tz).toEpochMilliseconds() + (hourOfDay * 60 * 60 * 1000L)
+        return targetMillis - now.toEpochMilliseconds()
     }
 
     /**
@@ -206,7 +209,9 @@ class SnapshotScheduler(
         // Determine target month
         var targetYear = nowLocal.year
         var targetMonth = nowLocal.monthNumber
-        val effectiveDay = minOf(dayOfMonth, 28) // Clamp to avoid invalid dates
+
+        // Get effective day for current month (use last day of month if requested day > days in month)
+        var effectiveDay = minOf(dayOfMonth, lastDayOfMonth(targetYear, targetMonth))
 
         // If we're past the target day this month (or same day but past hour), go to next month
         if (nowLocal.dayOfMonth > effectiveDay ||
@@ -216,6 +221,8 @@ class SnapshotScheduler(
                 targetMonth = 1
                 targetYear++
             }
+            // Recalculate effective day for the new target month
+            effectiveDay = minOf(dayOfMonth, lastDayOfMonth(targetYear, targetMonth))
         }
 
         // Calculate target instant
@@ -223,6 +230,17 @@ class SnapshotScheduler(
         val targetMillis = targetDate.atStartOfDayIn(tz).toEpochMilliseconds() + (hourOfDay * 60 * 60 * 1000L)
 
         return targetMillis - now.toEpochMilliseconds()
+    }
+
+    /**
+     * Get the last day of a given month
+     */
+    private fun lastDayOfMonth(year: Int, month: Int): Int {
+        // Create the first day of the next month, then subtract one day
+        val nextMonth = if (month == 12) 1 else month + 1
+        val nextYear = if (month == 12) year + 1 else year
+        val firstOfNextMonth = kotlinx.datetime.LocalDate(nextYear, nextMonth, 1)
+        return firstOfNextMonth.minus(1, DateTimeUnit.DAY).dayOfMonth
     }
 
     /**
