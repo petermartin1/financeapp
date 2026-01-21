@@ -14,6 +14,7 @@ interface AccountRepository {
     suspend fun deleteAccount(id: Long)
     suspend fun getAccountBalance(id: Long): Long
     suspend fun getClearedBalance(id: Long): Long
+    suspend fun getReconciledBalance(id: Long): Long
     suspend fun insertReconciliation(accountId: Long, statementDate: LocalDate, statementBalance: Long, isCompleted: Boolean): Long
     fun notifyBalancesChanged()
 }

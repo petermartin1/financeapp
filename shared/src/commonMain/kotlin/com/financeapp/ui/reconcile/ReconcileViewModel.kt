@@ -34,8 +34,8 @@ class ReconcileViewModel(
 
     private fun loadTransactions(accountId: Long) {
         scope.launch {
-            // Get last reconciled balance
-            val reconciledBalance = accountRepository.getClearedBalance(accountId)
+            // Get last reconciled balance (sum of reconciled transactions only)
+            val reconciledBalance = accountRepository.getReconciledBalance(accountId)
 
             // Get unreconciled transactions
             val allTransactions = transactionRepository.getTransactionsByAccount(accountId).first()

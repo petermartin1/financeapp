@@ -212,6 +212,18 @@ class AccountRepositoryImpl(
         }
     }
 
+    override suspend fun getReconciledBalance(id: Long): Long = withContext(ioDispatcher) {
+        transaction(database) {
+            Transactions
+                .select(Transactions.amount.sum())
+                .where {
+                    (Transactions.accountId eq id.toInt()) and (Transactions.isReconciled eq true)
+                }
+                .singleOrNull()
+                ?.get(Transactions.amount.sum()) ?: 0L
+        }
+    }
+
     override suspend fun insertReconciliation(accountId: Long, statementDate: LocalDate, statementBalance: Long, isCompleted: Boolean): Long = withContext(ioDispatcher) {
         val now = Clock.System.now().toEpochMilliseconds()
         val statementDateMillis = statementDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
