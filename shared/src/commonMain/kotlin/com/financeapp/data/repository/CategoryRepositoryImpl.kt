@@ -94,7 +94,12 @@ class CategoryRepositoryImpl(
 
     override suspend fun deleteCategory(id: Long): Unit = withContext(ioDispatcher) {
         transaction(database) {
-            // First, nullify category_id in all transactions that reference this category
+            // Nullify parentId for child categories
+            Categories.update({ Categories.parentId eq id.toInt() }) {
+                it[parentId] = null
+            }
+
+            // Nullify category_id in all transactions that reference this category
             Transactions.update({ Transactions.categoryId eq id.toInt() }) {
                 it[categoryId] = null
             }
