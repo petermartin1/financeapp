@@ -162,6 +162,18 @@ class PayeeRepositoryImpl(
             Transactions.update({ Transactions.payeeId eq sourceId.toInt() }) {
                 it[payeeId] = targetId.toInt()
             }
+            // Update scheduled transactions
+            ScheduledTransactions.update({ ScheduledTransactions.payeeId eq sourceId.toInt() }) {
+                it[payeeId] = targetId.toInt()
+            }
+            // Update transaction templates
+            TransactionTemplates.update({ TransactionTemplates.payeeId eq sourceId.toInt() }) {
+                it[payeeId] = targetId.toInt()
+            }
+            // Update payee aliases to point to target payee
+            PayeeAliases.update({ PayeeAliases.canonicalPayeeId eq sourceId.toInt() }) {
+                it[canonicalPayeeId] = targetId.toInt()
+            }
             // Delete source payee
             Payees.deleteWhere { Payees.id eq sourceId.toInt() }
         }
