@@ -101,6 +101,12 @@ class ScheduledViewModel(
             val dueTransactions = scheduledTransactionRepository.getDueScheduledTransactions(todayMillis)
 
             for (scheduled in dueTransactions) {
+                // Skip if nextDate is already past endDate (safety check)
+                if (scheduled.endDate != null && scheduled.nextDate > scheduled.endDate) {
+                    scheduledTransactionRepository.updateScheduledTransactionActive(scheduled.id, false)
+                    continue
+                }
+
                 val now = Clock.System.now()
 
                 // Create the transaction
@@ -123,7 +129,7 @@ class ScheduledViewModel(
                 val newDate = calculateNextDate(scheduled.nextDate, scheduled.frequency)
                 val newDateMillis = newDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
 
-                // Check if past end date
+                // Check if next occurrence would be past end date
                 val endDateMillis = scheduled.endDate?.atStartOfDayIn(TimeZone.currentSystemDefault())?.toEpochMilliseconds()
                 if (endDateMillis != null && newDateMillis > endDateMillis) {
                     scheduledTransactionRepository.updateScheduledTransactionActive(scheduled.id, false)
