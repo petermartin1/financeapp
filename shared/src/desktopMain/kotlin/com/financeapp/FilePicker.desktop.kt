@@ -9,6 +9,7 @@ actual fun pickFile(onFileContent: (String) -> Unit) {
     dialog.setFilenameFilter { _, name ->
         name.lowercase().endsWith(".ofx") ||
         name.lowercase().endsWith(".qfx") ||
+        name.lowercase().endsWith(".qif") ||
         name.lowercase().endsWith(".csv")
     }
     dialog.isVisible = true
