@@ -61,8 +61,12 @@ fun LineChart(
     }
 
     val allPoints = series.flatMap { it.points }
-    val minValue = allPoints.minOrNull() ?: 0f
-    val maxValue = (allPoints.maxOrNull() ?: 100f) * 1.1f
+    val rawMinValue = allPoints.minOrNull() ?: 0f
+    val rawMaxValue = (allPoints.maxOrNull() ?: 100f) * 1.1f
+    // Ensure non-zero range to prevent division by zero when all values are equal
+    val range = if (rawMaxValue - rawMinValue < 0.01f) 1f else rawMaxValue - rawMinValue
+    val minValue = rawMinValue
+    val maxValue = rawMinValue + range
     val textMeasurer = rememberTextMeasurer()
 
     Column(modifier = modifier) {
