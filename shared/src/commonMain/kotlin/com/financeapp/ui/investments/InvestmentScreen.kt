@@ -25,6 +25,7 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -553,7 +554,7 @@ private fun AddHoldingDialog(
             TextButton(
                 onClick = {
                     val sharesValue = shares.toDoubleOrNull() ?: 0.0
-                    val costValue = ((costBasis.toDoubleOrNull() ?: 0.0) * 100).toLong()
+                    val costValue = ((costBasis.toDoubleOrNull() ?: 0.0) * 100).roundToLong()
                     onConfirm(
                         selectedAccountId,
                         symbol,
@@ -682,7 +683,7 @@ private fun UpdatePriceDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val priceValue = ((price.toDoubleOrNull() ?: 0.0) * 100).toLong()
+                    val priceValue = ((price.toDoubleOrNull() ?: 0.0) * 100).roundToLong()
                     onConfirm(priceValue)
                 },
                 enabled = price.isNotBlank()

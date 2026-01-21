@@ -22,6 +22,7 @@ import com.financeapp.domain.model.CategoryType
 import com.financeapp.domain.model.Tag
 import com.financeapp.domain.model.TransactionWithDetails
 import kotlin.math.abs
+import kotlin.math.roundToLong
 import com.financeapp.ui.categories.CategoriesViewModel
 import com.financeapp.ui.tags.TagsViewModel
 import kotlinx.datetime.Clock
@@ -325,7 +326,7 @@ fun AddTransactionDialog(
             TextButton(
                 onClick = {
                     val dollars = amountText.toDoubleOrNull() ?: 0.0
-                    val cents = (dollars * 100).toLong()
+                    val cents = (dollars * 100).roundToLong()
 
                     if (transactionType == 2 && onTransfer != null && selectedToAccount != null) {
                         // Transfer

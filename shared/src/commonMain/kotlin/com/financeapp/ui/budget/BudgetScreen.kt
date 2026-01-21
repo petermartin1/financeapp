@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.BudgetWithSpending
+import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -322,7 +323,7 @@ private fun AddBudgetDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val amount = amountText.toDoubleOrNull()?.let { (it * 100).toLong() } ?: 0L
+                    val amount = amountText.toDoubleOrNull()?.let { (it * 100).roundToLong() } ?: 0L
                     onConfirm(selectedCategoryId, amount)
                 },
                 enabled = amountText.isNotBlank() && selectedCategoryId != 0L

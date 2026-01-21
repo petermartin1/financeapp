@@ -18,6 +18,7 @@ import com.financeapp.domain.model.TransactionTemplateWithDetails
 import com.financeapp.domain.model.Account
 import com.financeapp.domain.model.Category
 import com.financeapp.domain.model.Payee
+import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -396,7 +397,7 @@ private fun TemplateDialog(
             TextButton(
                 onClick = {
                     val amount = amountText.toDoubleOrNull()?.let {
-                        val cents = (it * 100).toLong()
+                        val cents = (it * 100).roundToLong()
                         if (isExpense) -cents else cents
                     }
                     onConfirm(

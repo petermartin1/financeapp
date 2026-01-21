@@ -12,6 +12,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.financeapp.ui.theme.FinanceTypography
 import kotlin.math.abs
+import kotlin.math.roundToLong
 
 /**
  * Centralized currency formatting and display component.
@@ -232,7 +233,7 @@ fun parseDecimalToCents(decimalString: String): Long? {
     return try {
         val cleaned = decimalString.replace(",", "").trim()
         val dollars = cleaned.toDoubleOrNull() ?: return null
-        (dollars * 100).toLong()
+        (dollars * 100).roundToLong()
     } catch (e: Exception) {
         null
     }

@@ -24,6 +24,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.abs
+import kotlin.math.roundToLong
 
 @Composable
 fun ManageLotsDialog(
@@ -283,7 +284,7 @@ fun LotEditorDialog(
             TextButton(
                 onClick = {
                     val shareValue = shares.toDoubleOrNull() ?: 0.0
-                    val costValue = ((costBasis.toDoubleOrNull() ?: 0.0) * 100).toLong()
+                    val costValue = ((costBasis.toDoubleOrNull() ?: 0.0) * 100).roundToLong()
                     onConfirm(
                         date,
                         purpose.ifBlank { null },

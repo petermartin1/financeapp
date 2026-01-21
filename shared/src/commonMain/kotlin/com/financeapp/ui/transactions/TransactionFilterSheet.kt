@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.Category
 import com.financeapp.ui.categories.CategoriesViewModel
 import org.koin.compose.koinInject
+import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -162,8 +163,8 @@ fun TransactionFilterSheet(
             }
             Button(
                 onClick = {
-                    val minAmount = minAmountText.toDoubleOrNull()?.let { (it * 100).toLong() }
-                    val maxAmount = maxAmountText.toDoubleOrNull()?.let { (it * 100).toLong() }
+                    val minAmount = minAmountText.toDoubleOrNull()?.let { (it * 100).roundToLong() }
+                    val maxAmount = maxAmountText.toDoubleOrNull()?.let { (it * 100).roundToLong() }
 
                     onApply(
                         currentFilter.copy(

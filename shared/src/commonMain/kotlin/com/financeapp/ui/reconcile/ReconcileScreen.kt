@@ -16,6 +16,7 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -263,7 +264,7 @@ fun ReconcileStartDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val balance = balanceText.toDoubleOrNull()?.let { (it * 100).toLong() } ?: 0L
+                    val balance = balanceText.toDoubleOrNull()?.let { (it * 100).roundToLong() } ?: 0L
                     onStart(statementDate, balance)
                 },
                 enabled = balanceText.isNotBlank()
