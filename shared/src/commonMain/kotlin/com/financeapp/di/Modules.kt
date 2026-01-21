@@ -125,7 +125,7 @@ val sharedModule = module {
     factory { TagsViewModel(get()) }
     factory { DashboardViewModel(get(), get(), get(), get()) }
     factory { TemplatesViewModel(get(), get(), get(), get()) }
-    factory { SearchViewModel(get(), get()) }
+    factory { SearchViewModel(get(), get(), get()) }
 }
 
 fun appModules() = listOf(platformModule(), sharedModule)

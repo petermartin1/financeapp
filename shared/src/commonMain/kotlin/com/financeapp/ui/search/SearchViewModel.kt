@@ -4,6 +4,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.financeapp.domain.model.TransactionWithDetails
+import com.financeapp.domain.repository.AccountRepository
 import com.financeapp.domain.repository.TransactionRepository
 import com.financeapp.domain.repository.TagRepository
 import kotlinx.coroutines.CoroutineScope
@@ -25,7 +26,8 @@ data class SearchUiState(
 
 class SearchViewModel(
     private val transactionRepository: TransactionRepository,
-    private val tagRepository: TagRepository
+    private val tagRepository: TagRepository,
+    private val accountRepository: AccountRepository
 ) {
     private val viewModelScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -89,6 +91,7 @@ class SearchViewModel(
     fun deleteTransaction(id: Long) {
         viewModelScope.launch {
             transactionRepository.deleteTransaction(id)
+            accountRepository.notifyBalancesChanged()
         }
     }
 
@@ -111,6 +114,9 @@ class SearchViewModel(
 
             // Update tags
             tagRepository.setTransactionTags(txn.id, tagIds)
+
+            // Refresh account balances
+            accountRepository.notifyBalancesChanged()
         }
     }
 
