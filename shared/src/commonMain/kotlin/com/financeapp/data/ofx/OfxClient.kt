@@ -270,8 +270,8 @@ NEWFILEUID:NONE
             append("<SIGNONMSGSRQV1>")
             append("<SONRQ>")
             append("<DTCLIENT>$timestamp</DTCLIENT>")
-            append("<USERID>${credentials.userId}</USERID>")
-            append("<USERPASS>${credentials.password}</USERPASS>")
+            append("<USERID>${escapeXml(credentials.userId)}</USERID>")
+            append("<USERPASS>${escapeXml(credentials.password)}</USERPASS>")
             append("<LANGUAGE>ENG</LANGUAGE>")
             append("<FI>")
             append("<ORG>${config.fiOrg}</ORG>")
@@ -297,6 +297,18 @@ NEWFILEUID:NONE
         val timestamp = Clock.System.now().toEpochMilliseconds()
         val random = kotlin.random.Random.nextInt(100000, 999999)
         return "${timestamp}_$random"
+    }
+
+    /**
+     * Escape special XML characters in a string
+     */
+    private fun escapeXml(value: String): String {
+        return value
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&apos;")
     }
 
     /**
