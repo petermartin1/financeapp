@@ -1,7 +1,9 @@
 package com.financeapp.data.repository
 
 import com.financeapp.db.schema.Accounts
+import com.financeapp.db.schema.DividendEvents
 import com.financeapp.db.schema.HoldingLots
+import com.financeapp.db.schema.HoldingSnapshots
 import com.financeapp.db.schema.Holdings
 import com.financeapp.db.schema.SecurityPrices
 import com.financeapp.domain.model.Holding
@@ -139,6 +141,11 @@ class InvestmentRepositoryImpl(
 
     override suspend fun deleteHolding(id: Long): Unit = withContext(ioDispatcher) {
         transaction(database) {
+            // Delete related records first to avoid FK constraint violations
+            HoldingSnapshots.deleteWhere { HoldingSnapshots.holdingId eq id.toInt() }
+            HoldingLots.deleteWhere { HoldingLots.holdingId eq id.toInt() }
+            DividendEvents.deleteWhere { DividendEvents.holdingId eq id.toInt() }
+            // Then delete the holding
             Holdings.deleteWhere { Holdings.id eq id.toInt() }
         }
         notifyHoldingsChanged()
