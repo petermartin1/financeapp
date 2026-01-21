@@ -1,6 +1,7 @@
 package com.financeapp.security
 
 import java.io.File
+import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
 import javax.crypto.Cipher
@@ -275,11 +276,13 @@ actual class SecureCredentialStore actual constructor() {
 
     /**
      * Sanitizes a key name to be safe for use as a filename.
-     * Removes any characters that aren't alphanumeric, underscore, or hyphen.
+     * Uses SHA-256 to avoid collisions (hashCode can collide easily).
      */
     private fun sanitizeFilename(key: String): String {
-        // Hash the key to ensure consistent length and valid filename
-        val hash = key.hashCode().toString(16).padStart(8, '0')
+        // Use SHA-256 for collision-resistant hashing
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hashBytes = digest.digest(key.toByteArray(Charsets.UTF_8))
+        val hash = hashBytes.take(16).joinToString("") { "%02x".format(it) }
         return "cred_$hash"
     }
 
