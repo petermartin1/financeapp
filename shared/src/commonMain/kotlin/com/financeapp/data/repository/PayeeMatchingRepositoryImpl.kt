@@ -59,7 +59,20 @@ class PayeeMatchingRepositoryImpl(
 
     override suspend fun batchInsertAliases(aliases: List<PayeeAlias>): List<Long> = withContext(ioDispatcher) {
         transaction(database) {
-            aliases.map { alias ->
+            // Get normalized names for all input aliases
+            val normalizedInputs = aliases.associate { payeeMatcher.normalize(it.aliasName) to it }
+
+            // Find which normalized names already exist
+            val existingNames = PayeeAliases
+                .select(PayeeAliases.aliasName)
+                .where { PayeeAliases.aliasName inList normalizedInputs.keys }
+                .map { it[PayeeAliases.aliasName] }
+                .toSet()
+
+            // Only insert aliases that don't already exist
+            val newAliases = normalizedInputs.filterKeys { it !in existingNames }
+
+            newAliases.values.map { alias ->
                 PayeeAliases.insertAndGetId {
                     it[aliasName] = payeeMatcher.normalize(alias.aliasName)
                     it[canonicalPayeeId] = alias.canonicalPayeeId.toInt()
