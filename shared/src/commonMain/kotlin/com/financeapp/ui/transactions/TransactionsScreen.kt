@@ -237,14 +237,24 @@ fun TransactionsScreen(
                     )
                 }
 
-                // Calculate running balances (from oldest to newest, then display newest first)
-                val transactionsWithBalance = remember(uiState.filteredTransactions, uiState.accountBalance) {
-                    val sorted = uiState.filteredTransactions.sortedBy { it.transaction.date }
+                // Calculate running balances from full transaction list (not filtered)
+                // This ensures correct balances even when filtering
+                val runningBalanceMap = remember(uiState.transactions, uiState.accountBalance) {
+                    val sorted = uiState.transactions.sortedBy { it.transaction.date }
                     var balance = uiState.accountBalance - sorted.sumOf { it.transaction.amount }
-                    sorted.map { txn ->
+                    sorted.associate { txn ->
                         balance += txn.transaction.amount
-                        txn.copy(runningBalance = balance)
-                    }.reversed()
+                        txn.transaction.id to balance
+                    }
+                }
+
+                // Apply running balances to filtered transactions
+                val transactionsWithBalance = remember(uiState.filteredTransactions, runningBalanceMap) {
+                    uiState.filteredTransactions
+                        .sortedByDescending { it.transaction.date }
+                        .map { txn ->
+                            txn.copy(runningBalance = runningBalanceMap[txn.transaction.id])
+                        }
                 }
 
                 TransactionsList(
