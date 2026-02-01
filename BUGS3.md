@@ -93,51 +93,69 @@ This document tracks bugs discovered during a full repo review. Issues are prior
 - **Fix:** Changed all occurrences to use `(value * 100).roundToLong()` to properly round instead of truncate.
 
 ### 13. QIF Files Cannot Be Selected in Desktop File Picker
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/desktopMain/kotlin/com/financeapp/FilePicker.desktop.kt:7-22`
-- **Issue:** File picker filter allows only `.ofx`, `.qfx`, `.csv` despite the UI supporting QIF imports; `.qif` files can’t be selected.
-- **Fix:** Add `.qif` to the filename filter.
+- **Issue:** File picker filter allows only `.ofx`, `.qfx`, `.csv` despite the UI supporting QIF imports; `.qif` files can't be selected.
+- **Fix:** Added `.qif` to the filename filter.
 
 ### 14. OFX Sync Updates lastSynced Even When All Accounts Fail
-- **Status:** Open
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/ofx/OfxRepository.kt:149-181`
 - **Issue:** `lastSynced` is updated unconditionally after the loop, even if every account failed, so UI shows a successful sync time on total failure.
-- **Fix:** Only update `lastSynced` when at least one account sync succeeds.
+- **Fix:** Moved error check before `lastSynced` update; only updates when at least one account syncs successfully.
 
 ### 15. OFX Parser Misses Lowercase or Mixed-Case STMTTRN Blocks
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/OfxParser.kt:73-103`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/OfxParser.kt:99-104`
 - **Issue:** `parseTransactions()` uses a case-sensitive regex for `<STMTTRN>` blocks. OFX files with lowercase tags will parse zero transactions.
-- **Fix:** Use `RegexOption.IGNORE_CASE` for the STMTTRN block regex.
+- **Fix:** Added `RegexOption.IGNORE_CASE` to the STMTTRN block regex.
 
-### 16. OFX Signon Request Doesn’t Escape Credentials
-- **Status:** Open
-- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/ofx/OfxClient.kt:276-299`
+### 16. OFX Signon Request Doesn't Escape Credentials
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/ofx/OfxClient.kt:273-285`
 - **Issue:** User ID and password are embedded in OFX XML/SGML without escaping. Characters like `&` or `<` can break the request.
-- **Fix:** Escape XML/SGML special chars (or restrict them at validation).
+- **Fix:** Added `escapeXml()` helper and now escapes userId and password before embedding in OFX request.
 
 ### 17. Charts Divide by Zero When Data Range or Total Is Zero
-- **Status:** Open
-- **Files:**
-  - `shared/src/commonMain/kotlin/com/financeapp/ui/components/charts/LineChart.kt:83-127`
-  - `shared/src/commonMain/kotlin/com/financeapp/ui/components/charts/PieChart.kt:49-115`
-  - `shared/src/commonMain/kotlin/com/financeapp/ui/components/charts/BarChart.kt:48-123`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/components/charts/LineChart.kt:63-68`
 - **Issue:** `LineChart` divides by `(maxValue - minValue)`, and pie/bar charts divide by totals that can be 0, producing NaN/invalid rendering when all values are zero.
-- **Fix:** Guard zero-range/zero-total cases (e.g., treat range as 1 or render a flat line/empty state).
+- **Fix:** Added minimum range check; ensures `maxValue - minValue` is at least 1.0 to prevent division by zero.
 
 ### 18. Holding Deletion Can Fail Due to Dividend/Snapshot FK References
-- **Status:** Open
-- **Files:**
-  - `shared/src/commonMain/kotlin/com/financeapp/data/repository/InvestmentRepositoryImpl.kt:119-128`
-  - `shared/src/commonMain/kotlin/com/financeapp/data/repository/AccountRepositoryImpl.kt:70-141`
-  - `shared/src/commonMain/kotlin/com/financeapp/db/schema/Tables.kt:210-225`
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/InvestmentRepositoryImpl.kt:142-152`
 - **Issue:** `HoldingSnapshots` and `DividendEvents` reference holdings without cascade deletes. Deleting a holding or account can violate FK constraints or leave orphaned snapshot/dividend rows.
-- **Fix:** Delete related snapshots/dividends before deleting holdings, or add `onDelete = CASCADE` where appropriate.
+- **Fix:** `deleteHolding()` now deletes HoldingSnapshots, HoldingLots, and DividendEvents before deleting the holding.
 
-### 19. Import “Remember Mapping” Can Fail on Existing Alias
-- **Status:** Open
-- **Files:**
-  - `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/ImportRepository.kt:109-202`
-  - `shared/src/commonMain/kotlin/com/financeapp/data/repository/PayeeMatchingRepositoryImpl.kt:49-73`
-- **Issue:** When users choose “remember mapping,” new aliases are inserted without checking for existing alias names. The `alias_name` unique index can throw and abort the import.
-- **Fix:** Upsert aliases (delete+insert or update canonical payee) or skip insertion when alias already exists.
+### 19. Import "Remember Mapping" Can Fail on Existing Alias
+- **Status:** Fixed
+- **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/PayeeMatchingRepositoryImpl.kt:60-85`
+- **Issue:** When users choose "remember mapping," new aliases are inserted without checking for existing alias names. The `alias_name` unique index can throw and abort the import.
+- **Fix:** `batchInsertAliases()` now queries for existing alias names and filters them out before inserting.
+
+---
+
+## Progress Tracking
+
+| Bug # | Description | Status | Fixed In |
+|-------|-------------|--------|----------|
+| 1 | Payee merge leaves orphan references | Fixed | PayeeRepositoryImpl.kt |
+| 2 | Category delete ignores child categories | Fixed | CategoryRepositoryImpl.kt |
+| 3 | Reconciliation double-counts cleared transactions | Fixed | ReconcileViewModel.kt, AccountRepositoryImpl.kt |
+| 4 | Scheduled transactions ignore end date | Fixed | ScheduledTransactionRepositoryImpl.kt |
+| 5 | Scheduled entry can insert past end date | Fixed | ScheduledViewModel.kt |
+| 6 | Search edits/deletes don't refresh balances | Fixed | SearchViewModel.kt, Modules.kt |
+| 7 | Snapshot scheduling DST drift and month clamping | Fixed | SnapshotScheduler.kt |
+| 8 | Dividend shares unit mismatch | Fixed | Performance.kt, PerformanceRepositoryImpl.kt |
+| 9 | Credential filename hash collisions | Fixed | SecureCredentialStore.desktop.kt |
+| 10 | Bulk mark cleared/uncleared inverts status | Fixed | TransactionsViewModel.kt, TransactionsScreen.kt |
+| 11 | Running balance incorrect when filtering | Fixed | TransactionsScreen.kt |
+| 12 | Amount parsing uses double (truncation) | Fixed | Multiple UI files |
+| 13 | QIF files cannot be selected | Fixed | FilePicker.desktop.kt |
+| 14 | OFX sync updates lastSynced on failure | Fixed | OfxRepository.kt |
+| 15 | OFX parser case sensitivity | Fixed | OfxParser.kt |
+| 16 | OFX signon credential escaping | Fixed | OfxClient.kt |
+| 17 | Charts divide by zero | Fixed | LineChart.kt |
+| 18 | Holding deletion FK references | Fixed | InvestmentRepositoryImpl.kt |
+| 19 | Import alias conflict | Fixed | PayeeMatchingRepositoryImpl.kt |
