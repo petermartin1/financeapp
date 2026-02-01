@@ -1,6 +1,7 @@
 package com.financeapp.ui.payees
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -297,6 +298,7 @@ private fun PayeeList(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PayeeItem(
     payeeWithStats: PayeeWithStats,
@@ -366,7 +368,10 @@ private fun PayeeItem(
                 MaterialTheme.colorScheme.surface
             }
         ),
-        modifier = Modifier.clickable { onSelect() }
+        modifier = Modifier.combinedClickable(
+            onClick = { onSelect() },
+            onDoubleClick = { onEdit() }
+        )
     )
     HorizontalDivider()
 }

@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -75,25 +77,26 @@ class PayeeManagementViewModel(
         }
     }
 
-    val transactionsUiState: StateFlow<PayeeTransactionsUiState> = combine(
-        _selectedPayeeId,
-        selectedPayeeIds,
-        transactionRepository.getAllTransactionsWithDetails()
-    ) { selectedPayeeId, payeeIds, transactions ->
-        Triple(selectedPayeeId, payeeIds, transactions)
-    }.mapLatest { (selectedPayeeId, payeeIds, transactions) ->
-        if (selectedPayeeId == null) {
-            PayeeTransactionsUiState()
-        } else {
-            PayeeTransactionsUiState(
-                transactions = filterTransactionsForPayee(transactions, payeeIds)
-            )
-        }
-    }.stateIn(
-        scope = scope,
-        started = SharingStarted.Lazily,
-        initialValue = PayeeTransactionsUiState()
-    )
+    val transactionsUiState: StateFlow<PayeeTransactionsUiState> = _selectedPayeeId
+        .flatMapLatest { selectedPayeeId ->
+            if (selectedPayeeId == null) {
+                // Don't load transactions until a payee is selected
+                flowOf(PayeeTransactionsUiState())
+            } else {
+                combine(
+                    selectedPayeeIds,
+                    transactionRepository.getAllTransactionsWithDetails()
+                ) { payeeIds, transactions ->
+                    PayeeTransactionsUiState(
+                        transactions = filterTransactionsForPayee(transactions, payeeIds)
+                    )
+                }
+            }
+        }.stateIn(
+            scope = scope,
+            started = SharingStarted.Lazily,
+            initialValue = PayeeTransactionsUiState()
+        )
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
