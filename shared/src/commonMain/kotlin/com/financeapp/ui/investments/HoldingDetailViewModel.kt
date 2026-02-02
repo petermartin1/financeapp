@@ -7,6 +7,7 @@ import com.financeapp.domain.service.PriceRefreshService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
@@ -198,8 +199,6 @@ class HoldingDetailViewModel(
     }
 
     fun onDispose() {
-        viewModelScope.launch {
-            // Cancel all coroutines
-        }
+        viewModelScope.cancel()
     }
 }

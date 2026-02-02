@@ -49,8 +49,8 @@ This document tracks bugs discovered during a deep code review. Issues are prior
 
 ## Low Priority / Code Quality
 
-### 7. ViewModel Dispose Hooks Don’t Cancel Coroutines
-- **Status:** Not fixed
+### 7. ViewModel Dispose Hooks Don't Cancel Coroutines
+- **Status:** Fixed
 - **Files:**
   - `shared/src/commonMain/kotlin/com/financeapp/ui/investments/HoldingDetailViewModel.kt:200-204`
   - `shared/src/commonMain/kotlin/com/financeapp/ui/investments/PerformanceTabViewModel.kt:123-125`
@@ -58,21 +58,21 @@ This document tracks bugs discovered during a deep code review. Issues are prior
 - **Fix:** Cancel the scope (`viewModelScope.cancel()`) in `onDispose()`.
 
 ### 8. Accessibility Helpers Are Stubs
-- **Status:** Not fixed
+- **Status:** Fixed (removed)
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/accessibility/AccessibilityHelpers.kt:76-79`, `shared/src/commonMain/kotlin/com/financeapp/ui/accessibility/AccessibilityHelpers.kt:207-214`
 - **Issue:** `formatDateForScreenReader()` returns the input unchanged and `isHighContrastMode()` always returns false. These methods imply accessibility behavior but don’t implement it.
 - **Fix:** Implement proper date formatting and high-contrast detection, or remove/rename to avoid misleading callers.
 
-### 9. CSV Exports Don’t Escape All Fields
-- **Status:** Not fixed
+### 9. CSV Exports Don't Escape All Fields
+- **Status:** Fixed
 - **Files:**
   - `shared/src/commonMain/kotlin/com/financeapp/data/backup/ExportRepository.kt:142-154`
   - `shared/src/commonMain/kotlin/com/financeapp/data/backup/ExportRepository.kt:159-170`
 - **Issue:** `exportAccounts()` and `exportCategories()` escape only the name fields. `institution`, `icon`, and `color` can contain commas/quotes/newlines, which will break CSV structure.
 - **Fix:** Run `escapeCsv()` on all fields written to CSV.
 
-### 10. Reconcile Flag Doesn’t Update `updatedAt`
-- **Status:** Not fixed
+### 10. Reconcile Flag Doesn't Update `updatedAt`
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/TransactionRepositoryImpl.kt:330-336`
 - **Issue:** `markTransactionReconciled()` changes transaction state but doesn’t update `updatedAt`, so audit/update timestamps become inconsistent.
 - **Fix:** Set `updatedAt` alongside `isReconciled`.

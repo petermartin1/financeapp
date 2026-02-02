@@ -326,9 +326,11 @@ class TransactionRepositoryImpl(
     }
 
     override suspend fun markTransactionReconciled(id: Long, isReconciled: Boolean): Unit = withContext(ioDispatcher) {
+        val now = Clock.System.now().toEpochMilliseconds()
         transaction(database) {
             Transactions.update({ Transactions.id eq id.toInt() }) {
                 it[Transactions.isReconciled] = isReconciled
+                it[Transactions.updatedAt] = now
             }
         }
         notifyTransactionsChanged()

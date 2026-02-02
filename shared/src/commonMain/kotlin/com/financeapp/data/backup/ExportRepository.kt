@@ -147,8 +147,8 @@ class ExportRepository(
 
         accounts.forEach { account ->
             val name = escapeCsv(account[Accounts.name])
-            val institution = account[Accounts.institution] ?: ""
-            val currency = account[Accounts.currency]
+            val institution = escapeCsv(account[Accounts.institution] ?: "")
+            val currency = escapeCsv(account[Accounts.currency])
             val active = if (account[Accounts.isActive]) "Y" else "N"
             sb.appendLine("$name,${account[Accounts.type]},$institution,$currency,$active")
         }
@@ -164,8 +164,8 @@ class ExportRepository(
 
         categories.forEach { category ->
             val name = escapeCsv(category[Categories.name])
-            val icon = category[Categories.icon] ?: ""
-            val color = category[Categories.color] ?: ""
+            val icon = escapeCsv(category[Categories.icon] ?: "")
+            val color = escapeCsv(category[Categories.color] ?: "")
             sb.appendLine("$name,${category[Categories.type]},$icon,$color")
         }
 

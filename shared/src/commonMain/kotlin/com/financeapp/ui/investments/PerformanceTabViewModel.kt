@@ -6,6 +6,7 @@ import com.financeapp.domain.service.PriceRefreshService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -118,6 +119,6 @@ class PerformanceTabViewModel(
     }
 
     fun onDispose() {
-        // Cleanup if needed
+        viewModelScope.cancel()
     }
 }
