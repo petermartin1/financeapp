@@ -289,50 +289,21 @@ class TransactionsViewModel(
         date: LocalDate
     ) {
         scope.launch {
-            val now = Clock.System.now()
-
             // Get account names for memo
             val fromAccount = accountRepository.getAccountById(currentAccountId)
             val toAccount = accountRepository.getAccountById(toAccountId)
 
-            val transferMemo = memo ?: "Transfer"
-
-            // Create outgoing transaction (negative amount from source)
-            val outgoingTx = Transaction(
-                accountId = currentAccountId,
-                date = date,
-                amount = -amount,
-                payeeId = null,
-                categoryId = null,
-                memo = "$transferMemo to ${toAccount?.name ?: "account"}",
-                isCleared = false,
-                createdAt = now,
-                updatedAt = now
-            )
-            val outgoingId = transactionRepository.insertTransaction(outgoingTx)
-
-            // Create incoming transaction (positive amount to destination)
-            val incomingTx = Transaction(
-                accountId = toAccountId,
-                date = date,
+            // Create transfer atomically in a single DB transaction
+            transactionRepository.createTransfer(
+                fromAccountId = currentAccountId,
+                toAccountId = toAccountId,
                 amount = amount,
-                payeeId = null,
-                categoryId = null,
-                memo = "$transferMemo from ${fromAccount?.name ?: "account"}",
-                isCleared = false,
-                transferId = outgoingId,
-                createdAt = now,
-                updatedAt = now
-            )
-            val incomingId = transactionRepository.insertTransaction(incomingTx)
-
-            // Link the outgoing transaction to the incoming one
-            transactionRepository.updateTransaction(
-                outgoingTx.copy(id = outgoingId, transferId = incomingId)
+                date = date,
+                memo = memo,
+                fromAccountName = fromAccount?.name ?: "account",
+                toAccountName = toAccount?.name ?: "account"
             )
 
-            // Notify changes
-            transactionRepository.notifyTransactionsChanged()
             accountRepository.notifyBalancesChanged()
         }
     }

@@ -23,6 +23,29 @@ interface TransactionRepository {
     suspend fun markTransactionReconciled(id: Long, isReconciled: Boolean)
 
     /**
+     * Create a transfer between two accounts atomically.
+     * Creates both sides of the transfer in a single transaction.
+     *
+     * @param fromAccountId Source account
+     * @param toAccountId Destination account
+     * @param amount Amount in cents (positive value)
+     * @param date Transaction date
+     * @param memo Optional memo
+     * @param fromAccountName Name of source account (for memo)
+     * @param toAccountName Name of destination account (for memo)
+     * @return Pair of (outgoingId, incomingId)
+     */
+    suspend fun createTransfer(
+        fromAccountId: Long,
+        toAccountId: Long,
+        amount: Long,
+        date: LocalDate,
+        memo: String?,
+        fromAccountName: String,
+        toAccountName: String
+    ): Pair<Long, Long>
+
+    /**
      * Notify that transactions have changed, triggering UI refresh
      */
     fun notifyTransactionsChanged()

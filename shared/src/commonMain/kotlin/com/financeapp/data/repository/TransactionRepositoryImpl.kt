@@ -3,6 +3,8 @@ package com.financeapp.data.repository
 import com.financeapp.db.schema.Accounts
 import com.financeapp.db.schema.Categories
 import com.financeapp.db.schema.Payees
+import com.financeapp.db.schema.SplitItems
+import com.financeapp.db.schema.TransactionTags
 import com.financeapp.db.schema.Transactions
 import com.financeapp.domain.model.Transaction
 import com.financeapp.domain.model.TransactionWithDetails
@@ -238,6 +240,25 @@ class TransactionRepositoryImpl(
 
     override suspend fun deleteTransaction(id: Long): Unit = withContext(ioDispatcher) {
         org.jetbrains.exposed.sql.transactions.transaction(database) {
+            // Get the transaction to check for transfer pair
+            val txn = Transactions.selectAll()
+                .where { Transactions.id eq id.toInt() }
+                .singleOrNull()
+
+            val transferId = txn?.get(Transactions.transferId)?.value?.toLong()
+
+            // Clear the counterpart's transferId if this is part of a transfer pair
+            if (transferId != null) {
+                Transactions.update({ Transactions.id eq transferId.toInt() }) {
+                    it[Transactions.transferId] = null
+                }
+            }
+
+            // Delete related tags and split items first
+            TransactionTags.deleteWhere { TransactionTags.transactionId eq id.toInt() }
+            SplitItems.deleteWhere { SplitItems.transactionId eq id.toInt() }
+
+            // Delete the transaction
             Transactions.deleteWhere { Transactions.id eq id.toInt() }
         }
         notifyTransactionsChanged()
@@ -334,6 +355,70 @@ class TransactionRepositoryImpl(
             }
         }
         notifyTransactionsChanged()
+    }
+
+    override suspend fun createTransfer(
+        fromAccountId: Long,
+        toAccountId: Long,
+        amount: Long,
+        date: LocalDate,
+        memo: String?,
+        fromAccountName: String,
+        toAccountName: String
+    ): Pair<Long, Long> = withContext(ioDispatcher) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        val dateMillis = date.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+        val transferMemo = memo ?: "Transfer"
+
+        val (outgoingId, incomingId) = transaction(database) {
+            // Create outgoing transaction (negative amount from source)
+            val outId = Transactions.insert {
+                it[accountId] = fromAccountId.toInt()
+                it[Transactions.date] = dateMillis
+                it[Transactions.amount] = -amount
+                it[payeeId] = null
+                it[categoryId] = null
+                it[Transactions.memo] = "$transferMemo to $toAccountName"
+                it[checkNumber] = null
+                it[isCleared] = false
+                it[isReconciled] = false
+                it[transferId] = null  // Will update after creating incoming
+                it[importId] = null
+                it[transactionType] = null
+                it[sic] = null
+                it[createdAt] = now
+                it[updatedAt] = now
+            }[Transactions.id].value.toLong()
+
+            // Create incoming transaction (positive amount to destination)
+            val inId = Transactions.insert {
+                it[accountId] = toAccountId.toInt()
+                it[Transactions.date] = dateMillis
+                it[Transactions.amount] = amount
+                it[payeeId] = null
+                it[categoryId] = null
+                it[Transactions.memo] = "$transferMemo from $fromAccountName"
+                it[checkNumber] = null
+                it[isCleared] = false
+                it[isReconciled] = false
+                it[transferId] = outId.toInt()
+                it[importId] = null
+                it[transactionType] = null
+                it[sic] = null
+                it[createdAt] = now
+                it[updatedAt] = now
+            }[Transactions.id].value.toLong()
+
+            // Link outgoing to incoming
+            Transactions.update({ Transactions.id eq outId.toInt() }) {
+                it[transferId] = inId.toInt()
+            }
+
+            Pair(outId, inId)
+        }
+
+        notifyTransactionsChanged()
+        Pair(outgoingId, incomingId)
     }
 
     private fun ResultRow.toDomain(): Transaction {

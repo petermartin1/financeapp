@@ -142,12 +142,23 @@ class AccountRepositoryImpl(
 
     override suspend fun deleteAccount(id: Long): Unit = withContext(ioDispatcher) {
         transaction(database) {
-            // Delete transaction tags and split items for transactions in this account
+            // Get all transaction IDs in this account
             val transactionIds = Transactions
                 .select(Transactions.id)
                 .where { Transactions.accountId eq id.toInt() }
                 .map { it[Transactions.id].value }
 
+            // Clear transferId on counterpart transactions in OTHER accounts
+            // (transactions that point to transactions being deleted)
+            if (transactionIds.isNotEmpty()) {
+                Transactions.update({
+                    Transactions.transferId inList transactionIds
+                }) {
+                    it[transferId] = null
+                }
+            }
+
+            // Delete transaction tags and split items for transactions in this account
             for (txnId in transactionIds) {
                 TransactionTags.deleteWhere { TransactionTags.transactionId eq txnId }
                 SplitItems.deleteWhere { SplitItems.transactionId eq txnId }
