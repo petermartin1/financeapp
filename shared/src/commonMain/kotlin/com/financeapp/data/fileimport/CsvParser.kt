@@ -20,8 +20,8 @@ class CsvParser {
             // Skip header rows
             val dataLines = lines.drop(config.headerRows)
 
-            val transactions = dataLines.mapNotNull { line ->
-                parseLine(line, config)
+            val transactions = dataLines.mapIndexedNotNull { index, line ->
+                parseLine(line, config, index)
             }
 
             Result.success(transactions)
@@ -30,7 +30,7 @@ class CsvParser {
         }
     }
 
-    private fun parseLine(line: String, config: CsvImportConfig): ImportedTransaction? {
+    private fun parseLine(line: String, config: CsvImportConfig, rowIndex: Int): ImportedTransaction? {
         val columns = parseCsvLine(line)
 
         if (columns.size <= maxOf(
@@ -50,8 +50,8 @@ class CsvParser {
         val date = parseDate(dateStr, config.dateFormat) ?: return null
         val amount = parseAmount(amountStr, config)
 
-        // Generate a unique ID from date + amount + description
-        val fitId = "${date}_${amount}_${description.hashCode()}"
+        // Generate a unique ID from date + amount + description + row index to avoid collisions
+        val fitId = "${date}_${amount}_${description.hashCode()}_$rowIndex"
 
         val type = if (amount >= 0) TransactionType.CREDIT else TransactionType.DEBIT
 

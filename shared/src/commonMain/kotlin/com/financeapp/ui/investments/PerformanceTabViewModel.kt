@@ -57,11 +57,8 @@ class PerformanceTabViewModel(
                 val summary = performanceRepository.getPerformanceSummary()
                 _performanceSummary.value = summary
 
-                // Load all holding performances
-                performanceRepository.getAllHoldingPerformance()
-                    .collect { holdings ->
-                        _allHoldingPerformance.value = holdings
-                    }
+                // Load all holding performances once to avoid long-lived collectors
+                _allHoldingPerformance.value = performanceRepository.getAllHoldingPerformance().first()
 
                 // Load performance metrics and chart data sequentially
                 loadTimeRangeData()

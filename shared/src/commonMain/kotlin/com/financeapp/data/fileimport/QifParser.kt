@@ -16,6 +16,7 @@ class QifParser {
 
             val transactions = mutableListOf<ImportedTransaction>()
             var currentTransaction = QifTransaction()
+            var sequence = 0
 
             for (line in lines) {
                 when {
@@ -24,9 +25,10 @@ class QifParser {
                     }
                     line == "^" -> {
                         // End of transaction
-                        val imported = currentTransaction.toImportedTransaction()
+                        val imported = currentTransaction.toImportedTransaction(sequence)
                         if (imported != null) {
                             transactions.add(imported)
+                            sequence++
                         }
                         currentTransaction = QifTransaction()
                     }
@@ -60,7 +62,7 @@ class QifParser {
 
             // Handle last transaction if file doesn't end with ^
             if (currentTransaction.date != null && (currentTransaction.amountT != null || currentTransaction.amountU != null)) {
-                val imported = currentTransaction.toImportedTransaction()
+                val imported = currentTransaction.toImportedTransaction(sequence)
                 if (imported != null) {
                     transactions.add(imported)
                 }
@@ -114,14 +116,14 @@ class QifParser {
         var cleared: String? = null,
         var category: String? = null
     ) {
-        fun toImportedTransaction(): ImportedTransaction? {
+        fun toImportedTransaction(sequence: Int): ImportedTransaction? {
             val d = date ?: return null
             // Prefer U (higher precision) over T when both are present
             val a = amountU ?: amountT ?: return null
             val name = payee ?: memo ?: "Unknown"
 
-            // Generate unique ID
-            val fitId = "QIF_${d}_${a}_${name.hashCode()}"
+            // Generate unique ID with sequence to avoid collisions
+            val fitId = "QIF_${d}_${a}_${name.hashCode()}_$sequence"
 
             val type = if (a >= 0) TransactionType.CREDIT else TransactionType.DEBIT
 
