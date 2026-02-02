@@ -33,13 +33,13 @@ This document tracks bugs discovered during a deep code review. Issues are prior
 - **Fix:** Loop until `nextDate` exceeds today (or `endDate`), inserting each missed occurrence and advancing `nextDate` accordingly.
 
 ### 5. Spending-by-Category Counts Transfers/Uncategorized Debits
-- **Status:** Not fixed
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/repository/TransactionRepositoryImpl.kt:305-323`
 - **Issue:** `getSpendingByCategory()` includes all negative transactions regardless of category or transfer type. Transfers and other uncategorized debits inflate spending totals and dashboard charts.
 - **Fix:** Filter to expense categories only (e.g., `Category.type == EXPENSE`) and/or exclude transactions marked as transfers or without a category.
 
 ### 6. Market Value Truncation Loses Cents for Fractional Shares
-- **Status:** Not fixed
+- **Status:** Fixed
 - **Files:**
   - `shared/src/commonMain/kotlin/com/financeapp/domain/model/Investment.kt:41-42`
   - `shared/src/commonMain/kotlin/com/financeapp/data/repository/PerformanceRepositoryImpl.kt:55-57`

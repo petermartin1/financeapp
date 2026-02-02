@@ -53,7 +53,7 @@ class PerformanceRepositoryImpl(
 
             // Create holding snapshots and calculate totals
             holdingsWithPrices.forEach { (holding, currentPrice, costBasisValue) ->
-                val marketValue = (holding.shares * currentPrice).toLong()
+                val marketValue = kotlin.math.round(holding.shares * currentPrice).toLong()
 
                 totalValue += marketValue
                 totalCostBasis += costBasisValue
@@ -290,7 +290,7 @@ class PerformanceRepositoryImpl(
         val priceHistory = investmentRepository.getPriceHistory(holding.symbol, 2)
         val previousPrice = if (priceHistory.size > 1) priceHistory[1].price else currentPrice
 
-        val currentValue = (holding.shares * currentPrice).toLong()
+        val currentValue = kotlin.math.round(holding.shares * currentPrice).toLong()
         val costBasisTotal = holding.costBasis
         val gainLoss = currentValue - costBasisTotal
         val gainLossPercent = if (costBasisTotal > 0) {
@@ -299,7 +299,7 @@ class PerformanceRepositoryImpl(
             0.0
         }
 
-        val dayChange = (holding.shares * (currentPrice - previousPrice)).toLong()
+        val dayChange = kotlin.math.round(holding.shares * (currentPrice - previousPrice)).toLong()
         val dayChangePercent = if (previousPrice > 0) {
             ((currentPrice - previousPrice).toDouble() / previousPrice.toDouble()) * 100.0
         } else {
@@ -311,7 +311,7 @@ class PerformanceRepositoryImpl(
             .sumOf { h ->
                 val q = investmentRepository.getLatestPrice(h.symbol)
                 val price = q?.price ?: 0L
-                (h.shares * price).toLong()
+                kotlin.math.round(h.shares * price).toLong()
             }
 
         val allocation = if (totalPortfolioValue > 0) {

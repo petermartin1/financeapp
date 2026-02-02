@@ -323,23 +323,32 @@ class TransactionRepositoryImpl(
             val startMillis = startOfMonth.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
             val endMillis = now.toEpochMilliseconds()
 
-            // Get all transactions for current month (only expenses)
+            // Get expense categories only (not income or transfer categories)
+            val expenseCategories = Categories
+                .selectAll()
+                .where { Categories.type eq "EXPENSE" }
+                .associate { it[Categories.id].value.toLong() to it[Categories.name] }
+
+            // Get all transactions for current month that are:
+            // - negative amounts (outflows)
+            // - not transfers (transferId is null)
+            // - have an expense category
             val transactions = Transactions
                 .selectAll().where {
                     (Transactions.date greaterEq startMillis) and
                     (Transactions.date lessEq endMillis) and
-                    (Transactions.amount less 0)
+                    (Transactions.amount less 0) and
+                    (Transactions.transferId.isNull()) and
+                    (Transactions.categoryId.isNotNull())
                 }
                 .map { it.toDomain() }
-
-            // Get categories
-            val categories = Categories.selectAll().associate { it[Categories.id].value.toLong() to it[Categories.name] }
+                .filter { it.categoryId != null && expenseCategories.containsKey(it.categoryId) }
 
             // Group by category
             transactions
                 .groupBy { it.categoryId }
                 .mapNotNull { (categoryId, txns) ->
-                    val categoryName = categoryId?.let { categories[it] } ?: "Uncategorized"
+                    val categoryName = categoryId?.let { expenseCategories[it] } ?: return@mapNotNull null
                     categoryName to kotlin.math.abs(txns.sumOf { it.amount })
                 }
                 .toMap()

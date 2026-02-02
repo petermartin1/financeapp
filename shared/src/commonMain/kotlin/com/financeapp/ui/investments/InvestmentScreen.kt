@@ -706,7 +706,7 @@ private fun formatCurrency(cents: Long): String {
 
 private fun buildLotAnalytics(lots: List<HoldingLot>, currentPrice: Long?): List<LotAnalytics> {
     return lots.map { lot ->
-        val marketValue = currentPrice?.let { (lot.shares * it).toLong() }
+        val marketValue = currentPrice?.let { kotlin.math.round(lot.shares * it).toLong() }
         val gainLoss = marketValue?.minus(lot.costBasis)
         val percent = if (gainLoss != null && lot.costBasis != 0L) {
             (gainLoss.toDouble() / lot.costBasis) * 100

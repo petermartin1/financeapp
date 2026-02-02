@@ -50,7 +50,7 @@ class HoldingDetailViewModel(
         combine(_lots, _holdingPerformance) { lots, performance ->
             val currentPrice = performance?.currentPrice
             lots.map { lot ->
-                val marketValue = currentPrice?.let { (lot.shares * it).toLong() }
+                val marketValue = currentPrice?.let { kotlin.math.round(lot.shares * it).toLong() }
                 val gainLoss = marketValue?.minus(lot.costBasis)
                 val percent = if (gainLoss != null && lot.costBasis != 0L) {
                     (gainLoss.toDouble() / lot.costBasis) * 100

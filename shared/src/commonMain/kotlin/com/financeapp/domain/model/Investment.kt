@@ -39,7 +39,7 @@ data class HoldingWithPrice(
     val accountName: String
 ) {
     val marketValue: Long
-        get() = currentPrice?.let { (holding.shares * it).toLong() } ?: 0L
+        get() = currentPrice?.let { kotlin.math.round(holding.shares * it).toLong() } ?: 0L
 
     val gainLoss: Long
         get() = marketValue - holding.costBasis
