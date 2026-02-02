@@ -9,8 +9,8 @@ import kotlinx.datetime.Instant
  * IMPORTANT: This logger MUST NEVER log passwords, credentials, or other sensitive data.
  * All events are sanitized to remove sensitive information before logging.
  *
- * Events are logged to both console (for development) and a persistent log file (for auditing).
- * In production, these logs should be monitored for security incidents.
+ * Events are logged to console and kept in memory (up to 1000 events).
+ * Note: Events are NOT persisted to disk and will be lost on app restart.
  */
 object SecurityAuditLogger {
     private val events = mutableListOf<SecurityEvent>()

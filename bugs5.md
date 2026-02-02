@@ -41,8 +41,8 @@ This document tracks bugs discovered during a deep code review. Issues are prior
 - **Issue:** OFX export hardcodes `<CURDEF>USD</CURDEF>` for every account. Non-USD accounts export incorrect currency metadata.
 - **Fix:** Use each account’s stored currency (`Accounts.currency`) when writing `<CURDEF>`.
 
-### 6. SecurityAuditLogger Claims Persistent Logging but Doesn’t Persist
-- **Status:** Not fixed
+### 6. SecurityAuditLogger Claims Persistent Logging but Doesn't Persist
+- **Status:** Fixed (docs updated)
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/security/SecurityAuditLogger.kt:6-45`
 - **Issue:** The header comment promises persistent audit logs, but the implementation only logs to console and memory. On restart, all audit events are lost.
 - **Fix:** Implement persistent storage (file or secure log) or update the documentation to match behavior.
