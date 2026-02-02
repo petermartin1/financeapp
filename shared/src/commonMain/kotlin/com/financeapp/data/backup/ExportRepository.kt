@@ -118,7 +118,7 @@ class ExportRepository(
                 sb.appendLine("<STMTTRN>")
                 sb.appendLine("<TRNTYPE>$trnType</TRNTYPE>")
                 sb.appendLine("<DTPOSTED>$dateStr</DTPOSTED>")
-                sb.appendLine("<TRNAMT>${amount / 100.0}</TRNAMT>")
+                sb.appendLine("<TRNAMT>${formatAmountFromCents(amount)}</TRNAMT>")
                 sb.appendLine("<FITID>${tx[Transactions.id].value}</FITID>")
                 sb.appendLine("<NAME>$payeeName</NAME>")
                 tx[Transactions.memo]?.let {
@@ -209,8 +209,19 @@ class ExportRepository(
     }
 
     private fun formatAmount(cents: Long): String {
-        val dollars = cents / 100.0
-        return "%.2f".format(dollars)
+        return formatAmountFromCents(cents)
+    }
+
+    /**
+     * Format cents as a decimal string using integer-only math to avoid
+     * floating-point precision issues.
+     */
+    private fun formatAmountFromCents(cents: Long): String {
+        val sign = if (cents < 0) "-" else ""
+        val absCents = kotlin.math.abs(cents)
+        val dollars = absCents / 100
+        val remainder = absCents % 100
+        return "$sign$dollars.${remainder.toString().padStart(2, '0')}"
     }
 
     private fun escapeCsv(value: String): String {
@@ -228,17 +239,5 @@ class ExportRepository(
             .replace(">", "&gt;")
             .replace("\"", "&quot;")
             .replace("'", "&apos;")
-    }
-
-    private fun String.format(vararg args: Any?): String {
-        // Simple format for %.2f
-        if (this == "%.2f" && args.isNotEmpty()) {
-            val num = args[0] as? Double ?: return this
-            val intPart = num.toLong()
-            val decPart = ((kotlin.math.abs(num) - kotlin.math.abs(intPart)) * 100).toLong()
-            val sign = if (num < 0) "-" else ""
-            return "$sign${kotlin.math.abs(intPart)}.${decPart.toString().padStart(2, '0')}"
-        }
-        return this
     }
 }

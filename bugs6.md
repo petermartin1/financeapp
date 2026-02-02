@@ -26,8 +26,8 @@ This document tracks bugs discovered during a deep code review. Issues are prior
 
 ## Medium Priority Issues
 
-### 4. Scheduled Transactions Don’t Catch Up Missed Occurrences
-- **Status:** Not fixed
+### 4. Scheduled Transactions Don't Catch Up Missed Occurrences
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/scheduled/ScheduledViewModel.kt:96-140`
 - **Issue:** `enterDueTransactions()` only inserts one occurrence per scheduled transaction, even if the next date is far in the past. Missed cycles are silently skipped.
 - **Fix:** Loop until `nextDate` exceeds today (or `endDate`), inserting each missed occurrence and advancing `nextDate` accordingly.
@@ -49,13 +49,13 @@ This document tracks bugs discovered during a deep code review. Issues are prior
 ## Low Priority / Correctness Edge Cases
 
 ### 7. Export Amount Formatting Can Be Off by One Cent
-- **Status:** Not fixed
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/backup/ExportRepository.kt:118-121`, `shared/src/commonMain/kotlin/com/financeapp/data/backup/ExportRepository.kt:211-240`
 - **Issue:** OFX export uses `amount / 100.0`, and CSV uses a custom formatter that truncates rather than rounds. Negative values can end up one cent off, and floating-point formatting may introduce precision artifacts.
 - **Fix:** Format currency using integer cents with explicit two-decimal formatting (no floating point).
 
 ### 8. Price Refresh Concurrency Race
-- **Status:** Not fixed
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/domain/service/PriceRefreshService.kt:56-87`
 - **Issue:** `_isRefreshing` is checked and then set without synchronization. Two concurrent calls can both enter refresh, causing overlapping updates and inconsistent `lastError`/`lastRefreshTime`.
 - **Fix:** Use a `Mutex`/`AtomicBoolean` compare-and-set to guarantee single-flight refresh.

@@ -109,27 +109,38 @@ class ScheduledViewModel(
                     continue
                 }
 
-                val now = Clock.System.now()
+                // Loop to catch up all missed occurrences
+                var currentDate = scheduled.nextDate
+                while (currentDate <= today) {
+                    // Check if we've passed the end date
+                    if (scheduled.endDate != null && currentDate > scheduled.endDate) {
+                        break
+                    }
 
-                // Create the transaction
-                val transaction = Transaction(
-                    accountId = scheduled.accountId,
-                    date = scheduled.nextDate,
-                    amount = scheduled.amount,
-                    payeeId = scheduled.payeeId,
-                    categoryId = scheduled.categoryId,
-                    memo = scheduled.memo,
-                    isCleared = false,
-                    createdAt = now,
-                    updatedAt = now
-                )
+                    val now = Clock.System.now()
 
-                transactionRepository.insertTransaction(transaction)
-                entered++
+                    // Create the transaction for this occurrence
+                    val transaction = Transaction(
+                        accountId = scheduled.accountId,
+                        date = currentDate,
+                        amount = scheduled.amount,
+                        payeeId = scheduled.payeeId,
+                        categoryId = scheduled.categoryId,
+                        memo = scheduled.memo,
+                        isCleared = false,
+                        createdAt = now,
+                        updatedAt = now
+                    )
 
-                // Update next date
-                val newDate = calculateNextDate(scheduled.nextDate, scheduled.frequency)
-                val newDateMillis = newDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+                    transactionRepository.insertTransaction(transaction)
+                    entered++
+
+                    // Advance to next occurrence
+                    currentDate = calculateNextDate(currentDate, scheduled.frequency)
+                }
+
+                // Update the scheduled transaction's next date
+                val newDateMillis = currentDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
 
                 // Check if next occurrence would be past end date
                 val endDateMillis = scheduled.endDate?.atStartOfDayIn(TimeZone.currentSystemDefault())?.toEpochMilliseconds()

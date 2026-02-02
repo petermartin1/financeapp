@@ -6,6 +6,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
 
 /**
@@ -17,6 +19,7 @@ class PriceRefreshService(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 ) {
     private var refreshJob: Job? = null
+    private val refreshMutex = Mutex()
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -54,14 +57,15 @@ class PriceRefreshService(
      * Manually trigger a price refresh
      */
     suspend fun refreshPrices(): RefreshResult {
-        if (_isRefreshing.value) {
+        // Use tryLock to return immediately if already refreshing
+        if (!refreshMutex.tryLock()) {
             return RefreshResult.AlreadyInProgress
         }
 
-        _isRefreshing.value = true
-        _lastError.value = null
-
         return try {
+            _isRefreshing.value = true
+            _lastError.value = null
+
             val results = quoteRepository.refreshAllPrices()
 
             val successCount = results.values.count { it.isSuccess }
@@ -85,6 +89,7 @@ class PriceRefreshService(
             RefreshResult.Failure(e)
         } finally {
             _isRefreshing.value = false
+            refreshMutex.unlock()
         }
     }
 
