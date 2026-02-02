@@ -12,7 +12,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
@@ -39,17 +38,17 @@ class TransactionRepositoryImpl(
         transactionRefreshTrigger.value += 1
     }
 
-    override fun getTransactionsByAccount(accountId: Long): Flow<List<Transaction>> = flow {
-        val transactions = withContext(ioDispatcher) {
-            transaction(database) {
-                Transactions
-                    .selectAll().where { Transactions.accountId eq accountId.toInt() }
-                    .orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC)
-                    .map { it.toDomain() }
+    override fun getTransactionsByAccount(accountId: Long): Flow<List<Transaction>> =
+        transactionRefreshTrigger.map { _ ->
+            withContext(ioDispatcher) {
+                transaction(database) {
+                    Transactions
+                        .selectAll().where { Transactions.accountId eq accountId.toInt() }
+                        .orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC)
+                        .map { it.toDomain() }
+                }
             }
         }
-        emit(transactions)
-    }
 
     override fun getTransactionsWithDetailsByAccount(accountId: Long): Flow<List<TransactionWithDetails>> =
         transactionRefreshTrigger.map { _ ->
@@ -112,13 +111,13 @@ class TransactionRepositoryImpl(
     override fun getTransactionsByDateRange(
         startDate: LocalDate,
         endDate: LocalDate
-    ): Flow<List<Transaction>> = flow {
+    ): Flow<List<Transaction>> = transactionRefreshTrigger.map { _ ->
         val tz = TimeZone.currentSystemDefault()
         val startMillis = startDate.atStartOfDayIn(tz).toEpochMilliseconds()
         // Use proper date arithmetic to handle DST (23/25 hour days)
         val endMillis = endDate.plus(1, DateTimeUnit.DAY).atStartOfDayIn(tz).toEpochMilliseconds() - 1
 
-        val transactions = withContext(ioDispatcher) {
+        withContext(ioDispatcher) {
             transaction(database) {
                 Transactions
                     .selectAll().where { (Transactions.date greaterEq startMillis) and (Transactions.date lessEq endMillis) }
@@ -126,20 +125,19 @@ class TransactionRepositoryImpl(
                     .map { it.toDomain() }
             }
         }
-        emit(transactions)
     }
 
-    override fun getTransactionsByCategory(categoryId: Long): Flow<List<Transaction>> = flow {
-        val transactions = withContext(ioDispatcher) {
-            transaction(database) {
-                Transactions
-                    .selectAll().where { Transactions.categoryId eq categoryId.toInt() }
-                    .orderBy(Transactions.date to SortOrder.DESC)
-                    .map { it.toDomain() }
+    override fun getTransactionsByCategory(categoryId: Long): Flow<List<Transaction>> =
+        transactionRefreshTrigger.map { _ ->
+            withContext(ioDispatcher) {
+                transaction(database) {
+                    Transactions
+                        .selectAll().where { Transactions.categoryId eq categoryId.toInt() }
+                        .orderBy(Transactions.date to SortOrder.DESC)
+                        .map { it.toDomain() }
+                }
             }
         }
-        emit(transactions)
-    }
 
     override suspend fun getTransactionById(id: Long): Transaction? = withContext(ioDispatcher) {
         transaction(database) {

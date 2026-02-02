@@ -4,6 +4,7 @@ import com.financeapp.domain.model.ScheduledTransaction
 import com.financeapp.domain.model.ScheduledTransactionWithDetails
 import com.financeapp.domain.model.Transaction
 import com.financeapp.domain.model.TransactionFrequency
+import com.financeapp.domain.repository.AccountRepository
 import com.financeapp.domain.repository.ScheduledTransactionRepository
 import com.financeapp.domain.repository.TransactionRepository
 import kotlinx.coroutines.CoroutineScope
@@ -16,7 +17,8 @@ import kotlinx.datetime.*
 
 class ScheduledViewModel(
     private val scheduledTransactionRepository: ScheduledTransactionRepository,
-    private val transactionRepository: TransactionRepository
+    private val transactionRepository: TransactionRepository,
+    private val accountRepository: AccountRepository
 ) {
     private val scope = CoroutineScope(Dispatchers.Main)
 
@@ -136,6 +138,9 @@ class ScheduledViewModel(
                 } else {
                     scheduledTransactionRepository.updateScheduledTransactionNextDate(scheduled.id, newDateMillis)
                 }
+            }
+            if (entered > 0) {
+                accountRepository.notifyBalancesChanged()
             }
             _uiState.value = _uiState.value.copy(lastEnteredCount = entered)
         }

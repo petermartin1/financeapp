@@ -115,7 +115,7 @@ val sharedModule = module {
     single { ImportViewModel(get(), get(), get(), get(), get(), get()) }
     single { ConnectionsViewModel(get()) }
     single { ReconcileViewModel(get<TransactionRepository>(), get<AccountRepository>()) }
-    single { ScheduledViewModel(get<ScheduledTransactionRepository>(), get<TransactionRepository>()) }
+    single { ScheduledViewModel(get<ScheduledTransactionRepository>(), get<TransactionRepository>(), get<AccountRepository>()) }
     single { BudgetViewModel(get()) }
     single { ReportsViewModel(get<TransactionRepository>(), get<AccountRepository>()) }
     single { BackupViewModel(get()) }

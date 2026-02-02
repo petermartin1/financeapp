@@ -98,7 +98,7 @@ class ExportRepository(
 
             sb.appendLine("<STMTTRNRS>")
             sb.appendLine("<STMTRS>")
-            sb.appendLine("<CURDEF>USD</CURDEF>")
+            sb.appendLine("<CURDEF>${account[Accounts.currency]}</CURDEF>")
             sb.appendLine("<BANKACCTFROM>")
             sb.appendLine("<BANKID>000000000</BANKID>")
             sb.appendLine("<ACCTID>$accountId</ACCTID>")

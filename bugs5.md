@@ -20,8 +20,8 @@ This document tracks bugs discovered during a deep code review. Issues are prior
 
 ## Medium Priority Issues
 
-### 3. TransactionRepository Flows Aren’t Reactive for Several Queries
-- **Status:** Not fixed
+### 3. TransactionRepository Flows Aren't Reactive for Several Queries
+- **Status:** Fixed
 - **Files:**
   - `shared/src/commonMain/kotlin/com/financeapp/data/repository/TransactionRepositoryImpl.kt:42-52`
   - `shared/src/commonMain/kotlin/com/financeapp/data/repository/TransactionRepositoryImpl.kt:112-130`
@@ -29,14 +29,14 @@ This document tracks bugs discovered during a deep code review. Issues are prior
 - **Issue:** `getTransactionsByAccount`, `getTransactionsByDateRange`, and `getTransactionsByCategory` return `Flow` but emit only once and ignore `transactionRefreshTrigger`. Consumers collecting these flows won’t update after inserts/updates unless they re-subscribe.
 - **Fix:** Mirror the reactive pattern used by `getAllTransactionsWithDetails()` and `getTransactionsWithDetailsByAccount()` by mapping from `transactionRefreshTrigger` (or combining it with filters).
 
-### 4. Scheduled Entry Doesn’t Refresh Account Balances
-- **Status:** Not fixed
+### 4. Scheduled Entry Doesn't Refresh Account Balances
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/ui/scheduled/ScheduledViewModel.kt:94-140`
 - **Issue:** `enterDueTransactions()` inserts transactions but never calls `accountRepository.notifyBalancesChanged()`. Account balances remain stale until another action forces a refresh.
 - **Fix:** Inject `AccountRepository` and call `notifyBalancesChanged()` once after processing due transactions.
 
 ### 5. OFX Export Ignores Account Currency
-- **Status:** Not fixed
+- **Status:** Fixed
 - **File:** `shared/src/commonMain/kotlin/com/financeapp/data/backup/ExportRepository.kt:95-106`
 - **Issue:** OFX export hardcodes `<CURDEF>USD</CURDEF>` for every account. Non-USD accounts export incorrect currency metadata.
 - **Fix:** Use each account’s stored currency (`Accounts.currency`) when writing `<CURDEF>`.
