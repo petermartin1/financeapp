@@ -33,10 +33,10 @@ class ScheduledTransactionRepositoryImpl(
         scheduledTransactionRefreshTrigger.map { _ ->
             withContext(ioDispatcher) {
                 transaction(database) {
-                    // Load all scheduled transactions with account names
+                    // Load all active scheduled transactions with account names
                     val scheduledRows = ScheduledTransactions
                         .join(Accounts, JoinType.INNER, ScheduledTransactions.accountId, Accounts.id)
-                        .selectAll()
+                        .selectAll().where { ScheduledTransactions.isActive eq true }
                         .toList()
 
                     // Batch load all payees and categories once

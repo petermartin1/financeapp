@@ -12,10 +12,11 @@ import com.financeapp.domain.model.AccountWithBalance
 import com.financeapp.domain.model.TransactionWithDetails
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
@@ -43,6 +44,7 @@ class DashboardViewModel(
 ) {
     private val scope = CoroutineScope(Dispatchers.Main)
     private val json = Json { ignoreUnknownKeys = true }
+    private var observeJob: Job? = null
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
@@ -52,10 +54,9 @@ class DashboardViewModel(
     }
 
     fun loadDashboard() {
+        // Load dashboard config (one-time preference read)
         scope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-
-            // Load dashboard config
             val configJson = preferencesRepository.getDashboardConfig()
             val config = if (configJson != null) {
                 try {
@@ -66,33 +67,38 @@ class DashboardViewModel(
             } else {
                 DashboardConfig()
             }
+            _uiState.value = _uiState.value.copy(dashboardConfig = config)
+        }
 
-            // Load accounts
-            val accounts = accountRepository.getAccountsWithBalances().first()
-            val totalBalance = accounts.sumOf { it.balance }
-
-            // Load recent transactions (last 5)
-            val recentTransactions = transactionRepository.getRecentTransactions(5)
-
-            // Calculate spending by category for current month
-            val spending = transactionRepository.getSpendingByCategory()
-
-            // Load budget data for current month
+        // Start reactive observation of data (cancel any previous)
+        observeJob?.cancel()
+        observeJob = scope.launch {
             val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
-            val budgetsWithSpending = budgetRepository.getBudgetsWithSpendingByMonth(now.year, now.monthNumber).first()
-            val monthlyBudgetTotal = budgetsWithSpending.sumOf { it.budget.amount }
-            val monthlyBudgetSpent = budgetsWithSpending.sumOf { it.spent }
+            combine(
+                accountRepository.getAccountsWithBalances(),
+                transactionRepository.getAllTransactionsWithDetails(),
+                budgetRepository.getBudgetsWithSpendingByMonth(now.year, now.monthNumber)
+            ) { accounts, allTransactions, budgetsWithSpending ->
+                val totalBalance = accounts.sumOf { it.balance }
+                val recentTransactions = allTransactions
+                    .sortedByDescending { it.transaction.date }
+                    .take(5)
+                val spending = transactionRepository.getSpendingByCategory()
+                val monthlyBudgetTotal = budgetsWithSpending.sumOf { it.budget.amount }
+                val monthlyBudgetSpent = budgetsWithSpending.sumOf { it.spent }
 
-            _uiState.value = DashboardUiState(
-                isLoading = false,
-                accounts = accounts,
-                totalBalance = totalBalance,
-                recentTransactions = recentTransactions,
-                dashboardConfig = config,
-                spendingByCategory = spending,
-                monthlyBudgetSpent = monthlyBudgetSpent,
-                monthlyBudgetTotal = monthlyBudgetTotal
-            )
+                _uiState.value.copy(
+                    isLoading = false,
+                    accounts = accounts,
+                    totalBalance = totalBalance,
+                    recentTransactions = recentTransactions,
+                    spendingByCategory = spending,
+                    monthlyBudgetSpent = monthlyBudgetSpent,
+                    monthlyBudgetTotal = monthlyBudgetTotal
+                )
+            }.collect { state ->
+                _uiState.value = state
+            }
         }
     }
 

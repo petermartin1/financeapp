@@ -272,18 +272,29 @@ class PerformanceRepositoryImpl(
 
     override fun getAllHoldingPerformance(): Flow<List<HoldingPerformance>> = flow {
         val holdings = investmentRepository.getAllHoldings()
+        val totalPortfolioValue = computeTotalPortfolioValue(holdings)
         val performances = holdings.map { holding ->
-            calculateHoldingPerformance(holding)
+            calculateHoldingPerformance(holding, totalPortfolioValue)
         }
         emit(performances)
     }
 
     override suspend fun getHoldingPerformance(holdingId: Long): HoldingPerformance? = withContext(Dispatchers.IO) {
         val holding = investmentRepository.getHoldingById(holdingId) ?: return@withContext null
-        calculateHoldingPerformance(holding)
+        val totalPortfolioValue = computeTotalPortfolioValue()
+        calculateHoldingPerformance(holding, totalPortfolioValue)
     }
 
-    private suspend fun calculateHoldingPerformance(holding: Holding): HoldingPerformance {
+    private suspend fun computeTotalPortfolioValue(holdings: List<Holding>? = null): Long {
+        val allHoldings = holdings ?: investmentRepository.getAllHoldings()
+        return allHoldings.sumOf { h ->
+            val q = investmentRepository.getLatestPrice(h.symbol)
+            val price = q?.price ?: 0L
+            kotlin.math.round(h.shares * price).toLong()
+        }
+    }
+
+    private suspend fun calculateHoldingPerformance(holding: Holding, totalPortfolioValue: Long): HoldingPerformance {
         val quote = investmentRepository.getLatestPrice(holding.symbol)
         val currentPrice = quote?.price ?: 0L
         // Get previous price from history (we don't have previousClose in SecurityPrice model)
@@ -305,14 +316,6 @@ class PerformanceRepositoryImpl(
         } else {
             0.0
         }
-
-        // Calculate allocation
-        val totalPortfolioValue = investmentRepository.getAllHoldings()
-            .sumOf { h ->
-                val q = investmentRepository.getLatestPrice(h.symbol)
-                val price = q?.price ?: 0L
-                kotlin.math.round(h.shares * price).toLong()
-            }
 
         val allocation = if (totalPortfolioValue > 0) {
             (currentValue.toDouble() / totalPortfolioValue.toDouble()) * 100.0
@@ -338,7 +341,8 @@ class PerformanceRepositoryImpl(
 
     override suspend fun getPerformanceSummary(): PerformanceSummary = withContext(Dispatchers.IO) {
         val holdings = investmentRepository.getAllHoldings()
-        val holdingPerformances = holdings.map { calculateHoldingPerformance(it) }
+        val totalPortfolioValue = computeTotalPortfolioValue(holdings)
+        val holdingPerformances = holdings.map { calculateHoldingPerformance(it, totalPortfolioValue) }
 
         val totalValue = holdingPerformances.sumOf { it.currentValue }
         val totalCostBasis = holdingPerformances.sumOf { it.costBasis }

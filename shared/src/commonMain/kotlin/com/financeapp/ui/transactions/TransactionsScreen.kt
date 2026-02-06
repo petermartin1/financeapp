@@ -351,14 +351,17 @@ fun TransactionsScreen(
             onConfirm = { categoryId ->
                 selectedTransactionIds.forEach { id ->
                     uiState.filteredTransactions.find { it.transaction.id == id }?.let { txn ->
-                        viewModel.editTransaction(
-                            txn.transaction,
-                            categoryId,
-                            txn.transaction.memo,
-                            txn.transaction.date,
-                            txn.transaction.isCleared,
-                            emptyList() // Keep existing tags
-                        )
+                        coroutineScope.launch {
+                            val existingTags = viewModel.getTagsForTransaction(txn.transaction.id)
+                            viewModel.editTransaction(
+                                txn.transaction,
+                                categoryId,
+                                txn.transaction.memo,
+                                txn.transaction.date,
+                                txn.transaction.isCleared,
+                                existingTags // Keep existing tags
+                            )
+                        }
                     }
                 }
                 selectedTransactionIds = emptySet()

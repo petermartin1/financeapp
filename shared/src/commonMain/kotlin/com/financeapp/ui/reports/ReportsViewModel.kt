@@ -89,8 +89,9 @@ class ReportsViewModel(
     private suspend fun loadSpendingReport(startDate: LocalDate, endDate: LocalDate): SpendingReport {
         val transactions = transactionRepository.getTransactionsByDateRange(startDate, endDate).first()
 
-        // Filter to expenses only (negative amounts) and group by category
+        // Filter to expenses only (negative amounts), excluding transfers, and group by category
         val expensesByCategory = transactions
+            .filter { it.transferId == null }
             .filter { it.amount < 0 }
             .groupBy { it.categoryId }
 
@@ -125,8 +126,9 @@ class ReportsViewModel(
     private suspend fun loadIncomeExpenseReport(startDate: LocalDate, endDate: LocalDate): IncomeExpenseReport {
         val transactions = transactionRepository.getTransactionsByDateRange(startDate, endDate).first()
 
-        // Group by year-month
-        val byMonth = transactions.groupBy { Pair(it.date.year, it.date.monthNumber) }
+        // Exclude transfers, then group by year-month
+        val nonTransferTransactions = transactions.filter { it.transferId == null }
+        val byMonth = nonTransferTransactions.groupBy { Pair(it.date.year, it.date.monthNumber) }
 
         val monthlyTrends = byMonth.map { (yearMonth, txns) ->
             val (year, month) = yearMonth

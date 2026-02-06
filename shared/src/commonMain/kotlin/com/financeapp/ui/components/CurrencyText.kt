@@ -223,7 +223,7 @@ fun formatCurrency(amountCents: Long, showSign: Boolean = false): String {
  */
 fun formatCentsToDecimal(amountCents: Long): String {
     val dollars = amountCents / 100.0
-    return String.format("%.2f", abs(dollars))
+    return String.format("%.2f", dollars)
 }
 
 /**

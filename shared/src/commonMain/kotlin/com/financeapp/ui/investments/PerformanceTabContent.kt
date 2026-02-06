@@ -628,8 +628,9 @@ fun HoldingPerformanceItem(holding: HoldingPerformance) {
 }
 
 private fun formatCurrency(cents: Long): String {
+    val sign = if (cents < 0) "-" else ""
     val dollars = cents / 100.0
-    return "${'$'}${"%,.2f".format(kotlin.math.abs(dollars))}"
+    return "${sign}${'$'}${"%,.2f".format(kotlin.math.abs(dollars))}"
 }
 
 private fun formatShares(shares: Double): String {
