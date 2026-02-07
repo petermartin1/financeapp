@@ -25,6 +25,7 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import com.financeapp.ui.components.parseDecimalToCents
 import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -554,7 +555,7 @@ private fun AddHoldingDialog(
             TextButton(
                 onClick = {
                     val sharesValue = shares.toDoubleOrNull() ?: 0.0
-                    val costValue = ((costBasis.toDoubleOrNull() ?: 0.0) * 100).roundToLong()
+                    val costValue = parseDecimalToCents(costBasis) ?: 0L
                     onConfirm(
                         selectedAccountId,
                         symbol,
@@ -683,7 +684,7 @@ private fun UpdatePriceDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val priceValue = ((price.toDoubleOrNull() ?: 0.0) * 100).roundToLong()
+                    val priceValue = parseDecimalToCents(price) ?: 0L
                     onConfirm(priceValue)
                 },
                 enabled = price.isNotBlank()

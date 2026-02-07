@@ -24,6 +24,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.abs
+import com.financeapp.ui.components.parseDecimalToCents
 import kotlin.math.roundToLong
 
 @Composable
@@ -284,7 +285,7 @@ fun LotEditorDialog(
             TextButton(
                 onClick = {
                     val shareValue = shares.toDoubleOrNull() ?: 0.0
-                    val costValue = ((costBasis.toDoubleOrNull() ?: 0.0) * 100).roundToLong()
+                    val costValue = parseDecimalToCents(costBasis) ?: 0L
                     onConfirm(
                         date,
                         purpose.ifBlank { null },

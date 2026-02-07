@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.Category
 import com.financeapp.ui.categories.CategoriesViewModel
 import org.koin.compose.koinInject
+import com.financeapp.ui.components.parseDecimalToCents
 import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -163,8 +164,8 @@ fun TransactionFilterSheet(
             }
             Button(
                 onClick = {
-                    val minAmount = minAmountText.toDoubleOrNull()?.let { (it * 100).roundToLong() }
-                    val maxAmount = maxAmountText.toDoubleOrNull()?.let { (it * 100).roundToLong() }
+                    val minAmount = if (minAmountText.isNotBlank()) parseDecimalToCents(minAmountText) else null
+                    val maxAmount = if (maxAmountText.isNotBlank()) parseDecimalToCents(maxAmountText) else null
 
                     onApply(
                         currentFilter.copy(

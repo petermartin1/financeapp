@@ -114,17 +114,17 @@ val sharedModule = module {
     single { CategoriesViewModel(get()) }
     single { ImportViewModel(get(), get(), get(), get(), get(), get()) }
     single { ConnectionsViewModel(get()) }
-    single { ReconcileViewModel(get<TransactionRepository>(), get<AccountRepository>()) }
+    factory { ReconcileViewModel(get<TransactionRepository>(), get<AccountRepository>()) }
     single { ScheduledViewModel(get<ScheduledTransactionRepository>(), get<TransactionRepository>(), get<AccountRepository>()) }
     single { BudgetViewModel(get()) }
     single { ReportsViewModel(get<TransactionRepository>(), get<AccountRepository>()) }
     single { BackupViewModel(get()) }
     factory { PayeeManagementViewModel(get(), get(), get(), get(), get()) }
-    factory { InvestmentViewModel(get(), get(), get()) }
-    factory { PerformanceTabViewModel(get(), get()) }
-    factory { TagsViewModel(get()) }
-    factory { DashboardViewModel(get(), get(), get(), get()) }
-    factory { TemplatesViewModel(get(), get(), get(), get()) }
+    single { InvestmentViewModel(get(), get(), get()) }
+    single { PerformanceTabViewModel(get(), get()) }
+    single { TagsViewModel(get()) }
+    single { DashboardViewModel(get(), get(), get(), get()) }
+    single { TemplatesViewModel(get(), get(), get(), get()) }
     factory { SearchViewModel(get(), get(), get()) }
 }
 

@@ -81,10 +81,10 @@ class ScheduledViewModel(
                 ?: return@launch
 
             val newDate = calculateNextDate(scheduled.nextDate, scheduled.frequency)
-            val newDateMillis = newDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+            val newDateMillis = newDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
 
             // Check if past end date
-            val endDateMillis = scheduled.endDate?.atStartOfDayIn(TimeZone.currentSystemDefault())?.toEpochMilliseconds()
+            val endDateMillis = scheduled.endDate?.atStartOfDayIn(TimeZone.UTC)?.toEpochMilliseconds()
             if (endDateMillis != null && newDateMillis > endDateMillis) {
                 scheduledTransactionRepository.updateScheduledTransactionActive(id, false)
             } else {
@@ -98,7 +98,7 @@ class ScheduledViewModel(
             var entered = 0
             val today = Clock.System.now()
                 .toLocalDateTime(TimeZone.currentSystemDefault()).date
-            val todayMillis = today.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+            val todayMillis = today.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
 
             val dueTransactions = scheduledTransactionRepository.getDueScheduledTransactions(todayMillis)
 
@@ -140,10 +140,10 @@ class ScheduledViewModel(
                 }
 
                 // Update the scheduled transaction's next date
-                val newDateMillis = currentDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+                val newDateMillis = currentDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
 
                 // Check if next occurrence would be past end date
-                val endDateMillis = scheduled.endDate?.atStartOfDayIn(TimeZone.currentSystemDefault())?.toEpochMilliseconds()
+                val endDateMillis = scheduled.endDate?.atStartOfDayIn(TimeZone.UTC)?.toEpochMilliseconds()
                 if (endDateMillis != null && newDateMillis > endDateMillis) {
                     scheduledTransactionRepository.updateScheduledTransactionActive(scheduled.id, false)
                 } else {

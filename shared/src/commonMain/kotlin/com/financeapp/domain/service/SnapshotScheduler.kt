@@ -11,9 +11,11 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 
 /**
@@ -170,8 +172,9 @@ class SnapshotScheduler(
             targetDate = targetDate.plus(1, DateTimeUnit.DAY)
         }
 
-        // Calculate target instant using timezone-aware arithmetic
-        val targetMillis = targetDate.atStartOfDayIn(tz).toEpochMilliseconds() + (hourOfDay * 60 * 60 * 1000L)
+        // Calculate target instant using DST-safe LocalDateTime conversion
+        val targetDateTime = kotlinx.datetime.LocalDateTime(targetDate, LocalTime(hourOfDay, 0))
+        val targetMillis = targetDateTime.toInstant(tz).toEpochMilliseconds()
         return targetMillis - now.toEpochMilliseconds()
     }
 
@@ -193,9 +196,10 @@ class SnapshotScheduler(
         // If same day but past the hour, schedule for next week
         if (daysUntilTarget == 0 && nowLocal.hour >= hourOfDay) daysUntilTarget = 7
 
-        // Calculate target instant
+        // Calculate target instant using DST-safe LocalDateTime conversion
         val targetDate = nowLocal.date.plus(daysUntilTarget, DateTimeUnit.DAY)
-        val targetMillis = targetDate.atStartOfDayIn(tz).toEpochMilliseconds() + (hourOfDay * 60 * 60 * 1000L)
+        val targetDateTime = kotlinx.datetime.LocalDateTime(targetDate, LocalTime(hourOfDay, 0))
+        val targetMillis = targetDateTime.toInstant(tz).toEpochMilliseconds()
 
         return targetMillis - now.toEpochMilliseconds()
     }
@@ -229,9 +233,10 @@ class SnapshotScheduler(
             effectiveDay = minOf(dayOfMonth, lastDayOfMonth(targetYear, targetMonth))
         }
 
-        // Calculate target instant
+        // Calculate target instant using DST-safe LocalDateTime conversion
         val targetDate = kotlinx.datetime.LocalDate(targetYear, targetMonth, effectiveDay)
-        val targetMillis = targetDate.atStartOfDayIn(tz).toEpochMilliseconds() + (hourOfDay * 60 * 60 * 1000L)
+        val targetDateTime = kotlinx.datetime.LocalDateTime(targetDate, LocalTime(hourOfDay, 0))
+        val targetMillis = targetDateTime.toInstant(tz).toEpochMilliseconds()
 
         return targetMillis - now.toEpochMilliseconds()
     }

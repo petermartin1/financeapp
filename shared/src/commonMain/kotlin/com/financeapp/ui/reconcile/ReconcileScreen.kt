@@ -16,6 +16,7 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import com.financeapp.ui.components.parseDecimalToCents
 import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -264,10 +265,10 @@ fun ReconcileStartDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val balance = balanceText.toDoubleOrNull()?.let { (it * 100).roundToLong() } ?: 0L
+                    val balance = parseDecimalToCents(balanceText) ?: return@Button
                     onStart(statementDate, balance)
                 },
-                enabled = balanceText.isNotBlank()
+                enabled = balanceText.isNotBlank() && parseDecimalToCents(balanceText) != null
             ) {
                 Text("Start")
             }

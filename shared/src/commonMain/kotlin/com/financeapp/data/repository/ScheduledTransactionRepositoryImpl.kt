@@ -87,8 +87,8 @@ class ScheduledTransactionRepositoryImpl(
                 it[amount] = scheduledTransaction.amount
                 it[memo] = scheduledTransaction.memo
                 it[frequency] = scheduledTransaction.frequency.name
-                it[nextDate] = scheduledTransaction.nextDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
-                it[endDate] = scheduledTransaction.endDate?.atStartOfDayIn(TimeZone.currentSystemDefault())?.toEpochMilliseconds()
+                it[nextDate] = scheduledTransaction.nextDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
+                it[endDate] = scheduledTransaction.endDate?.atStartOfDayIn(TimeZone.UTC)?.toEpochMilliseconds()
                 it[isActive] = scheduledTransaction.isActive
             }[ScheduledTransactions.id].value.toLong()
         }
@@ -133,8 +133,8 @@ class ScheduledTransactionRepositoryImpl(
             amount = this[ScheduledTransactions.amount],
             memo = this[ScheduledTransactions.memo],
             frequency = TransactionFrequency.valueOf(this[ScheduledTransactions.frequency]),
-            nextDate = Instant.fromEpochMilliseconds(nextDateMillis).toLocalDateTime(TimeZone.currentSystemDefault()).date,
-            endDate = endDateMillis?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.currentSystemDefault()).date },
+            nextDate = Instant.fromEpochMilliseconds(nextDateMillis).toLocalDateTime(TimeZone.UTC).date,
+            endDate = endDateMillis?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.UTC).date },
             isActive = this[ScheduledTransactions.isActive]
         )
     }

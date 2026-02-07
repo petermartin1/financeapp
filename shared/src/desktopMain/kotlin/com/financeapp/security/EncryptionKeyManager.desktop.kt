@@ -55,6 +55,8 @@ actual class EncryptionKeyManager {
 
     private fun storeInKeychain(key: String): Boolean {
         return try {
+            // Note: -w passes the secret as a CLI argument, which is briefly visible in ps aux.
+            // A more secure approach would use the macOS Security framework via JNI/JNA.
             val process = ProcessBuilder(
                 "security", "add-generic-password",
                 "-s", serviceName,
@@ -70,11 +72,12 @@ actual class EncryptionKeyManager {
     }
 
     private fun getOrCreateFileKey(): String {
-        return if (keyFile.exists()) {
-            keyFile.readText().trim()
-        } else {
+        keyFile.parentFile?.mkdirs()
+
+        // Use atomic createNewFile to avoid TOCTOU race between check and create
+        return if (keyFile.createNewFile()) {
+            // We created the file, so we own it - write the key
             val key = generateKey()
-            keyFile.parentFile?.mkdirs()
             keyFile.writeText(key)
             // Set file permissions to owner only
             try {
@@ -86,6 +89,9 @@ actual class EncryptionKeyManager {
                 // Ignore on systems that don't support this
             }
             key
+        } else {
+            // File already existed, read it
+            keyFile.readText().trim()
         }
     }
 

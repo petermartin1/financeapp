@@ -20,6 +20,7 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import com.financeapp.ui.components.parseDecimalToCents
 import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -342,7 +343,7 @@ private fun AddScheduledDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val amount = amountText.toDoubleOrNull()?.let { (it * 100).roundToLong() } ?: 0L
+                    val amount = parseDecimalToCents(amountText) ?: 0L
                     val signedAmount = if (isExpense) -amount else amount
                     onConfirm(
                         selectedAccountId,

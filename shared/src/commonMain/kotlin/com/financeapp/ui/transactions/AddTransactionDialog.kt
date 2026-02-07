@@ -22,6 +22,7 @@ import com.financeapp.domain.model.CategoryType
 import com.financeapp.domain.model.Tag
 import com.financeapp.domain.model.TransactionWithDetails
 import kotlin.math.abs
+import com.financeapp.ui.components.parseDecimalToCents
 import kotlin.math.roundToLong
 import com.financeapp.ui.categories.CategoriesViewModel
 import com.financeapp.ui.tags.TagsViewModel
@@ -325,8 +326,7 @@ fun AddTransactionDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val dollars = amountText.toDoubleOrNull() ?: 0.0
-                    val cents = (dollars * 100).roundToLong()
+                    val cents = parseDecimalToCents(amountText) ?: 0L
 
                     if (transactionType == 2 && onTransfer != null && selectedToAccount != null) {
                         // Transfer

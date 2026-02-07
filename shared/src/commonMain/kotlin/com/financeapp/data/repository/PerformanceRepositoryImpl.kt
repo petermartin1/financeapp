@@ -392,19 +392,16 @@ class PerformanceRepositoryImpl(
                 .orderBy(PortfolioSnapshots.date to SortOrder.ASC)
                 .toList()
 
-            var previousValue: Long? = null
             val snapshots = rows.map { row ->
                 val value = row[PortfolioSnapshots.totalValue]
-                val baseValue = previousValue ?: row[PortfolioSnapshots.totalCostBasis]
+                val costBasis = row[PortfolioSnapshots.totalCostBasis]
 
-                val gainLoss = value - baseValue
-                val gainLossPercent = if (baseValue > 0) {
-                    (gainLoss.toDouble() / baseValue.toDouble()) * 100.0
+                val gainLoss = value - costBasis
+                val gainLossPercent = if (costBasis > 0) {
+                    (gainLoss.toDouble() / costBasis.toDouble()) * 100.0
                 } else {
                     0.0
                 }
-
-                previousValue = value
 
                 PerformanceDataPoint(
                     date = row[PortfolioSnapshots.date],

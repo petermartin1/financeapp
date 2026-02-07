@@ -18,6 +18,7 @@ import com.financeapp.domain.model.TransactionTemplateWithDetails
 import com.financeapp.domain.model.Account
 import com.financeapp.domain.model.Category
 import com.financeapp.domain.model.Payee
+import com.financeapp.ui.components.parseDecimalToCents
 import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -396,8 +397,7 @@ private fun TemplateDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val amount = amountText.toDoubleOrNull()?.let {
-                        val cents = (it * 100).roundToLong()
+                    val amount = parseDecimalToCents(amountText)?.let { cents ->
                         if (isExpense) -cents else cents
                     }
                     onConfirm(
