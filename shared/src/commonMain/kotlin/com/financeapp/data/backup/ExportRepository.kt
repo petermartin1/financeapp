@@ -187,7 +187,7 @@ class ExportRepository(
         allBudgets.forEach { budget ->
             val categoryId = budget[Budgets.categoryId].value.toLong()
             val categoryName = escapeCsv(categories[categoryId] ?: "Unknown")
-            val amount = budget[Budgets.amount] / 100.0
+            val amount = formatAmountFromCents(budget[Budgets.amount])
             val year = budget[Budgets.year]
             val month = budget[Budgets.month]
             sb.appendLine("$categoryName,$amount,$year,$month")

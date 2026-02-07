@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 data class TemplatesUiState(
@@ -45,28 +45,25 @@ class TemplatesViewModel(
         scope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
-            // Load accounts, categories, payees
-            val accounts = accountRepository.getAccountsWithBalances().first().map { it.account }
-            val categories = categoryRepository.getAllCategories().first()
-            val payees = payeeRepository.getAllPayees().first()
-
-            _uiState.value = _uiState.value.copy(
-                accounts = accounts,
-                categories = categories,
-                payees = payees
-            )
-
-            // Observe templates
-            templateRepository.getAllTemplates()
+            combine(
+                accountRepository.getAccountsWithBalances(),
+                categoryRepository.getAllCategories(),
+                payeeRepository.getAllPayees(),
+                templateRepository.getAllTemplates()
+            ) { accountsWithBalances, categories, payees, templates ->
+                TemplatesUiState(
+                    isLoading = false,
+                    templates = templates,
+                    accounts = accountsWithBalances.map { it.account },
+                    categories = categories,
+                    payees = payees
+                )
+            }
                 .catch { e ->
-                    // Log error and set loading to false to prevent UI from being stuck
                     _uiState.value = _uiState.value.copy(isLoading = false)
                 }
-                .collect { templates ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        templates = templates
-                    )
+                .collect { state ->
+                    _uiState.value = state
                 }
         }
     }

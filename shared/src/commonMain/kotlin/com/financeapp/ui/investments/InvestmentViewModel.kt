@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.Clock
@@ -53,17 +54,14 @@ class InvestmentViewModel(
 
     private fun loadData() {
         scope.launch {
-            // Load investment accounts
-            accountRepository.getAllAccounts().collect { accounts ->
+            combine(
+                accountRepository.getAllAccounts(),
+                investmentRepository.getPortfolio()
+            ) { accounts, holdings ->
                 val investmentAccounts = accounts
                     .filter { it.type == AccountType.INVESTMENT }
                     .map { it.id to it.name }
-                _uiState.value = _uiState.value.copy(investmentAccounts = investmentAccounts)
-            }
-        }
 
-        scope.launch {
-            investmentRepository.getPortfolio().collect { holdings ->
                 val totalCostBasis = holdings.sumOf { it.holding.costBasis }
                 val totalMarketValue = holdings.sumOf { it.marketValue }
                 val totalGainLoss = totalMarketValue - totalCostBasis
@@ -79,7 +77,6 @@ class InvestmentViewModel(
                     totalGainLossPercent = totalGainLossPercent
                 )
 
-                // Calculate asset allocation
                 val allocation = if (totalMarketValue > 0) {
                     holdings.map { h ->
                         AssetAllocation(
@@ -91,11 +88,14 @@ class InvestmentViewModel(
                     }.sortedByDescending { it.marketValue }
                 } else emptyList()
 
-                _uiState.value = _uiState.value.copy(
+                _uiState.value.copy(
                     portfolio = portfolio,
                     assetAllocation = allocation,
+                    investmentAccounts = investmentAccounts,
                     isLoading = false
                 )
+            }.collect { state ->
+                _uiState.value = state
             }
         }
     }

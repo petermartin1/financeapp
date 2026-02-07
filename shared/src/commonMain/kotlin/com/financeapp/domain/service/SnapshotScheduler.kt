@@ -6,6 +6,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
@@ -31,6 +32,7 @@ class SnapshotScheduler(
 
     private val _isCreatingSnapshot = MutableStateFlow(false)
     val isCreatingSnapshot: StateFlow<Boolean> = _isCreatingSnapshot.asStateFlow()
+    private val snapshotMutex = Mutex()
 
     /**
      * Start automatic daily snapshot creation
@@ -119,7 +121,7 @@ class SnapshotScheduler(
      * Manually create a snapshot
      */
     suspend fun createSnapshot(type: SnapshotType = SnapshotType.DAILY): Result<Long> {
-        if (_isCreatingSnapshot.value) {
+        if (!snapshotMutex.tryLock()) {
             return Result.failure(Exception("Snapshot creation already in progress"))
         }
 
@@ -135,6 +137,7 @@ class SnapshotScheduler(
             Result.failure(e)
         } finally {
             _isCreatingSnapshot.value = false
+            snapshotMutex.unlock()
         }
     }
 

@@ -201,15 +201,21 @@ fun formatAmountWithCommas(value: String): String {
     val wholePart = parts[0]
     val decimalPart = if (parts.size > 1) parts[1] else null
 
+    // Strip negative sign before formatting, re-prepend after
+    val negative = wholePart.startsWith("-")
+    val absWhole = if (negative) wholePart.substring(1) else wholePart
+
     // Add commas to whole part
-    val formatted = wholePart.reversed()
+    val formatted = absWhole.reversed()
         .chunked(3)
         .joinToString(",")
         .reversed()
 
+    val withSign = if (negative) "-$formatted" else formatted
+
     return if (decimalPart != null) {
-        "$formatted.$decimalPart"
+        "$withSign.$decimalPart"
     } else {
-        formatted
+        withSign
     }
 }

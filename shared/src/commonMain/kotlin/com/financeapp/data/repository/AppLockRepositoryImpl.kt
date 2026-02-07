@@ -71,7 +71,6 @@ class AppLockRepositoryImpl(
     }
 
     private fun verifyHashedPin(pin: String, parsedHash: PinHash): Boolean {
-        val derived = deriveKey(pin, parsedHash.salt, parsedHash.iterations, parsedHash.algorithm)
         return try {
             val derived = deriveKey(pin, parsedHash.salt, parsedHash.iterations, parsedHash.algorithm)
             MessageDigest.isEqual(derived, parsedHash.hash)

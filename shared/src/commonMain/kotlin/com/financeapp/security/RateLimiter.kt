@@ -1,6 +1,8 @@
 package com.financeapp.security
 
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlin.math.min
@@ -64,6 +66,7 @@ class RateLimiter(
         var lockedUntil: Instant? = null
     )
 
+    private val mutex = Mutex()
     private val attemptsByKey = mutableMapOf<String, AttemptRecord>()
 
     /**
@@ -74,38 +77,46 @@ class RateLimiter(
      * @throws RateLimitException if key is locked out
      */
     suspend fun checkAndWait(key: String) {
-        val now = Clock.System.now()
-        val record = attemptsByKey.getOrPut(key) { AttemptRecord() }
+        val delayDuration = mutex.withLock {
+            val now = Clock.System.now()
+            val record = attemptsByKey.getOrPut(key) { AttemptRecord() }
 
-        // Reset if enough time has passed since last attempt
-        record.lastAttempt?.let { lastAttempt ->
-            if (now - lastAttempt > resetAfter) {
-                record.consecutiveFailures = 0
-                record.lockedUntil = null
+            // Reset if enough time has passed since last attempt
+            record.lastAttempt?.let { lastAttempt ->
+                if (now - lastAttempt > resetAfter) {
+                    record.consecutiveFailures = 0
+                    record.lockedUntil = null
+                }
             }
-        }
 
-        // Check if locked out
-        record.lockedUntil?.let { lockedUntil ->
-            if (now < lockedUntil) {
-                val remainingLockout = lockedUntil - now
-                throw RateLimitException(
-                    "Too many failed attempts. Locked out for ${remainingLockout.inWholeSeconds} more seconds."
-                )
+            // Check if locked out
+            record.lockedUntil?.let { lockedUntil ->
+                if (now < lockedUntil) {
+                    val remainingLockout = lockedUntil - now
+                    throw RateLimitException(
+                        "Too many failed attempts. Locked out for ${remainingLockout.inWholeSeconds} more seconds."
+                    )
+                } else {
+                    // Lockout expired, reset
+                    record.consecutiveFailures = 0
+                    record.lockedUntil = null
+                }
+            }
+
+            record.lastAttempt = now
+
+            // Calculate exponential backoff delay (compute inside lock, delay outside)
+            if (record.consecutiveFailures > 0) {
+                calculateBackoffDelay(record.consecutiveFailures)
             } else {
-                // Lockout expired, reset
-                record.consecutiveFailures = 0
-                record.lockedUntil = null
+                null
             }
         }
 
-        // Calculate exponential backoff delay
-        if (record.consecutiveFailures > 0) {
-            val delaySeconds = calculateBackoffDelay(record.consecutiveFailures)
-            delay(delaySeconds.inWholeMilliseconds)
+        // Delay outside the lock to not block other keys
+        if (delayDuration != null) {
+            delay(delayDuration.inWholeMilliseconds)
         }
-
-        record.lastAttempt = now
     }
 
     /**
@@ -113,7 +124,7 @@ class RateLimiter(
      *
      * @param key Unique identifier
      */
-    fun recordSuccess(key: String) {
+    suspend fun recordSuccess(key: String) = mutex.withLock {
         val record = attemptsByKey.getOrPut(key) { AttemptRecord() }
         record.consecutiveFailures = 0
         record.lockedUntil = null
@@ -125,7 +136,7 @@ class RateLimiter(
      *
      * @param key Unique identifier
      */
-    fun recordFailure(key: String) {
+    suspend fun recordFailure(key: String) = mutex.withLock {
         val record = attemptsByKey.getOrPut(key) { AttemptRecord() }
         record.consecutiveFailures++
 
@@ -141,11 +152,11 @@ class RateLimiter(
      * @param key Unique identifier
      * @return true if currently locked out
      */
-    fun isLockedOut(key: String): Boolean {
+    suspend fun isLockedOut(key: String): Boolean = mutex.withLock {
         val now = Clock.System.now()
-        val record = attemptsByKey[key] ?: return false
+        val record = attemptsByKey[key] ?: return@withLock false
 
-        return record.lockedUntil?.let { it > now } ?: false
+        record.lockedUntil?.let { it > now } ?: false
     }
 
     /**
@@ -154,8 +165,8 @@ class RateLimiter(
      * @param key Unique identifier
      * @return Number of consecutive failures
      */
-    fun getFailureCount(key: String): Int {
-        return attemptsByKey[key]?.consecutiveFailures ?: 0
+    suspend fun getFailureCount(key: String): Int = mutex.withLock {
+        attemptsByKey[key]?.consecutiveFailures ?: 0
     }
 
     /**
@@ -164,14 +175,15 @@ class RateLimiter(
      *
      * @param key Unique identifier
      */
-    fun reset(key: String) {
+    suspend fun reset(key: String): Unit = mutex.withLock {
         attemptsByKey.remove(key)
+        Unit
     }
 
     /**
      * Reset all keys.
      */
-    fun resetAll() {
+    suspend fun resetAll(): Unit = mutex.withLock {
         attemptsByKey.clear()
     }
 

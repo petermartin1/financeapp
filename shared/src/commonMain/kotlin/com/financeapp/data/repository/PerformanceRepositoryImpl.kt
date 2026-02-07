@@ -225,7 +225,7 @@ class PerformanceRepositoryImpl(
                 0.0
             }
 
-            // Calculate time-weighted return (simplified version)
+            // Calculate annualized return (CAGR)
             val days = ((endSnapshot.date - startSnapshot.date) / (24 * 60 * 60 * 1000L)).toInt()
             val timeWeightedReturn = if (days > 0 && startSnapshot.totalValue > 0) {
                 val dailyReturn = totalReturnPercent / 100.0

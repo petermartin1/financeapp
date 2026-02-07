@@ -10,6 +10,7 @@ import com.financeapp.domain.repository.TagRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,7 +30,8 @@ class SearchViewModel(
     private val tagRepository: TagRepository,
     private val accountRepository: AccountRepository
 ) {
-    private val viewModelScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val supervisorJob = SupervisorJob()
+    private val viewModelScope = CoroutineScope(supervisorJob + Dispatchers.Main)
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
@@ -122,5 +124,9 @@ class SearchViewModel(
 
     suspend fun getTagsForTransaction(transactionId: Long): List<Long> {
         return tagRepository.getTagsForTransaction(transactionId).map { it.id }
+    }
+
+    fun dispose() {
+        supervisorJob.cancel()
     }
 }

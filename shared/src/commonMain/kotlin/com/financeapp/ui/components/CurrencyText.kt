@@ -227,13 +227,40 @@ fun formatCentsToDecimal(amountCents: Long): String {
 }
 
 /**
- * Parse decimal string to cents (for input processing)
+ * Parse decimal string to cents using integer-only math to avoid
+ * floating-point precision issues (e.g., "1.005" converting incorrectly).
  */
 fun parseDecimalToCents(decimalString: String): Long? {
     return try {
         val cleaned = decimalString.replace(",", "").trim()
-        val dollars = cleaned.toDoubleOrNull() ?: return null
-        (dollars * 100).roundToLong()
+        if (cleaned.isEmpty()) return null
+
+        val negative = cleaned.startsWith("-")
+        val abs = if (negative) cleaned.substring(1) else cleaned
+
+        val parts = abs.split(".")
+        if (parts.size > 2) return null
+
+        val wholePart = parts[0].toLongOrNull() ?: return null
+        val centsPart = if (parts.size == 2) {
+            val frac = parts[1]
+            when (frac.length) {
+                0 -> 0L
+                1 -> (frac.toLongOrNull() ?: return null) * 10
+                2 -> frac.toLongOrNull() ?: return null
+                else -> {
+                    // More than 2 decimal places: round the third digit
+                    val first2 = frac.substring(0, 2).toLongOrNull() ?: return null
+                    val third = frac[2].digitToIntOrNull() ?: return null
+                    if (third >= 5) first2 + 1 else first2
+                }
+            }
+        } else {
+            0L
+        }
+
+        val totalCents = wholePart * 100 + centsPart
+        if (negative) -totalCents else totalCents
     } catch (e: Exception) {
         null
     }

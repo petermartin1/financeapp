@@ -28,7 +28,7 @@ data class PerformanceMetrics(
     val endValue: Long,
     val totalReturn: Long,
     val totalReturnPercent: Double,
-    val timeWeightedReturn: Double, // Annualized TWR
+    val timeWeightedReturn: Double, // Annualized return (CAGR)
     val highWaterMark: Long,
     val lowWaterMark: Long,
     val volatility: Double
