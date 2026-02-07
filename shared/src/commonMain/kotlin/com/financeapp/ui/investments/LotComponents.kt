@@ -315,8 +315,10 @@ private fun buildGainLossLabel(gainLoss: Long, percent: Double?): String {
 }
 
 internal fun formatHoldingCurrency(cents: Long): String {
-    val dollars = cents / 100.0
-    return "$${String.format("%,.2f", dollars)}"
+    val absCents = kotlin.math.abs(cents)
+    val wholeDollars = absCents / 100
+    val centsPart = absCents % 100
+    return "$${String.format("%,d", wholeDollars)}.${centsPart.toString().padStart(2, '0')}"
 }
 
 internal fun formatHoldingShares(shares: Double): String =

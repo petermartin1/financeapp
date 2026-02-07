@@ -152,8 +152,8 @@ private fun TransactionSearchResultCard(
 ) {
     val date = transaction.transaction.date
 
-    val amount = transaction.transaction.amount / 100.0
-    val isNegative = amount < 0
+    val amountCents = transaction.transaction.amount
+    val isNegative = amountCents < 0
 
     Card(
         onClick = onClick,
@@ -181,7 +181,13 @@ private fun TransactionSearchResultCard(
                     )
                 }
                 Text(
-                    text = String.format("$%.2f", kotlin.math.abs(amount)),
+                    text = run {
+                        val absCents = kotlin.math.abs(amountCents)
+                        val wholeDollars = absCents / 100
+                        val cents = absCents % 100
+                        val sign = if (isNegative) "-" else ""
+                        "$sign$$wholeDollars.${cents.toString().padStart(2, '0')}"
+                    },
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isNegative) {

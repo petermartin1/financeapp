@@ -572,9 +572,10 @@ fun HoldingsPerformanceCard(holdings: List<HoldingPerformance>) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            holdings.sortedByDescending { it.allocation }.forEach { holding ->
+            val sortedHoldings = holdings.sortedByDescending { it.allocation }
+            sortedHoldings.forEachIndexed { index, holding ->
                 HoldingPerformanceItem(holding)
-                if (holding != holdings.last()) {
+                if (index < sortedHoldings.size - 1) {
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
@@ -628,9 +629,11 @@ fun HoldingPerformanceItem(holding: HoldingPerformance) {
 }
 
 private fun formatCurrency(cents: Long): String {
+    val absCents = kotlin.math.abs(cents)
+    val wholeDollars = absCents / 100
+    val centsPart = absCents % 100
     val sign = if (cents < 0) "-" else ""
-    val dollars = cents / 100.0
-    return "${sign}${'$'}${"%,.2f".format(kotlin.math.abs(dollars))}"
+    return "${sign}${'$'}${String.format("%,d", wholeDollars)}.${centsPart.toString().padStart(2, '0')}"
 }
 
 private fun formatShares(shares: Double): String {

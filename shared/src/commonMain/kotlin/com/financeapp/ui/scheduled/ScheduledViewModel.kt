@@ -8,6 +8,7 @@ import com.financeapp.domain.repository.AccountRepository
 import com.financeapp.domain.repository.ScheduledTransactionRepository
 import com.financeapp.domain.repository.TransactionRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -159,6 +160,10 @@ class ScheduledViewModel(
 
     fun clearEnteredCount() {
         _uiState.value = _uiState.value.copy(lastEnteredCount = null)
+    }
+
+    fun cleanup() {
+        scope.cancel()
     }
 
     private fun calculateNextDate(current: LocalDate, frequency: TransactionFrequency): LocalDate {

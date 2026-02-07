@@ -582,8 +582,10 @@ private fun LotsSummaryCard(
 }
 
 private fun formatCurrency(cents: Long): String {
-    val dollars = cents / 100.0
-    return "${'$'}${"%,.2f".format(kotlin.math.abs(dollars))}"
+    val absCents = kotlin.math.abs(cents)
+    val wholeDollars = absCents / 100
+    val centsPart = absCents % 100
+    return "${'$'}${String.format("%,d", wholeDollars)}.${centsPart.toString().padStart(2, '0')}"
 }
 
 private fun formatShares(shares: Double): String {

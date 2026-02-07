@@ -1,9 +1,11 @@
 package com.financeapp.ui.reports
 
 import com.financeapp.domain.model.*
+import com.financeapp.domain.repository.CategoryRepository
 import com.financeapp.domain.repository.TransactionRepository
 import com.financeapp.domain.repository.AccountRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +21,8 @@ import kotlinx.datetime.toLocalDateTime
 
 class ReportsViewModel(
     private val transactionRepository: TransactionRepository,
-    private val accountRepository: AccountRepository
+    private val accountRepository: AccountRepository,
+    private val categoryRepository: CategoryRepository
 ) {
     private val scope = CoroutineScope(Dispatchers.Main)
 
@@ -97,12 +100,9 @@ class ReportsViewModel(
 
         val totalSpent = expensesByCategory.values.flatten().sumOf { kotlin.math.abs(it.amount) }
 
-        // Get category names (we'll need to fetch these)
-        val allTransactions = transactionRepository.getAllTransactionsWithDetails().first()
-        val categoryNames = allTransactions
-            .filter { it.categoryName != null }
-            .associate { it.transaction.categoryId to it.categoryName!! }
-            .toMutableMap()
+        // Get category names from category repository (avoids loading all transactions)
+        val categories = categoryRepository.getAllCategories().first()
+        val categoryNames = categories.associate { it.id to it.name }.toMutableMap()
 
         val categorySpending = expensesByCategory.map { (categoryId, txns) ->
             val amount = txns.sumOf { kotlin.math.abs(it.amount) }
@@ -152,6 +152,10 @@ class ReportsViewModel(
             totalIncome = totalIncome,
             totalExpenses = totalExpenses
         )
+    }
+
+    fun cleanup() {
+        scope.cancel()
     }
 
     private suspend fun loadNetWorthReport(): NetWorthReport {

@@ -165,8 +165,10 @@ class TransactionsViewModel(
     }
 
     private fun formatAmount(cents: Long): String {
-        val dollars = cents / 100.0
-        return String.format("%.2f", kotlin.math.abs(dollars))
+        val absCents = kotlin.math.abs(cents)
+        val wholeDollars = absCents / 100
+        val centsPart = absCents % 100
+        return "$wholeDollars.${centsPart.toString().padStart(2, '0')}"
     }
 
     fun addTransaction(

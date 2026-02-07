@@ -11,6 +11,7 @@ import com.financeapp.domain.repository.PreferencesRepository
 import com.financeapp.domain.model.AccountWithBalance
 import com.financeapp.domain.model.TransactionWithDetails
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -121,6 +122,11 @@ class DashboardViewModel(
                 preferencesRepository.setDashboardConfig(json.encodeToString(newConfig))
             }
         }
+    }
+
+    fun cleanup() {
+        observeJob?.cancel()
+        scope.cancel()
     }
 
     fun resetToDefaults() {

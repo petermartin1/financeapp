@@ -85,8 +85,9 @@ object AmountParser {
                         }
                         else -> {
                             // More than 2 decimal places - take first 2 and round
+                            // Uses half-up rounding (standard for financial calculations)
                             val first3 = centsPart.take(3).toLongOrNull() ?: return null
-                            (first3 + 5) / 10  // Round to nearest cent
+                            (first3 + 5) / 10  // Round to nearest cent (half-up)
                         }
                     }
                 }

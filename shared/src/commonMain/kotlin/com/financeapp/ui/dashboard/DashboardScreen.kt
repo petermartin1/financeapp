@@ -353,7 +353,9 @@ fun DashboardCustomizeDialog(
 }
 
 private fun formatCurrency(cents: Long): String {
-    val dollars = cents / 100.0
+    val absCents = kotlin.math.abs(cents)
+    val wholeDollars = absCents / 100
+    val centsPart = absCents % 100
     val sign = if (cents < 0) "-" else ""
-    return "$sign$${String.format("%.2f", kotlin.math.abs(dollars))}"
+    return "$sign$$wholeDollars.${centsPart.toString().padStart(2, '0')}"
 }

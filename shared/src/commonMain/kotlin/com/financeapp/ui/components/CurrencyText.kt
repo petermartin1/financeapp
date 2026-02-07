@@ -203,8 +203,9 @@ fun PercentageText(
  * @return Formatted currency string (e.g., "$1,234.56" or "-$1,234.56")
  */
 fun formatCurrency(amountCents: Long, showSign: Boolean = false): String {
-    val dollars = amountCents / 100.0
-    val absValue = abs(dollars)
+    val absCents = abs(amountCents)
+    val wholeDollars = absCents / 100
+    val cents = absCents % 100
 
     val sign = when {
         amountCents > 0 && showSign -> "+"
@@ -212,18 +213,22 @@ fun formatCurrency(amountCents: Long, showSign: Boolean = false): String {
         else -> ""
     }
 
-    // Format with thousands separator and 2 decimal places
-    val formatted = String.format("%,.2f", absValue)
+    // Format with thousands separator using integer-only math
+    val dollarsStr = String.format("%,d", wholeDollars)
+    val centsStr = cents.toString().padStart(2, '0')
 
-    return "$sign$$$formatted"
+    return "$sign$$dollarsStr.$centsStr"
 }
 
 /**
  * Format cents to dollars without currency symbol (for input fields)
  */
 fun formatCentsToDecimal(amountCents: Long): String {
-    val dollars = amountCents / 100.0
-    return String.format("%.2f", dollars)
+    val absCents = abs(amountCents)
+    val wholeDollars = absCents / 100
+    val cents = absCents % 100
+    val sign = if (amountCents < 0) "-" else ""
+    return "$sign$wholeDollars.${cents.toString().padStart(2, '0')}"
 }
 
 /**

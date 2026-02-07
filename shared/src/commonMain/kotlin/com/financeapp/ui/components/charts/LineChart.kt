@@ -62,11 +62,13 @@ fun LineChart(
 
     val allPoints = series.flatMap { it.points }
     val rawMinValue = allPoints.minOrNull() ?: 0f
-    val rawMaxValue = (allPoints.maxOrNull() ?: 100f) * 1.1f
-    // Ensure non-zero range to prevent division by zero when all values are equal
-    val range = if (rawMaxValue - rawMinValue < 0.01f) 1f else rawMaxValue - rawMinValue
-    val minValue = rawMinValue
-    val maxValue = rawMinValue + range
+    val rawMaxValue = allPoints.maxOrNull() ?: 100f
+    // Add symmetric 10% padding at top and bottom for visual clarity
+    val rawRange = rawMaxValue - rawMinValue
+    val padding = if (rawRange < 0.01f) 0.5f else rawRange * 0.1f
+    val minValue = rawMinValue - padding
+    val maxValue = rawMaxValue + padding
+    val range = maxValue - minValue
     val textMeasurer = rememberTextMeasurer()
 
     Column(modifier = modifier) {

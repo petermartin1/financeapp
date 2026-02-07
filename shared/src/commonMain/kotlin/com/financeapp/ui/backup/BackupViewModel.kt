@@ -36,29 +36,29 @@ class BackupViewModel(
         _uiState.value = _uiState.value.copy(isExporting = true, lastResult = null)
 
         scope.launch {
-            withContext(Dispatchers.IO) {
-                try {
-                    val (content, count) = exportAction()
-
-                    _uiState.value = _uiState.value.copy(
-                        isExporting = false,
-                        lastResult = BackupResult(
-                            success = true,
-                            message = "Exported $count $itemName",
-                            recordCount = count
-                        )
-                    )
-
-                    onComplete(content, filename)
-                } catch (e: Exception) {
-                    _uiState.value = _uiState.value.copy(
-                        isExporting = false,
-                        lastResult = BackupResult(
-                            success = false,
-                            message = "Export failed: ${e.message}"
-                        )
-                    )
+            try {
+                val (content, count) = withContext(Dispatchers.IO) {
+                    exportAction()
                 }
+
+                _uiState.value = _uiState.value.copy(
+                    isExporting = false,
+                    lastResult = BackupResult(
+                        success = true,
+                        message = "Exported $count $itemName",
+                        recordCount = count
+                    )
+                )
+
+                onComplete(content, filename)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isExporting = false,
+                    lastResult = BackupResult(
+                        success = false,
+                        message = "Export failed: ${e.message}"
+                    )
+                )
             }
         }
     }

@@ -129,8 +129,10 @@ class BudgetViewModel(
 }
 
 data class BudgetUiState(
-    val selectedYear: Int = 2024,
-    val selectedMonth: Int = 1,
+    val selectedYear: Int = kotlinx.datetime.Clock.System.now()
+        .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).year,
+    val selectedMonth: Int = kotlinx.datetime.Clock.System.now()
+        .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).monthNumber,
     val summary: BudgetSummary = BudgetSummary(0, 0, 0, emptyList()),
     val isLoading: Boolean = true
 )

@@ -35,7 +35,7 @@ enum class ShortcutCategory(val displayName: String) {
  * Global keyboard shortcuts registry
  */
 object KeyboardShortcutsRegistry {
-    private val shortcuts = mutableMapOf<String, KeyboardShortcut>()
+    private val shortcuts = java.util.concurrent.ConcurrentHashMap<String, KeyboardShortcut>()
 
     fun register(id: String, shortcut: KeyboardShortcut) {
         shortcuts[id] = shortcut
@@ -175,7 +175,25 @@ private fun formatKeyName(key: Key): String {
         Key.PageDown -> "PgDn"
         Key.Home -> "Home"
         Key.MoveEnd -> "End"
-        else -> key.keyCode.toChar().uppercase()
+        Key.F1 -> "F1"
+        Key.F2 -> "F2"
+        Key.F3 -> "F3"
+        Key.F4 -> "F4"
+        Key.F5 -> "F5"
+        Key.F6 -> "F6"
+        Key.F7 -> "F7"
+        Key.F8 -> "F8"
+        Key.F9 -> "F9"
+        Key.F10 -> "F10"
+        Key.F11 -> "F11"
+        Key.F12 -> "F12"
+        Key.Insert -> "Ins"
+        else -> {
+            val code = key.keyCode.toInt()
+            val ch = code.toChar()
+            // Only convert to char for printable ASCII range
+            if (code in 32..126) ch.uppercase() else "Key($code)"
+        }
     }
 }
 

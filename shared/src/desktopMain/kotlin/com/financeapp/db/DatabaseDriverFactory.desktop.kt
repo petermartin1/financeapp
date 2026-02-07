@@ -160,7 +160,22 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
         val salt: ByteArray,
         val iterations: Int,
         val algorithm: String
-    )
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is DatabaseConfig) return false
+            return salt.contentEquals(other.salt) &&
+                    iterations == other.iterations &&
+                    algorithm == other.algorithm
+        }
+
+        override fun hashCode(): Int {
+            var result = salt.contentHashCode()
+            result = 31 * result + iterations
+            result = 31 * result + algorithm.hashCode()
+            return result
+        }
+    }
 
     private companion object {
         private const val DEFAULT_ITERATIONS = 100000

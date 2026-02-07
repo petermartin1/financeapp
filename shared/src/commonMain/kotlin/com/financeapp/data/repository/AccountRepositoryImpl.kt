@@ -14,6 +14,7 @@ import com.financeapp.domain.model.Account
 import com.financeapp.domain.model.AccountType
 import com.financeapp.domain.model.AccountWithBalance
 import com.financeapp.domain.repository.AccountRepository
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -254,6 +255,10 @@ class AccountRepositoryImpl(
 
     override fun notifyBalancesChanged() {
         balanceRefreshTrigger.value += 1
+    }
+
+    fun cleanup() {
+        scope.cancel()
     }
 
     private fun ResultRow.toDomain(): Account {

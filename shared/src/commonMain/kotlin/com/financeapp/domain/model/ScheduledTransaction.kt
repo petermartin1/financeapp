@@ -15,6 +15,11 @@ data class ScheduledTransaction(
     val isActive: Boolean = true
 )
 
+/**
+ * @property days Approximate number of days for display/estimation only.
+ *   Do NOT use for actual date arithmetic - use proper calendar APIs instead
+ *   (e.g., LocalDate.plus(1, DateTimeUnit.MONTH) for MONTHLY).
+ */
 enum class TransactionFrequency(val displayName: String, val days: Int) {
     DAILY("Daily", 1),
     WEEKLY("Weekly", 7),

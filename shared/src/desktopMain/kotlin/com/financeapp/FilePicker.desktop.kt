@@ -19,6 +19,10 @@ actual fun pickFile(onFileContent: (String) -> Unit) {
 
     if (directory != null && filename != null) {
         val file = File(directory, filename)
+        val maxSize = 100 * 1024 * 1024L // 100 MB limit
+        if (file.length() > maxSize) {
+            throw IllegalArgumentException("File too large (${file.length()} bytes). Maximum allowed: $maxSize bytes.")
+        }
         val content = file.readText()
         onFileContent(content)
     }

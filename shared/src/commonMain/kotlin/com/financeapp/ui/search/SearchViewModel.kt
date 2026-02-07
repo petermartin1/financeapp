@@ -86,8 +86,10 @@ class SearchViewModel(
     }
 
     private fun formatAmount(amountCents: Long): String {
-        val dollars = amountCents / 100.0
-        return String.format("%.2f", kotlin.math.abs(dollars))
+        val absCents = kotlin.math.abs(amountCents)
+        val wholeDollars = absCents / 100
+        val centsPart = absCents % 100
+        return "$wholeDollars.${centsPart.toString().padStart(2, '0')}"
     }
 
     fun deleteTransaction(id: Long) {

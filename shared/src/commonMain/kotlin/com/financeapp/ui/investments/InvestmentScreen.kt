@@ -701,8 +701,10 @@ private fun UpdatePriceDialog(
 }
 
 private fun formatCurrency(cents: Long): String {
-    val dollars = cents / 100.0
-    return "$${String.format("%,.2f", dollars)}"
+    val absCents = kotlin.math.abs(cents)
+    val wholeDollars = absCents / 100
+    val centsPart = absCents % 100
+    return "$${String.format("%,d", wholeDollars)}.${centsPart.toString().padStart(2, '0')}"
 }
 
 private fun buildLotAnalytics(lots: List<HoldingLot>, currentPrice: Long?): List<LotAnalytics> {

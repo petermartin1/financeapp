@@ -43,7 +43,7 @@ enum class TimeRange(val days: Int, val label: String) {
     THREE_MONTHS(90, "3M"),
     SIX_MONTHS(180, "6M"),
     ONE_YEAR(365, "1Y"),
-    ALL_TIME(Int.MAX_VALUE, "ALL")
+    ALL_TIME(36500, "ALL") // ~100 years; avoids Int.MAX_VALUE overflow in arithmetic
 }
 
 /**

@@ -502,10 +502,9 @@ private fun CsvMappingOptions(
 }
 
 private fun formatCurrency(cents: Long): String {
-    val dollars = cents / 100.0
-    return if (cents >= 0) {
-        "$${String.format("%,.2f", dollars)}"
-    } else {
-        "-$${String.format("%,.2f", -dollars)}"
-    }
+    val absCents = kotlin.math.abs(cents)
+    val wholeDollars = absCents / 100
+    val centsPart = absCents % 100
+    val sign = if (cents < 0) "-" else ""
+    return "$sign$${String.format("%,d", wholeDollars)}.${centsPart.toString().padStart(2, '0')}"
 }
