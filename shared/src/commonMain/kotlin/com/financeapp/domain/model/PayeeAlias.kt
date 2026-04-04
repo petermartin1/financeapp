@@ -1,6 +1,6 @@
 package com.financeapp.domain.model
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 /**
  * Represents a mapping from an imported payee name to a canonical payee

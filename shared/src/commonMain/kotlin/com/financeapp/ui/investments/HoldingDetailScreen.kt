@@ -19,7 +19,7 @@ import com.financeapp.domain.model.LotAnalytics
 import com.financeapp.domain.model.PerformanceChartData
 import com.financeapp.domain.model.TimeRange
 import com.financeapp.ui.components.charts.LineChart
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 

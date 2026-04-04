@@ -15,7 +15,7 @@ import com.financeapp.domain.model.*
 import com.financeapp.ui.components.charts.SimpleLineChart
 import com.financeapp.ui.theme.income
 import com.financeapp.ui.theme.expense
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 

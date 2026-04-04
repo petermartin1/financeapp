@@ -7,7 +7,7 @@ import io.ktor.http.*
 import kotlin.math.roundToLong
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 /**
  * Yahoo Finance API client for stock quotes

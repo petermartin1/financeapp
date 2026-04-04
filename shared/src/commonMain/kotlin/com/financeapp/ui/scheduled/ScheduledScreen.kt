@@ -16,7 +16,7 @@ import com.financeapp.domain.model.Account
 import com.financeapp.domain.model.Category
 import com.financeapp.domain.model.ScheduledTransactionWithDetails
 import com.financeapp.domain.model.TransactionFrequency
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime

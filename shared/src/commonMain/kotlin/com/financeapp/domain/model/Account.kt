@@ -1,6 +1,6 @@
 package com.financeapp.domain.model
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 enum class AccountType {
     CHECKING,

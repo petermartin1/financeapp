@@ -8,7 +8,7 @@ import com.financeapp.domain.repository.QuoteRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 /**
  * Implementation of QuoteRepository using Yahoo Finance API

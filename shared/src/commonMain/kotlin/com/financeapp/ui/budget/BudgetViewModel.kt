@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
 import kotlinx.datetime.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -129,9 +130,9 @@ class BudgetViewModel(
 }
 
 data class BudgetUiState(
-    val selectedYear: Int = kotlinx.datetime.Clock.System.now()
+    val selectedYear: Int = kotlin.time.Clock.System.now()
         .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).year,
-    val selectedMonth: Int = kotlinx.datetime.Clock.System.now()
+    val selectedMonth: Int = kotlin.time.Clock.System.now()
         .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).monthNumber,
     val summary: BudgetSummary = BudgetSummary(0, 0, 0, emptyList()),
     val isLoading: Boolean = true

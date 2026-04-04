@@ -17,7 +17,7 @@ import com.financeapp.ui.transactions.EditTransactionDialog
 import com.financeapp.ui.tags.TagsViewModel
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject

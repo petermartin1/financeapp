@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.TimeZone
@@ -187,11 +187,11 @@ class SnapshotScheduler(
         val now = Clock.System.now()
         val tz = TimeZone.currentSystemDefault()
         val nowLocal = now.toLocalDateTime(tz)
-        val targetDayOfWeek = DayOfWeek.of(dayOfWeek)
+        val targetDayOfWeek = DayOfWeek.entries[dayOfWeek - 1]
 
         // Calculate days until target day of week
-        val currentDayValue = nowLocal.dayOfWeek.value
-        var daysUntilTarget = targetDayOfWeek.value - currentDayValue
+        val currentDayValue = nowLocal.dayOfWeek.ordinal + 1 // ISO: Monday=1..Sunday=7
+        var daysUntilTarget = (targetDayOfWeek.ordinal + 1) - currentDayValue
         if (daysUntilTarget < 0) daysUntilTarget += 7
         // If same day but past the hour, schedule for next week
         if (daysUntilTarget == 0 && nowLocal.hour >= hourOfDay) daysUntilTarget = 7

@@ -1,7 +1,7 @@
 package com.financeapp.security
 
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 /**
  * Security audit logging framework for tracking sensitive operations.

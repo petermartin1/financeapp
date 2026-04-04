@@ -17,8 +17,8 @@ import com.financeapp.domain.model.Holding
 import com.financeapp.domain.model.HoldingLot
 import com.financeapp.domain.model.LotAnalytics
 import com.financeapp.ui.components.forms.DatePickerField
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn

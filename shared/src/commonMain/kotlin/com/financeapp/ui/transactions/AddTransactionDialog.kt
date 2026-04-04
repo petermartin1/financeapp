@@ -26,7 +26,7 @@ import com.financeapp.ui.components.parseDecimalToCents
 import kotlin.math.roundToLong
 import com.financeapp.ui.categories.CategoriesViewModel
 import com.financeapp.ui.tags.TagsViewModel
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime

@@ -1,6 +1,6 @@
 package com.financeapp.domain.model
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 data class TransactionTemplate(
     val id: Long = 0,

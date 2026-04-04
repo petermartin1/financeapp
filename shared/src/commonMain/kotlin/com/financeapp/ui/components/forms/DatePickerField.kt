@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlin.time.Clock
 import kotlinx.datetime.*
 
 /**
@@ -100,7 +101,7 @@ private fun DatePickerDialog(
                         currentMonth = Month.DECEMBER
                         currentYear--
                     } else {
-                        currentMonth = currentMonth.minus(1)
+                        currentMonth = Month.entries[currentMonth.ordinal - 1]
                     }
                 }) {
                     Text("<")
@@ -118,7 +119,7 @@ private fun DatePickerDialog(
                         currentMonth = Month.JANUARY
                         currentYear++
                     } else {
-                        currentMonth = currentMonth.plus(1)
+                        currentMonth = Month.entries[currentMonth.ordinal + 1]
                     }
                 }) {
                     Text(">")
@@ -168,8 +169,14 @@ private fun CalendarGrid(
 ) {
     val firstDayOfMonth = LocalDate(year, month, 1)
     val isLeapYear = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
-    val daysInMonth = month.length(isLeapYear)
-    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7 // 0 = Sunday
+    val daysInMonth = when (month) {
+        Month.JANUARY, Month.MARCH, Month.MAY, Month.JULY,
+        Month.AUGUST, Month.OCTOBER, Month.DECEMBER -> 31
+        Month.APRIL, Month.JUNE, Month.SEPTEMBER, Month.NOVEMBER -> 30
+        Month.FEBRUARY -> if (isLeapYear) 29 else 28
+        else -> 30
+    }
+    val firstDayOfWeek = (firstDayOfMonth.dayOfWeek.ordinal + 1) % 7 // 0 = Sunday
 
     Column(
         modifier = Modifier.fillMaxWidth()

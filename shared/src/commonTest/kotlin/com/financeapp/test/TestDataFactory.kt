@@ -2,7 +2,7 @@ package com.financeapp.test
 
 import com.financeapp.domain.model.*
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 /**
  * Factory for creating test data objects with sensible defaults
@@ -32,8 +32,8 @@ object TestDataFactory {
         accountNumber: String? = "****1234",
         currency: String = "USD",
         isActive: Boolean = true,
-        createdAt: kotlinx.datetime.Instant = Clock.System.now(),
-        updatedAt: kotlinx.datetime.Instant = Clock.System.now()
+        createdAt: kotlin.time.Instant = Clock.System.now(),
+        updatedAt: kotlin.time.Instant = Clock.System.now()
     ) = Account(
         id = id,
         name = name,
@@ -99,8 +99,8 @@ object TestDataFactory {
         importId: String? = null,
         transactionType: String? = null,
         sic: String? = null,
-        createdAt: kotlinx.datetime.Instant = Clock.System.now(),
-        updatedAt: kotlinx.datetime.Instant = Clock.System.now()
+        createdAt: kotlin.time.Instant = Clock.System.now(),
+        updatedAt: kotlin.time.Instant = Clock.System.now()
     ) = Transaction(
         id = id,
         accountId = accountId,
