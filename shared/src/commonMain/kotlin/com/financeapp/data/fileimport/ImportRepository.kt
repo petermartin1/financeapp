@@ -15,7 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 class ImportRepository(
     private val transactionRepository: TransactionRepository,
@@ -239,7 +239,7 @@ class ImportRepository(
                     categoryId = if (mapping?.applyCategory == true) mapping.categoryId else null,
                     memo = importedTxn.memo,
                     checkNumber = importedTxn.checkNumber,
-                    isCleared = true,
+                    isCleared = false,
                     importId = importedTxn.fitId,
                     transactionType = importedTxn.type.name,
                     sic = importedTxn.sic,
@@ -332,7 +332,7 @@ class ImportRepository(
                     categoryId = null,
                     memo = importedTxn.memo,
                     checkNumber = importedTxn.checkNumber,
-                    isCleared = true,
+                    isCleared = false,
                     importId = importedTxn.fitId,
                     transactionType = importedTxn.type.name,
                     sic = importedTxn.sic,
