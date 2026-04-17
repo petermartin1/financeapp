@@ -324,4 +324,99 @@ class SecureCredentialStoreTest {
         empty.clear()
         notEmpty.clear()
     }
+
+    // === BASE64 VALIDATION TESTS ===
+
+    @Test
+    fun `test isValidBase64 accepts valid Base64 strings`() {
+        assertTrue(isValidBase64("SGVsbG8gV29ybGQ="))
+        assertTrue(isValidBase64("YWJjZGVmZw=="))
+        assertTrue(isValidBase64("dGVzdA=="))
+        assertTrue(isValidBase64("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+        assertTrue(isValidBase64("abcdefghijklmnopqrstuvwxyz"))
+        assertTrue(isValidBase64("0123456789+/="))
+    }
+
+    @Test
+    fun `test isValidBase64 rejects empty string`() {
+        assertFalse(isValidBase64(""))
+    }
+
+    @Test
+    fun `test isValidBase64 rejects PowerShell injection strings`() {
+        assertFalse(isValidBase64("'); Start-Process calc; ('"))
+        assertFalse(isValidBase64("abc'; rm -rf /; '"))
+        assertFalse(isValidBase64("test\$var"))
+        assertFalse(isValidBase64("test`whoami`"))
+        assertFalse(isValidBase64("test;malicious"))
+        assertFalse(isValidBase64("test|pipe"))
+        assertFalse(isValidBase64("test&background"))
+        assertFalse(isValidBase64("test(parens)"))
+        assertFalse(isValidBase64("test{braces}"))
+        assertFalse(isValidBase64("test<angle>"))
+        assertFalse(isValidBase64("test \"quotes\""))
+        assertFalse(isValidBase64("test 'quotes'"))
+        assertFalse(isValidBase64("test!bang"))
+    }
+
+    // === WINDOWS DPAPI TESTS ===
+
+    private fun isWindows(): Boolean {
+        return System.getProperty("os.name").lowercase().contains("win")
+    }
+
+    @Test
+    fun `test DPAPI store and retrieve round trip on Windows`() {
+        if (!isWindows()) return // Skip on non-Windows
+
+        val key = "dpapi_test_key"
+        val value = "dpapiSecretValue123"
+
+        val storeResult = store.store(key, value)
+        assertTrue(storeResult, "DPAPI store should succeed on Windows")
+
+        val retrieved = store.retrieve(key)
+        assertEquals(value, retrieved, "DPAPI retrieved value should match stored value")
+
+        store.delete(key)
+    }
+
+    @Test
+    fun `test DPAPI handles special characters in value on Windows`() {
+        if (!isWindows()) return
+
+        val key = "dpapi_special_chars"
+        val value = "p@ss\$w0rd!#%^&*()+={}[]|:;<>?,.~"
+
+        val storeResult = store.store(key, value)
+        assertTrue(storeResult, "DPAPI store with special chars should succeed")
+
+        val retrieved = store.retrieve(key)
+        assertEquals(value, retrieved, "Special characters should round-trip correctly")
+
+        store.delete(key)
+    }
+
+    @Test
+    fun `test DPAPI stored file is not plaintext on Windows`() {
+        if (!isWindows()) return
+
+        val key = "dpapi_not_plaintext"
+        val value = "ThisShouldNotAppearInTheFile"
+
+        store.store(key, value)
+
+        // Check the credential file doesn't contain the plaintext value
+        val credentialsDir = File(System.getProperty("user.home"), ".financeapp/credentials")
+        val files = credentialsDir.listFiles() ?: emptyArray()
+        files.forEach { file ->
+            val contents = file.readText()
+            assertFalse(
+                contents.contains(value),
+                "Credential file should not contain plaintext value"
+            )
+        }
+
+        store.delete(key)
+    }
 }

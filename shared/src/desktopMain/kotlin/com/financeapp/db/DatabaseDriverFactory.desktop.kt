@@ -134,6 +134,7 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
             props.setProperty("created", java.time.Instant.now().toString())
 
             FileOutputStream(configPath).use { props.store(it, "Database Configuration - Do not delete!") }
+            setRestrictedPermissions(configPath)
 
             config
         }
@@ -174,6 +175,18 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
             result = 31 * result + iterations
             result = 31 * result + algorithm.hashCode()
             return result
+        }
+    }
+
+    private fun setRestrictedPermissions(file: File) {
+        try {
+            file.setReadable(false, false)
+            file.setReadable(true, true)
+            file.setWritable(false, false)
+            file.setWritable(true, true)
+            file.setExecutable(false, false)
+        } catch (e: Exception) {
+            // Ignore on systems that don't support POSIX permissions
         }
     }
 

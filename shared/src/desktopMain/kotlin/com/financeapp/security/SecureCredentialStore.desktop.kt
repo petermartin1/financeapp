@@ -5,36 +5,27 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
 import javax.crypto.Cipher
-import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
  * Cross-platform secure credential storage for desktop.
  * - macOS: Uses Keychain via security CLI
- * - Windows/Linux: Uses encrypted file storage with AES-256-GCM
+ * - Windows: Uses DPAPI via PowerShell (tied to Windows user account)
+ * - Linux: Uses freedesktop Secret Service via secret-tool, with encrypted file fallback
  */
 actual class SecureCredentialStore actual constructor() {
     private val serviceName = "com.financeapp.credentials"
     private val credentialsDir = File(System.getProperty("user.home"), ".financeapp/credentials")
     private val masterKeyFile = File(System.getProperty("user.home"), ".financeapp/.credkey")
 
-    /**
-     * Validates that a key is safe to use with shell commands.
-     * Only allows alphanumeric characters, underscores, and hyphens.
-     */
     private fun isValidKey(key: String): Boolean {
         if (key.length > 128) return false
         return key.all { it.isLetterOrDigit() || it == '_' || it == '-' }
     }
 
-    /**
-     * Validates that a value doesn't contain characters that could break the command.
-     */
     private fun isValidValue(value: String): Boolean {
         if (value.length > 1024) return false
-        // Block null bytes and control characters
         return !value.any { it == '\u0000' || (it.code < 32 && it != '\t') }
     }
 
@@ -42,10 +33,10 @@ actual class SecureCredentialStore actual constructor() {
         if (!isValidKey(key) || !isValidValue(value)) {
             return false
         }
-        return if (isMacOS()) {
-            storeInKeychain(key, value)
-        } else {
-            storeInEncryptedFile(key, value)
+        return when {
+            isMacOS() -> storeInKeychain(key, value)
+            isWindows() -> storeWithDpapi(key, value)
+            else -> storeInEncryptedFile(key, value)
         }
     }
 
@@ -53,10 +44,10 @@ actual class SecureCredentialStore actual constructor() {
         if (!isValidKey(key)) {
             return null
         }
-        return if (isMacOS()) {
-            retrieveFromKeychain(key)
-        } else {
-            retrieveFromEncryptedFile(key)
+        return when {
+            isMacOS() -> retrieveFromKeychain(key)
+            isWindows() -> retrieveWithDpapi(key)
+            else -> retrieveFromEncryptedFile(key)
         }
     }
 
@@ -64,56 +55,58 @@ actual class SecureCredentialStore actual constructor() {
         if (!isValidKey(key)) {
             return false
         }
-        return if (isMacOS()) {
-            deleteFromKeychain(key)
-        } else {
-            deleteFromEncryptedFile(key)
+        return when {
+            isMacOS() -> deleteFromKeychain(key)
+            isWindows() -> deleteFromEncryptedFile(key)
+            else -> deleteFromEncryptedFile(key)
         }
     }
 
-    /**
-     * Store credential using SecureString (more secure - zeros memory).
-     */
     actual fun storeSecure(key: String, value: SecureString): Boolean {
         return value.use { charArray ->
             val stringValue = String(charArray)
             try {
                 store(key, stringValue)
             } finally {
-                // Zero the temporary string's backing array if possible
-                // Note: Can't actually zero String in JVM, but we clear SecureString
+                // Note: Can't zero String in JVM, but SecureString is cleared by use {}
             }
         }
     }
 
-    /**
-     * Retrieve credential as SecureString (more secure - allows explicit memory zeroing).
-     */
     actual fun retrieveSecure(key: String): SecureString? {
         val value = retrieve(key) ?: return null
-        val secureString = SecureString(value)
-        // Note: Original string 'value' will remain in memory until GC
-        // This is a JVM limitation, but SecureString allows caller to control when cleared
-        return secureString
+        return SecureString(value)
     }
+
+    // ==============================================================
+    // Platform Detection
+    // ==============================================================
 
     private fun isMacOS(): Boolean {
         return System.getProperty("os.name").lowercase().contains("mac")
     }
 
+    private fun isWindows(): Boolean {
+        return System.getProperty("os.name").lowercase().contains("win")
+    }
+
+    // ==============================================================
+    // macOS Keychain
+    // ==============================================================
+
     private fun storeInKeychain(key: String, value: String): Boolean {
         return try {
-            // First try to delete existing entry
-            deleteFromKeychain(key)
-
-            val process = ProcessBuilder(
-                "security", "add-generic-password",
-                "-s", serviceName,
-                "-a", key,
-                "-w", value
-            ).redirectErrorStream(true).start()
-
-            process.waitFor() == 0
+            val result = ProcessRunner.run(
+                listOf(
+                    "security", "add-generic-password",
+                    "-s", serviceName,
+                    "-a", key,
+                    "-w", value,
+                    "-U"
+                ),
+                mergeStderr = true
+            )
+            result.exitCode == 0
         } catch (e: Exception) {
             false
         }
@@ -121,17 +114,15 @@ actual class SecureCredentialStore actual constructor() {
 
     private fun retrieveFromKeychain(key: String): String? {
         return try {
-            val process = ProcessBuilder(
-                "security", "find-generic-password",
-                "-s", serviceName,
-                "-a", key,
-                "-w"
-            ).redirectErrorStream(false).start()
-
-            val result = process.inputStream.bufferedReader().readText().trim()
-            val exitCode = process.waitFor()
-
-            if (exitCode == 0 && result.isNotEmpty()) result else null
+            val result = ProcessRunner.run(
+                listOf(
+                    "security", "find-generic-password",
+                    "-s", serviceName,
+                    "-a", key,
+                    "-w"
+                )
+            )
+            if (result.exitCode == 0 && result.stdout.isNotEmpty()) result.stdout else null
         } catch (e: Exception) {
             null
         }
@@ -139,49 +130,121 @@ actual class SecureCredentialStore actual constructor() {
 
     private fun deleteFromKeychain(key: String): Boolean {
         return try {
-            val process = ProcessBuilder(
-                "security", "delete-generic-password",
-                "-s", serviceName,
-                "-a", key
-            ).redirectErrorStream(true).start()
-
-            process.waitFor() == 0
+            val result = ProcessRunner.run(
+                listOf(
+                    "security", "delete-generic-password",
+                    "-s", serviceName,
+                    "-a", key
+                ),
+                mergeStderr = true
+            )
+            result.exitCode == 0
         } catch (e: Exception) {
             false
         }
     }
 
     // ==============================================================
-    // Encrypted File Storage (Windows/Linux)
+    // Windows DPAPI via PowerShell
     // ==============================================================
 
-    /**
-     * Stores a credential in an encrypted file using AES-256-GCM.
-     * Each credential is stored in a separate file with format: IV(12 bytes) + Ciphertext + Tag(16 bytes)
-     */
-    private fun storeInEncryptedFile(key: String, value: String): Boolean {
+    private fun runPowerShellCommand(script: String): Pair<Int, String> {
+        val encodedCommand = Base64.getEncoder().encodeToString(
+            script.toByteArray(Charsets.UTF_16LE)
+        )
+        val result = ProcessRunner.run(
+            listOf(
+                "powershell.exe", "-NoProfile", "-NonInteractive",
+                "-ExecutionPolicy", "Bypass",
+                "-EncodedCommand", encodedCommand
+            )
+        )
+        return result.exitCode to result.stdout
+    }
+
+    private fun storeWithDpapi(key: String, value: String): Boolean {
         return try {
-            // Ensure credentials directory exists with restricted permissions
             credentialsDir.mkdirs()
             setRestrictedPermissions(credentialsDir)
 
-            // Get or create master encryption key
+            // Base64-encode the value first to safely embed it in the PowerShell script
+            val valueBase64 = Base64.getEncoder().encodeToString(value.toByteArray(Charsets.UTF_8))
+            val script = """
+                Add-Type -AssemblyName System.Security
+                ${'$'}bytes = [Convert]::FromBase64String('$valueBase64')
+                ${'$'}enc = [System.Security.Cryptography.ProtectedData]::Protect(${'$'}bytes, ${'$'}null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+                [Convert]::ToBase64String(${'$'}enc)
+            """.trimIndent()
+
+            val (exitCode, output) = runPowerShellCommand(script)
+            if (exitCode != 0 || output.isEmpty()) {
+                // Fall back to encrypted file storage if DPAPI fails
+                return storeInEncryptedFile(key, value)
+            }
+
+            val credentialFile = File(credentialsDir, sanitizeFilename(key))
+            credentialFile.writeText(output)
+            setRestrictedPermissions(credentialFile)
+            true
+        } catch (e: Exception) {
+            // Fall back to encrypted file storage
+            storeInEncryptedFile(key, value)
+        }
+    }
+
+    private fun retrieveWithDpapi(key: String): String? {
+        return try {
+            val credentialFile = File(credentialsDir, sanitizeFilename(key))
+            if (!credentialFile.exists()) return null
+
+            val encryptedBase64 = credentialFile.readText().trim()
+            if (encryptedBase64.isEmpty()) return null
+
+            // Validate file contents are safe Base64 before interpolating into PowerShell
+            if (!isValidBase64(encryptedBase64)) return null
+
+            val script = """
+                Add-Type -AssemblyName System.Security
+                ${'$'}enc = [Convert]::FromBase64String('$encryptedBase64')
+                ${'$'}bytes = [System.Security.Cryptography.ProtectedData]::Unprotect(${'$'}enc, ${'$'}null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+                [Convert]::ToBase64String(${'$'}bytes)
+            """.trimIndent()
+
+            val (exitCode, output) = runPowerShellCommand(script)
+            if (exitCode != 0 || output.isEmpty()) {
+                // Try encrypted file fallback (might be legacy format)
+                return retrieveFromEncryptedFile(key)
+            }
+
+            String(Base64.getDecoder().decode(output), Charsets.UTF_8)
+        } catch (e: Exception) {
+            // Try encrypted file fallback
+            retrieveFromEncryptedFile(key)
+        }
+    }
+
+    // ==============================================================
+    // Encrypted File Storage (Linux fallback)
+    // ==============================================================
+
+    private fun storeInEncryptedFile(key: String, value: String): Boolean {
+        return try {
+            credentialsDir.mkdirs()
+            setRestrictedPermissions(credentialsDir)
+
             val masterKey = getOrCreateMasterKey()
 
-            // Generate random IV (12 bytes for GCM)
             val iv = ByteArray(12)
             SecureRandom().nextBytes(iv)
 
-            // Encrypt the value using AES-256-GCM
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            val gcmSpec = GCMParameterSpec(128, iv) // 128-bit authentication tag
+            val gcmSpec = GCMParameterSpec(128, iv)
             val secretKey = SecretKeySpec(masterKey, "AES")
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, gcmSpec)
 
             val valueBytes = value.toByteArray(Charsets.UTF_8)
             val ciphertext = cipher.doFinal(valueBytes)
 
-            // Write IV + ciphertext to file
             val credentialFile = File(credentialsDir, sanitizeFilename(key))
             credentialFile.outputStream().use { out ->
                 out.write(iv)
@@ -196,26 +259,17 @@ actual class SecureCredentialStore actual constructor() {
         }
     }
 
-    /**
-     * Retrieves and decrypts a credential from encrypted file storage.
-     */
     private fun retrieveFromEncryptedFile(key: String): String? {
         return try {
             val credentialFile = File(credentialsDir, sanitizeFilename(key))
-            if (!credentialFile.exists()) {
-                return null
-            }
+            if (!credentialFile.exists()) return null
 
-            // Read IV + ciphertext from file
             val fileBytes = credentialFile.readBytes()
-            if (fileBytes.size < 28) { // Minimum: 12 bytes IV + 16 bytes tag
-                return null
-            }
+            if (fileBytes.size < 28) return null
 
             val iv = fileBytes.copyOfRange(0, 12)
             val ciphertext = fileBytes.copyOfRange(12, fileBytes.size)
 
-            // Decrypt using master key
             val masterKey = getOrCreateMasterKey()
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             val gcmSpec = GCMParameterSpec(128, iv)
@@ -230,75 +284,97 @@ actual class SecureCredentialStore actual constructor() {
         }
     }
 
-    /**
-     * Deletes a credential file from encrypted storage.
-     */
     private fun deleteFromEncryptedFile(key: String): Boolean {
         return try {
             val credentialFile = File(credentialsDir, sanitizeFilename(key))
             if (credentialFile.exists()) {
-                // Overwrite with random data before deletion (secure delete)
                 val random = ByteArray(credentialFile.length().toInt())
                 SecureRandom().nextBytes(random)
                 credentialFile.writeBytes(random)
                 credentialFile.delete()
             } else {
-                true // Already deleted
+                true
             }
         } catch (e: Exception) {
             false
         }
     }
 
-    /**
-     * Gets or creates the master encryption key for credential encryption.
-     * The key is derived from a random seed stored in a protected file.
-     */
     private fun getOrCreateMasterKey(): ByteArray {
+        // On Linux, try secret-tool first
+        if (!isMacOS() && !isWindows() && LinuxSecretService.isAvailable()) {
+            val existing = LinuxSecretService.lookup("credential-master-key")
+            if (existing != null) {
+                return try {
+                    Base64.getDecoder().decode(existing)
+                } catch (e: Exception) {
+                    // Invalid data in secret service, fall through to file-based
+                    generateAndStoreMasterKey()
+                }
+            }
+            // No key in secret service yet
+            val key = ByteArray(32)
+            SecureRandom().nextBytes(key)
+            val encoded = Base64.getEncoder().encodeToString(key)
+            if (LinuxSecretService.store("credential-master-key", "FinanceApp Credential Key", encoded)) {
+                // Migrate: if old plaintext file exists, securely delete it
+                if (masterKeyFile.exists()) {
+                    secureDeleteFile(masterKeyFile)
+                }
+                return key
+            }
+            // secret-tool store failed, fall through to file-based
+        }
+
         return if (masterKeyFile.exists()) {
-            // Read existing key
             val encodedKey = masterKeyFile.readText().trim()
             Base64.getDecoder().decode(encodedKey)
         } else {
-            // Generate new 256-bit key
-            val key = ByteArray(32)
-            SecureRandom().nextBytes(key)
-
-            // Store key in file with restricted permissions
-            masterKeyFile.parentFile?.mkdirs()
-            val encodedKey = Base64.getEncoder().encodeToString(key)
-            masterKeyFile.writeText(encodedKey)
-            setRestrictedPermissions(masterKeyFile)
-
-            key
+            generateAndStoreMasterKey()
         }
     }
 
-    /**
-     * Sanitizes a key name to be safe for use as a filename.
-     * Uses SHA-256 to avoid collisions (hashCode can collide easily).
-     */
+    private fun generateAndStoreMasterKey(): ByteArray {
+        val key = ByteArray(32)
+        SecureRandom().nextBytes(key)
+
+        masterKeyFile.parentFile?.mkdirs()
+        val encodedKey = Base64.getEncoder().encodeToString(key)
+        masterKeyFile.writeText(encodedKey)
+        setRestrictedPermissions(masterKeyFile)
+
+        return key
+    }
+
     private fun sanitizeFilename(key: String): String {
-        // Use SHA-256 for collision-resistant hashing
         val digest = MessageDigest.getInstance("SHA-256")
         val hashBytes = digest.digest(key.toByteArray(Charsets.UTF_8))
         val hash = hashBytes.take(16).joinToString("") { "%02x".format(it) }
         return "cred_$hash"
     }
 
-    /**
-     * Sets file/directory permissions to owner-only (read/write).
-     * This provides basic protection on Unix-like systems.
-     */
     private fun setRestrictedPermissions(file: File) {
         try {
             file.setReadable(false, false)
-            file.setReadable(true, true)   // Owner read
+            file.setReadable(true, true)
             file.setWritable(false, false)
-            file.setWritable(true, true)   // Owner write
+            file.setWritable(true, true)
             file.setExecutable(false, false)
         } catch (e: Exception) {
-            // Ignore on systems that don't support POSIX permissions (Windows)
+            // Ignore on systems that don't support POSIX permissions
+        }
+    }
+
+    private fun secureDeleteFile(file: File) {
+        try {
+            if (file.exists()) {
+                val random = ByteArray(file.length().toInt())
+                SecureRandom().nextBytes(random)
+                file.writeBytes(random)
+                file.delete()
+            }
+        } catch (e: Exception) {
+            // Best-effort secure deletion
         }
     }
 }
