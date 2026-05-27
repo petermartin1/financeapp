@@ -240,25 +240,28 @@ class TransactionRepositoryImpl(
 
     override suspend fun deleteTransaction(id: Long): Unit = withContext(ioDispatcher) {
         org.jetbrains.exposed.sql.transactions.transaction(database) {
-            // Get the transaction to check for transfer pair
             val txn = Transactions.selectAll()
                 .where { Transactions.id eq id.toInt() }
                 .singleOrNull()
 
-            val transferId = txn?.get(Transactions.transferId)?.value?.toLong()
+            val counterpartId = txn?.get(Transactions.transferId)?.value?.toLong()
 
-            // Clear the counterpart's transferId if this is part of a transfer pair
-            if (transferId != null) {
-                Transactions.update({ Transactions.id eq transferId.toInt() }) {
+            if (counterpartId != null) {
+                // Break the bidirectional link first so neither delete trips an FK.
+                Transactions.update({ Transactions.id eq id.toInt() }) {
                     it[Transactions.transferId] = null
                 }
+                Transactions.update({ Transactions.id eq counterpartId.toInt() }) {
+                    it[Transactions.transferId] = null
+                }
+
+                TransactionTags.deleteWhere { TransactionTags.transactionId eq counterpartId.toInt() }
+                SplitItems.deleteWhere { SplitItems.transactionId eq counterpartId.toInt() }
+                Transactions.deleteWhere { Transactions.id eq counterpartId.toInt() }
             }
 
-            // Delete related tags and split items first
             TransactionTags.deleteWhere { TransactionTags.transactionId eq id.toInt() }
             SplitItems.deleteWhere { SplitItems.transactionId eq id.toInt() }
-
-            // Delete the transaction
             Transactions.deleteWhere { Transactions.id eq id.toInt() }
         }
         notifyTransactionsChanged()
