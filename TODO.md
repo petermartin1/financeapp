@@ -2,130 +2,98 @@
 
 ---
 
-# 🔴 Code Review Findings (2026-04-16)
+# 🔴 Code Review Findings
 
-Comprehensive review turned up bugs/flaws across security, data integrity, imports, and UI state. Items have been spot-checked against the live code; see the discarded-findings list at the bottom of this section.
+**Original review:** 2026-04-16. **Reassessed against live code + deeper audit:** 2026-06-07.
+Each original item (R1–R34) is verified against the *current* source and tagged
+**FIXED / PARTIAL / OPEN**. New issues from the 2026-06-07 audit are **N1–N10**.
 
-**Stack note:** Despite `CLAUDE.md` naming SQLDelight and `Finance.sq` existing, this codebase actually uses **Exposed ORM + H2**. The `.sq` file appears to be dead/legacy — findings were re-verified against `db/schema/Tables.kt` and `data/repository/*Impl.kt`.
+**Stack note:** Despite `CLAUDE.md` naming SQLDelight and `Finance.sq` existing, this codebase uses **Exposed ORM 0.47 + H2** with **foreign-key enforcement ON** (so delete paths must hand-clean child rows). The shared module targets `jvm("desktop")` only — that's why `java.*`/`String.format` compile in `commonMain` (they would break the KMP contract if an iOS/native target were added). `Finance.sq` is dead/legacy.
 
-## P0 — Critical (data integrity / money / auth bypass)
+## ✅ Fixed in the 2026-06-07 session (with regression tests)
 
-- [ ] **R1. `HoldingWithPrice.marketValue` silently returns `0L` when price is null.**
-  `shared/src/commonMain/kotlin/com/financeapp/domain/model/Investment.kt:41-42`
-  Portfolio shows $0 any time the quote feed is missing a symbol. Change `marketValue` (and downstream `gainLoss`, `totalMarketValue`, etc.) to `Long?` and render "—" when unknown.
+- [x] **N1. `deleteAccount` FK violation on investment accounts.**
+  `AccountRepositoryImpl.deleteAccount` now removes `HoldingSnapshots` and `DividendEvents` for the account's holdings before deleting `Holdings`. Test: `AccountRepositoryTest` (dividend events / holding snapshots cases).
+- [x] **N2. `deleteCategory` FK violation via `PayeeAlias.preferredCategoryId`.**
+  `CategoryRepositoryImpl.deleteCategory` now nullifies `PayeeAliases.preferredCategoryId`. Test: `CategoryRepositoryTest`.
+- [x] **N3. Snapshots persisted a fabricated `$0` for missing prices.**
+  `PerformanceRepositoryImpl.createPortfolioSnapshot` now skips holdings with no known price instead of writing `marketValue = 0`. Test: `PerformanceRepositoryTest`.
 
-- [ ] **R2. Brute-force lockout bypass — `failedAttempts` is in-memory only.**
-  `shared/src/commonMain/kotlin/com/financeapp/data/repository/AppLockRepositoryImpl.kt:17`
-  Force-closing the app resets the counter; attacker gets unlimited 5-try rounds. Persist the counter *and* a `lockedUntil` timestamp via `PreferencesStore`.
+## 🆕 New findings — still OPEN
 
-- [ ] **R3. No time-based lockout.**
-  `shared/src/commonMain/kotlin/com/financeapp/ui/lock/PinUnlockScreen.kt:109`
-  Button is disabled but there's no cool-down. Combined with R2 this is a complete bypass. Add exponential backoff (e.g., 30s → 5min → 1h).
+- [ ] **N4. Scheduled-transaction catch-up can double-post on failure.**
+  `ScheduledViewModel.enterDueTransactions:107-153` inserts each missed occurrence in its own DB transaction and advances `nextDate` only after the loop; a crash mid-catch-up re-posts already-entered occurrences (scheduled txns have no `importId`/dedup). Advance `nextDate` per occurrence, or wrap the whole catch-up atomically. (Also: due txns post only via a manual "Enter Due" button — no background poster.)
+- [ ] **N5. `SnapshotScheduler` is never started.** Registered as a Koin `single` with `createSnapshot()` on a manual button, but `startDaily/Weekly/MonthlySnapshots` are never called → automatic performance history never accrues. Start at bootstrap (and `shutdown()` — R33).
+- [ ] **N6. Non-supervisor `CoroutineScope(Dispatchers.Main)` in 15 ViewModels.** An unhandled exception in any `scope.launch {}` (e.g. a DB error in `TransactionsViewModel.addTransaction`, which has no try/catch) cancels the whole VM scope incl. the `stateIn` collector → screen silently stops updating. Use `SupervisorJob()` + per-op error handling. Severe form of R16/R28.
+- [ ] **N7. `String.format` uses the default locale → wrong separators.** `CurrencyText.kt:186,217` + ~10 duplicate formatters (`InvestmentScreen`, `LotComponents`, `ImportScreen`, …). Non-US locales produce mixed separators. Compounds R17.
+- [ ] **N8. Reconcile marks `isReconciled` but not `isCleared`.** `ReconcileViewModel.completeReconciliation` → `markTransactionReconciled` sets only `isReconciled`, so `getClearedBalance` (sums `isCleared`) excludes reconciled rows. Reconciled should imply cleared.
+- [ ] **N9. `importWithMappings` isn't atomic across steps.** Payees, aliases, transactions, tags are each committed separately (`ImportRepository:133-276`); a mid-way failure leaves orphaned payees/aliases or untagged transactions.
+- [ ] **N10. Search re-queries the DB on every keystroke.** `TransactionsViewModel:64-97` feeds `_filter` into the `combine` upstream of `flatMapLatest`, so each character cancels + re-subscribes the full-account query. No debounce (sharper R23).
 
-- [ ] **R4. Transfer deletion orphans the counterpart transaction.**
-  `shared/src/commonMain/kotlin/com/financeapp/data/repository/TransactionRepositoryImpl.kt:241-265`
-  Deleting one leg clears the other's `transferId` but leaves the amount. The orphaned row now shows as a standalone income/expense and corrupts reports. Either delete both legs or prompt the user; never unlink silently.
+## P0 — Critical (original)
 
-- [ ] **R5. Split items not validated to sum to parent amount.**
-  `shared/src/commonMain/kotlin/com/financeapp/data/repository/TagRepositoryImpl.kt` — `setSplitsForTransaction`
-  Delete-all-then-reinsert with no atomicity guard and no `Σsplits == parent.amount` check. Wrap in a single `transaction {}` and validate.
+- [ ] **R1. `HoldingWithPrice.marketValue` returns `0L` when price is null. — OPEN.**
+  `domain/model/Investment.kt:41-42`. Live portfolio shows $0 / −100% for any holding missing a quote. (N3 fixed the *persisted-snapshot* half; this live-view half remains — make `marketValue`/`gainLoss` `Long?`, render "—".) Same `?: 0L` in `PerformanceRepositoryImpl.computeTotalPortfolioValue:293`, `calculateHoldingPerformance:299`.
+- [ ] **R2. Brute-force lockout bypass — `failedAttempts` in-memory only. — OPEN.** `AppLockRepositoryImpl.kt:17`. Persist counter + `lockedUntil`.
+- [ ] **R3. No time-based lockout. — OPEN.** `PinUnlockScreen.kt:109`. Add exponential backoff.
+- [x] **R4. Transfer deletion orphans the counterpart. — FIXED.** `TransactionRepositoryImpl.deleteTransaction:241-268` now deletes *both* legs (plus tags/splits).
+- [ ] **R5. Split items not validated to sum to parent amount. — PARTIAL.** `TagRepositoryImpl.setSplitsForTransaction` is now wrapped in one `transaction {}`, but still no `Σsplits == parent.amount` validation (no caller checks it either).
+- [ ] **R6. PIN/password in mutable `String` in lock UI. — OPEN.** `PinUnlockScreen.kt:31,74` (`PinPad.kt` is now dead code). Back with a zeroable `SecureString`.
+- [ ] **R7. Linux fallback writes encryption keys as plaintext Base64. — OPEN.** `EncryptionKeyManager.desktop.kt:197-206`; same for the credential master key in `SecureCredentialStore.desktop.kt:337-347`. Require Secret Service or wrap with a PBKDF2 KEK.
+- [ ] **R8. Import `fitId` uses `hashCode()` + per-file index → false dups across overlapping imports. — OPEN.** `QifParser.kt:126`, `CsvParser.kt:54`. Stable hash over `(date, amount, payee, memo)`.
 
-- [ ] **R6. PIN/password held in mutable `String` in lock UI.**
-  `shared/src/commonMain/kotlin/com/financeapp/ui/lock/PinUnlockScreen.kt:31, 74`
-  `shared/src/commonMain/kotlin/com/financeapp/ui/lock/PinPad.kt:24, 41, 61, 86`
-  Assigning `""` doesn't zero the previous `String` on the heap. Back the UI state with a `CharArray`-wrapped `SecureString` so the secret is zeroable on submit/dispose.
+## P1 — High (original)
 
-- [ ] **R7. Linux fallback writes encryption keys as plaintext Base64 to disk.**
-  `shared/src/desktopMain/kotlin/com/financeapp/security/EncryptionKeyManager.desktop.kt:199-203`
-  `shared/src/desktopMain/kotlin/com/financeapp/security/SecureCredentialStore.desktop.kt` (credkey path)
-  If `secret-tool` is unavailable, the AES-256 DB key goes to `~/.financeapp/.dbkey` as plaintext (file-mode 600). Any filesystem-read attacker decrypts the DB. Require Secret Service, or prompt user for a master password and wrap the key with PBKDF2-derived KEK.
+- [ ] **R9. CSV parser quoting. — OPEN, RE-SCOPED.** Parsing is line-by-line (`CsvParser.kt:12-23`), so the real bug is **multi-line quoted fields are unsupported** (RFC-4180 corruption) + no error on unbalanced quotes — it does *not* "concatenate the rest of the file." Parse the whole text respecting quoted newlines.
+- [ ] **R10. AmountParser treats European decimals as US. — OPEN.** `AmountParser.kt:28-34`. `"1.234,56"` → 123¢.
+- [ ] **R11. Reinvested dividends don't update holding shares/cost basis. — OPEN.** `PerformanceRepositoryImpl.recordDividend:468-480` only inserts the event.
+- [ ] **R12. Holding chart uses previous snapshot value as gain base, not cost basis. — OPEN.** `PerformanceRepositoryImpl.getHoldingChartData:439-451`. Use `value - costBasis`.
+- [x] **R13. `addTransaction` submits `$0` on parse failure. — FIXED.** `AddTransactionDialog.kt:355` `enabled` guard requires `toDoubleOrNull() != null`, making the `?: 0L` fallback unreachable.
+- [ ] **R14. ViewModels' manual scopes never cleaned up. — OPEN.** `cleanup()` exists on 13 VMs but is called only from tests. Bounded leak (VMs injected once in `MainContent`); see N6 for the worse failure mode.
+- [x] **R15. Concurrent `loadData()` collectors. — FIXED (where it mattered).** `TransactionsViewModel` uses `flatMapLatest`; `DashboardViewModel:75` cancels the prior `observeJob`.
+- [ ] **R16. Exception swallowing / no error surfacing. — OPEN.** See N6 (unhandled exceptions tear down non-supervisor scopes). Add a shared error channel.
+- [ ] **R17. Hardcoded `$` currency prefix. — OPEN.** `CurrencyText.formatCurrency:220` ignores `Account.currency`; ~10 duplicate formatters. See N7.
+- [ ] **R18. Weekly snapshot day-of-week indexing. — OPEN (LOW).** `SnapshotScheduler.kt:190` — only called with controlled `1..7`, so it won't actually throw; add a guard.
 
-- [ ] **R8. Import `fitId` uses `hashCode()` and a per-file sequence → collisions + false duplicates across imports.**
-  `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/QifParser.kt:19, 126`
-  `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/CsvParser.kt:54`
-  32-bit `hashCode()` is collision-prone; per-file counter means the same transaction in two QIF files gets the same ID. Replace with a stable SHA-256 (or 64-bit FNV) over `(date, amount, payee, memo)`.
+## P2 — Medium (original)
 
-## P1 — High (correctness issues that matter at scale)
-
-- [ ] **R9. CSV parser: unclosed quote concatenates rest of file into one field.**
-  `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/CsvParser.kt:75-92`
-  On EOF with `inQuotes=true`, surface a parse error and abort rather than committing garbage rows.
-
-- [ ] **R10. AmountParser treats European decimal format as US.**
-  `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/AmountParser.kt:28-34`
-  `"1.234,56"` becomes `1.23456` → parsed as 123¢ instead of 123 456¢. Detect locale heuristically or expose a per-import locale setting.
-
-- [ ] **R11. Reinvested dividends don't update holding cost basis / shares.**
-  `data/repository/PerformanceRepositoryImpl.kt` — `recordDividend` (verify exact lines)
-  DRIP logs the event but `Holding.shares` and `cost_basis` stay flat. Within the same `transaction {}`, add the reinvestment to the holding.
-
-- [ ] **R12. Performance chart uses previous snapshot value as gain base instead of cost basis.**
-  `PerformanceRepositoryImpl.kt` — `getHoldingChartData` (verify exact lines)
-  Chart shows compound delta, not true gain-vs-cost. Always compute `snapshot.value - snapshot.costBasis`.
-
-- [ ] **R13. `addTransaction` submits `$0` when amount parse fails.**
-  `shared/src/commonMain/kotlin/com/financeapp/ui/transactions/AddTransactionDialog.kt:~329`
-  `parseDecimalToCents(amountText) ?: 0L`. Disable submit when parser returns null; show inline validation error.
-
-- [ ] **R14. ViewModels manually create `CoroutineScope(Dispatchers.Main)` with no Koin lifecycle hook.**
-  ~16 ViewModels across `ui/**/*ViewModel.kt`. `cleanup()` exists in several but is never invoked. Flow collectors leak for app lifetime. Migrate to `viewModelScope` (KMP-ViewModel lib), or register a Koin `onClose` callback.
-
-- [ ] **R15. Race: multiple `loadData()` calls run concurrent collectors.**
-  e.g., `TemplatesViewModel:44-68`, `DashboardViewModel:57-103`, `ImportViewModel` init.
-  Cancel the prior `Job` before launching a new collect, or adopt a single `SharingStarted.WhileSubscribed` flow.
-
-- [ ] **R16. Exception swallowing in `addTransaction` / `addTransfer` / dashboard config.**
-  `TransactionsViewModel.kt:174-215, 287-311`, `DashboardViewModel.kt:~65` (`catch (e: Exception) { DashboardConfig() }`), `CurrencyText.kt:269`. Route to a shared error bus; never silently swallow.
-
-- [ ] **R17. Hardcoded `$` currency prefix everywhere.**
-  `ui/components/CurrencyText.kt:220` and callers. `Account.currency` is stored but ignored for display. Use a formatter keyed on the account's currency code; fall back to USD.
-
-- [ ] **R18. Weekly snapshot day-of-week indexing looks error-prone.**
-  `domain/service/SnapshotScheduler.kt:~190` — `DayOfWeek.entries[dayOfWeek - 1]` lacks bounds check.
-
-## P2 — Medium (UX, maintainability, robustness)
-
-- [ ] **R19. Legacy PIN hash (pre-v2) uses unsalted SHA-256 with non-constant-time compare.**
-  `AppLockRepositoryImpl.kt:37, 113-116`. Affects only the migration path but tighten to `MessageDigest.isEqual`.
-- [ ] **R20. Windows DPAPI migration returns plaintext key if DPAPI store fails.**
-  `EncryptionKeyManager.desktop.kt:141-146`. Return `null` and surface an error.
-- [ ] **R21. `EditTransactionDialog` caches category/payee objects that may be deleted under it.**
-  `AddTransactionDialog.kt:431-436`. Re-resolve by ID on save.
-- [ ] **R22. PIN minimum length is 8; OWASP recommends 12+ for financial apps.**
-  `PinSetupScreen.kt:32`.
-- [ ] **R23. Search has no debounce.** `TransactionsViewModel.kt:104-106`.
-- [ ] **R24. Bulk reconcile / bulk category update not atomic.**
-  `ReconcileViewModel.kt:108-113`. Wrap in one `transaction {}`.
-- [ ] **R25. Date-range reports hardcode 2000-01-01 start for "ALL TIME".** `ReportsViewModel.kt:~86`.
-- [ ] **R26. `DatabaseSeeder` runs from `AppViewModel.init {}`.** Move to app-start bootstrap.
-- [ ] **R27. No R8/ProGuard rules for Koin + Kotlinx Serialization + Exposed.**
-- [ ] **R28. No global error boundary / crash reporter.**
-- [ ] **R29. `App.kt` navigation state is `remember { mutableStateOf }` only.** Rotation/process-death drops the stack. Use `rememberSaveable`.
-- [ ] **R30. Backup format has no schema-version header.** Add a version field.
+- [ ] **R19. Legacy PIN hash compare. — OPEN.** `AppLockRepositoryImpl.hashLegacyPin:113-116` (unsalted SHA-256 + `==`, migration-only). Tighten to `MessageDigest.isEqual`.
+- [ ] **R20. Windows DPAPI migration returns plaintext key if store fails. — PARTIAL/OPEN.** `EncryptionKeyManager.desktop.kt:141-146` still returns the plaintext key (and leaves plaintext `.dbkey`) when DPAPI store fails.
+- [ ] **R21. `EditTransactionDialog` caches category object. — OPEN (LOW).** `AddTransactionDialog.kt:422-436` passes `selectedCategory?.id`; a category deleted mid-edit yields a stale id.
+- [ ] **R22. PIN minimum length is 8. — OPEN.** `PinSetupScreen.kt:32`.
+- [ ] **R23. Search has no debounce. — OPEN.** See N10.
+- [ ] **R24. Bulk reconcile not atomic. — OPEN.** `ReconcileViewModel.completeReconciliation:103-125` loops per-txn marks + the record. (See also N8.)
+- [ ] **R25. Reports hardcode 2000-01-01 for "ALL TIME". — OPEN.** `ReportsViewModel.kt:86`.
+- [ ] **R26. `DatabaseSeeder` runs from `AppViewModel.init {}`. — OPEN.** `AppViewModel.kt:42,48-52`.
+- [ ] **R27. No R8/ProGuard rules. — OPEN (desktop-only today).**
+- [ ] **R28. No global error boundary / crash reporter. — OPEN.** See N6.
+- [ ] **R29. `App.kt` navigation state is `remember` only. — OPEN (LOW for desktop).** `App.kt:105-107`.
+- [ ] **R30. Backup format has no schema-version header. — OPEN.**
 
 ## P3 — Low (cleanups / hardening)
 
-- [ ] **R31. Dead code:** `shared/src/commonMain/sqldelight/com/financeapp/db/Finance.sq` appears unused; Exposed is live. Remove or document.
-- [ ] **R32. Net-worth aggregations must exclude transfer legs.** Audit call sites of `getAllAccountBalances`, etc.
-- [ ] **R33. Services create their own scopes with `shutdown()` never called.** `PriceRefreshService`, `SnapshotScheduler`.
-- [ ] **R34. Koin singletons for transient ViewModels.** Review `single` vs `factory` in `di/Modules.kt`.
+- [ ] **R31. Dead code:** `Finance.sq` unused; also `PinPad.kt` has no callers now. Remove or document.
+- [ ] **R32. Net-worth aggregations must exclude transfer legs. — OPEN (NARROW).** Per-account balances cancel transfer legs between two active accounts; residual risk is transfers to/from inactive accounts (excluded from the active list).
+- [ ] **R33. Services' scopes never `shutdown()`. — OPEN.** `PriceRefreshService` (started, never stopped); `SnapshotScheduler` (never started — N5).
+- [ ] **R34. Koin `single` vs `factory` for ViewModels. — OPEN.** `di/Modules.kt`.
 
-## Agent findings discarded after verification
+## Agent findings discarded after verification (still discarded)
 
-- **AmountParser rounding formula:** `(first3 + 5) / 10` correctly half-ups 3+ decimal-place inputs. Verified against test cases.
-- **H2 `CIPHER=AES` defaults to ECB:** False — H2 uses AES-CBC with a per-page IV.
-- **SQLDelight `INSERT OR REPLACE` on Holding breaks FKs:** Not applicable; project uses Exposed; `InvestmentRepositoryImpl.insertHolding:116-128` uses plain `insert`.
-- **Date range off-by-one at month boundary:** `TransactionRepositoryImpl.getTransactionsByDateRange:120` uses `endDate.plus(1, DAY).atStartOfDayIn(tz) - 1` which handles the boundary + DST correctly.
-- **`selectAccountBalance` double-counts transfers:** Per-account query is correct. See R32 for the aggregation-side risk.
+- **AmountParser rounding `(first3 + 5) / 10`:** correct half-up. Verified.
+- **H2 `CIPHER=AES` ECB:** false.
+- **Holding `INSERT OR REPLACE` FK break:** N/A — Exposed `insert` used.
+- **Date-range off-by-one:** `getTransactionsByDateRange:120` handles boundary + DST.
+- **`selectAccountBalance` double-counts transfers:** per-account query is correct (see R32).
 
 ## Suggested execution order
 
-1. P0 auth (R2, R3, R6) — one focused PR
-2. P0 data integrity (R1, R4, R5) — one PR, with regression tests
-3. P0 key storage (R7) — Linux/Windows hardening
-4. P0 import stability (R8) — before any bulk import runs
-5. P1 batch — CSV quoting, DRIP, chart base, ViewModel scopes
-6. P2/P3 — cleanup backlog
+1. ✅ P0 data integrity N1–N3 (done, 2026-06-07).
+2. P0 money/correctness: R1 (live nullable value), R11 (DRIP), R12 (chart base) — one PR + tests.
+3. P0 auth: R2, R3, R6 — persist lockout + backoff + SecureString.
+4. P0 key storage: R7, R20 — Linux/Windows hardening.
+5. P0 import stability: R8, R9, R10 — before bulk imports.
+6. P1 robustness: N6 (supervisor scopes + error bus), N4 (scheduled dedup), N5 (start scheduler).
+7. P2/P3 — cleanup backlog (R17/N7 currency, R23/N10 search, …).
 
 ---
 

@@ -10,7 +10,12 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import com.financeapp.db.schema.PayeeAliases
+import com.financeapp.db.schema.Payees
 import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.insertAndGetId
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
 import kotlin.test.*
 import kotlin.time.Duration.Companion.seconds
 
@@ -86,6 +91,41 @@ class CategoryRepositoryTest {
 
         val retrieved = repository.getCategoryById(id)
         assertNull(retrieved)
+    }
+
+    @Test
+    fun `deleteCategory should nullify preferred category on payee aliases`() = runTest {
+        val categoryId = repository.insertCategory(TestDataFactory.createTestCategory(name = "Groceries"))
+
+        val payeeId = transaction(database) {
+            Payees.insertAndGetId {
+                it[name] = "Costco"
+                it[defaultCategoryId] = null
+            }.value
+        }
+        transaction(database) {
+            PayeeAliases.insertAndGetId {
+                it[aliasName] = "costco wholesale"
+                it[canonicalPayeeId] = payeeId
+                it[matchType] = "MANUAL"
+                it[confidence] = null
+                it[preferredCategoryId] = categoryId.toInt()
+                it[createdAt] = 0L
+            }
+        }
+
+        // Before the fix this throws a foreign-key violation: the category is
+        // deleted while PayeeAlias.preferredCategoryId still references it.
+        repository.deleteCategory(categoryId)
+
+        assertNull(repository.getCategoryById(categoryId))
+        // The alias must survive, only its preferred-category hint is cleared.
+        val (aliasCount, preferredCategoryId) = transaction(database) {
+            val row = PayeeAliases.selectAll().single()
+            PayeeAliases.selectAll().count() to row[PayeeAliases.preferredCategoryId]?.value
+        }
+        assertEquals(1L, aliasCount)
+        assertNull(preferredCategoryId)
     }
 
     // ============================================

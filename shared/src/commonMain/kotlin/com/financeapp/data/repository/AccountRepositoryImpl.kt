@@ -2,8 +2,10 @@ package com.financeapp.data.repository
 
 import com.financeapp.db.schema.Accounts
 import com.financeapp.db.schema.ConnectedAccounts
+import com.financeapp.db.schema.DividendEvents
 import com.financeapp.db.schema.Holdings
 import com.financeapp.db.schema.HoldingLots
+import com.financeapp.db.schema.HoldingSnapshots
 import com.financeapp.db.schema.ReconciliationSessions
 import com.financeapp.db.schema.ScheduledTransactions
 import com.financeapp.db.schema.SplitItems
@@ -169,7 +171,9 @@ class AccountRepositoryImpl(
             // Delete all transactions for this account
             Transactions.deleteWhere { Transactions.accountId eq id.toInt() }
 
-            // Delete holding lots for holdings in this account
+            // Delete holding-related records for holdings in this account.
+            // HoldingSnapshots and DividendEvents both FK-reference Holdings, so they
+            // must be removed first or the Holdings delete fails with an FK violation.
             val holdingIds = Holdings
                 .select(Holdings.id)
                 .where { Holdings.accountId eq id.toInt() }
@@ -177,6 +181,8 @@ class AccountRepositoryImpl(
 
             for (holdingId in holdingIds) {
                 HoldingLots.deleteWhere { HoldingLots.holdingId eq holdingId }
+                HoldingSnapshots.deleteWhere { HoldingSnapshots.holdingId eq holdingId }
+                DividendEvents.deleteWhere { DividendEvents.holdingId eq holdingId }
             }
 
             // Delete holdings for this account

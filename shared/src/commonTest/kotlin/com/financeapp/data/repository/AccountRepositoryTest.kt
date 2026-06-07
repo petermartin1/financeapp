@@ -13,7 +13,15 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import com.financeapp.db.schema.Holdings
+import com.financeapp.db.schema.HoldingSnapshots
+import com.financeapp.db.schema.DividendEvents
+import com.financeapp.db.schema.PortfolioSnapshots
 import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.insertAndGetId
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
 import kotlin.test.*
 import kotlin.time.Duration.Companion.seconds
 
@@ -117,6 +125,84 @@ class AccountRepositoryTest {
         // Balance should be 0 since transactions are deleted
         val balanceAfter = accountRepository.getAccountBalance(accountId)
         assertEquals(0L, balanceAfter)
+    }
+
+    @Test
+    fun `deleteAccount should remove dividend events for holdings in the account`() = runTest {
+        val accountId = accountRepository.insertAccount(
+            TestDataFactory.createTestAccount(type = AccountType.INVESTMENT)
+        )
+
+        val holdingId = transaction(database) {
+            Holdings.insertAndGetId {
+                it[Holdings.accountId] = accountId.toInt()
+                it[symbol] = "VOO"
+                it[name] = "S&P 500"
+                it[shares] = 10.0
+                it[costBasis] = 100_000
+            }.value
+        }
+        transaction(database) {
+            DividendEvents.insert {
+                it[DividendEvents.holdingId] = holdingId
+                it[symbol] = "VOO"
+                it[paymentDate] = 0L
+                it[amount] = 500
+                it[perShare] = 50
+                it[shares] = 10.0
+                it[isReinvested] = false
+            }
+        }
+
+        // Before the fix this throws a foreign-key violation: deleteAccount removes
+        // Holdings while DividendEvents still references them.
+        accountRepository.deleteAccount(accountId)
+
+        assertNull(accountRepository.getAccountById(accountId))
+        assertEquals(0L, transaction(database) { DividendEvents.selectAll().count() })
+        assertEquals(0L, transaction(database) { Holdings.selectAll().count() })
+    }
+
+    @Test
+    fun `deleteAccount should remove holding snapshots for holdings in the account`() = runTest {
+        val accountId = accountRepository.insertAccount(
+            TestDataFactory.createTestAccount(type = AccountType.INVESTMENT)
+        )
+
+        val holdingId = transaction(database) {
+            Holdings.insertAndGetId {
+                it[Holdings.accountId] = accountId.toInt()
+                it[symbol] = "VTI"
+                it[name] = "Total Market"
+                it[shares] = 4.0
+                it[costBasis] = 40_000
+            }.value
+        }
+        transaction(database) {
+            val snapshotId = PortfolioSnapshots.insertAndGetId {
+                it[date] = 0L
+                it[totalValue] = 0L
+                it[totalCostBasis] = 0L
+                it[totalGainLoss] = 0L
+                it[snapshotType] = "DAILY"
+            }
+            HoldingSnapshots.insert {
+                it[portfolioSnapshotId] = snapshotId
+                it[HoldingSnapshots.holdingId] = holdingId
+                it[symbol] = "VTI"
+                it[shares] = 4.0
+                it[costBasis] = 40_000
+                it[marketValue] = 44_000
+                it[price] = 11_000
+            }
+        }
+
+        // Before the fix this throws a foreign-key violation on the
+        // HoldingSnapshot -> Holding reference.
+        accountRepository.deleteAccount(accountId)
+
+        assertNull(accountRepository.getAccountById(accountId))
+        assertEquals(0L, transaction(database) { HoldingSnapshots.selectAll().count() })
     }
 
     // ============================================

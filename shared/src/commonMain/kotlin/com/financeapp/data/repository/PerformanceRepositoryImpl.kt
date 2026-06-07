@@ -31,11 +31,15 @@ class PerformanceRepositoryImpl(
     override suspend fun createPortfolioSnapshot(snapshotType: SnapshotType): Long = withContext(Dispatchers.IO) {
         val now = Clock.System.now().toEpochMilliseconds()
 
-        // Get all current holdings with their current prices (BEFORE transaction)
+        // Get all current holdings with their current prices (BEFORE transaction).
+        // Only holdings with a known price are valued: recording a missing price as
+        // $0 would permanently corrupt the snapshot history (fake -100% positions),
+        // so unpriced holdings are excluded from this snapshot.
         val holdings = investmentRepository.getAllHoldings()
-        val holdingsWithPrices = holdings.map { holding ->
-            val quote = investmentRepository.getLatestPrice(holding.symbol)
-            Triple(holding, quote?.price ?: 0L, holding.costBasis)
+        val holdingsWithPrices = holdings.mapNotNull { holding ->
+            val price = investmentRepository.getLatestPrice(holding.symbol)?.price
+                ?: return@mapNotNull null
+            Triple(holding, price, holding.costBasis)
         }
 
         var totalValue = 0L

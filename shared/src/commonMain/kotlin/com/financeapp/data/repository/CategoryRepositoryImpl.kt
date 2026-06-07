@@ -2,6 +2,7 @@ package com.financeapp.data.repository
 
 import com.financeapp.db.schema.Budgets
 import com.financeapp.db.schema.Categories
+import com.financeapp.db.schema.PayeeAliases
 import com.financeapp.db.schema.Payees
 import com.financeapp.db.schema.ScheduledTransactions
 import com.financeapp.db.schema.SplitItems
@@ -122,6 +123,11 @@ class CategoryRepositoryImpl(
             // Nullify in transaction templates
             TransactionTemplates.update({ TransactionTemplates.categoryId eq id.toInt() }) {
                 it[categoryId] = null
+            }
+
+            // Nullify preferred-category hints on payee aliases (FK to Categories)
+            PayeeAliases.update({ PayeeAliases.preferredCategoryId eq id.toInt() }) {
+                it[preferredCategoryId] = null
             }
 
             // Delete budgets for this category
