@@ -32,8 +32,8 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 
 ## P0 — Critical (original)
 
-- [ ] **R1. `HoldingWithPrice.marketValue` returns `0L` when price is null. — OPEN.**
-  `domain/model/Investment.kt:41-42`. Live portfolio shows $0 / −100% for any holding missing a quote. (N3 fixed the *persisted-snapshot* half; this live-view half remains — make `marketValue`/`gainLoss` `Long?`, render "—".) Same `?: 0L` in `PerformanceRepositoryImpl.computeTotalPortfolioValue:293`, `calculateHoldingPerformance:299`.
+- [x] **R1. `HoldingWithPrice.marketValue` returns `0L` when price is null. — FIXED.**
+  `marketValue`/`gainLoss`/`gainLossPercent` are now `Long?`/`Double?` (null when price unknown); `InvestmentScreen` renders "—" and `InvestmentViewModel` totals/allocation cover priced holdings only. Test: `InvestmentTest`. (Residual: the same `?: 0L` pattern still lives in `PerformanceRepositoryImpl.computeTotalPortfolioValue:293`/`calculateHoldingPerformance:299`, which feed the Performance tab — fold into the R11/R12 pass.)
 - [ ] **R2. Brute-force lockout bypass — `failedAttempts` in-memory only. — OPEN.** `AppLockRepositoryImpl.kt:17`. Persist counter + `lockedUntil`.
 - [ ] **R3. No time-based lockout. — OPEN.** `PinUnlockScreen.kt:109`. Add exponential backoff.
 - [x] **R4. Transfer deletion orphans the counterpart. — FIXED.** `TransactionRepositoryImpl.deleteTransaction:241-268` now deletes *both* legs (plus tags/splits).
@@ -88,7 +88,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 ## Suggested execution order
 
 1. ✅ P0 data integrity N1–N3 (done, 2026-06-07).
-2. P0 money/correctness: R1 (live nullable value), R11 (DRIP), R12 (chart base) — one PR + tests.
+2. P0 money/correctness: R11 (DRIP), R12 (chart base), and the residual `?: 0L` in `PerformanceRepositoryImpl` (performance-tab valuation) — one PR + tests. (R1 holdings-tab value done.)
 3. P0 auth: R2, R3, R6 — persist lockout + backoff + SecureString.
 4. P0 key storage: R7, R20 — Linux/Windows hardening.
 5. P0 import stability: R8, R9, R10 — before bulk imports.
