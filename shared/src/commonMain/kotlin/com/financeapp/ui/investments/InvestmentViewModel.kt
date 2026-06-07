@@ -62,8 +62,11 @@ class InvestmentViewModel(
                     .filter { it.type == AccountType.INVESTMENT }
                     .map { it.id to it.name }
 
-                val totalCostBasis = holdings.sumOf { it.holding.costBasis }
-                val totalMarketValue = holdings.sumOf { it.marketValue }
+                // Totals cover only holdings we can currently value; an unpriced
+                // holding shows "—" in its row rather than contributing a fake $0.
+                val pricedHoldings = holdings.filter { it.marketValue != null }
+                val totalCostBasis = pricedHoldings.sumOf { it.holding.costBasis }
+                val totalMarketValue = pricedHoldings.sumOf { it.marketValue ?: 0L }
                 val totalGainLoss = totalMarketValue - totalCostBasis
                 val totalGainLossPercent = if (totalCostBasis > 0) {
                     (totalGainLoss.toDouble() / totalCostBasis) * 100
@@ -78,12 +81,13 @@ class InvestmentViewModel(
                 )
 
                 val allocation = if (totalMarketValue > 0) {
-                    holdings.map { h ->
+                    pricedHoldings.mapNotNull { h ->
+                        val mv = h.marketValue ?: return@mapNotNull null
                         AssetAllocation(
                             symbol = h.holding.symbol,
                             name = h.holding.name,
-                            marketValue = h.marketValue,
-                            percentage = (h.marketValue.toDouble() / totalMarketValue) * 100
+                            marketValue = mv,
+                            percentage = (mv.toDouble() / totalMarketValue) * 100
                         )
                     }.sortedByDescending { it.marketValue }
                 } else emptyList()

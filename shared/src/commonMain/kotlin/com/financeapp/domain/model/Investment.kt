@@ -38,16 +38,19 @@ data class HoldingWithPrice(
     val currentPrice: Long?,  // in cents, null if no price available
     val accountName: String
 ) {
-    val marketValue: Long
-        get() = currentPrice?.let { kotlin.math.round(holding.shares * it).toLong() } ?: 0L
+    // Null when the current price is unknown — callers should render "—",
+    // never treat a missing quote as $0 (which would imply a -100% loss).
+    val marketValue: Long?
+        get() = currentPrice?.let { kotlin.math.round(holding.shares * it).toLong() }
 
-    val gainLoss: Long
-        get() = marketValue - holding.costBasis
+    val gainLoss: Long?
+        get() = marketValue?.let { it - holding.costBasis }
 
-    val gainLossPercent: Double
-        get() = if (holding.costBasis > 0) {
-            (gainLoss.toDouble() / holding.costBasis) * 100
-        } else 0.0
+    val gainLossPercent: Double?
+        get() {
+            val gl = gainLoss ?: return null
+            return if (holding.costBasis > 0) (gl.toDouble() / holding.costBasis) * 100 else 0.0
+        }
 }
 
 data class PortfolioSummary(

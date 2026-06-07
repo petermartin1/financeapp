@@ -304,13 +304,21 @@ private fun HoldingItem(
         trailingContent = {
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = formatCurrency(holding.marketValue),
+                    text = holding.marketValue?.let { formatCurrency(it) } ?: "—",
                     fontWeight = FontWeight.Bold
                 )
+                val gainLoss = holding.gainLoss
+                val gainLossPercent = holding.gainLossPercent
                 Text(
-                    text = "${formatCurrency(holding.gainLoss)} (${String.format("%.2f", holding.gainLossPercent)}%)",
+                    text = if (gainLoss != null && gainLossPercent != null) {
+                        "${formatCurrency(gainLoss)} (${String.format("%.2f", gainLossPercent)}%)"
+                    } else "—",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (holding.gainLoss >= 0) Color(0xFF4CAF50) else Color(0xFFF44336)
+                    color = when {
+                        gainLoss == null -> MaterialTheme.colorScheme.onSurfaceVariant
+                        gainLoss >= 0 -> Color(0xFF4CAF50)
+                        else -> Color(0xFFF44336)
+                    }
                 )
                 Box {
                     IconButton(onClick = { showMenu = true }) {
