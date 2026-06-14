@@ -6,12 +6,14 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.financeapp.App
 import com.financeapp.di.appModules
+import com.financeapp.domain.service.PriceRefreshService
+import com.financeapp.domain.service.SnapshotScheduler
 import org.koin.core.context.startKoin
 
 fun main() {
-    startKoin {
+    val koin = startKoin {
         modules(appModules())
-    }
+    }.koin
 
     application {
         val windowState = rememberWindowState(
@@ -19,7 +21,12 @@ fun main() {
             height = 900.dp
         )
         Window(
-            onCloseRequest = ::exitApplication,
+            onCloseRequest = {
+                // Stop the background service scopes before exiting (R33).
+                koin.get<PriceRefreshService>().shutdown()
+                koin.get<SnapshotScheduler>().shutdown()
+                exitApplication()
+            },
             title = "FinanceApp",
             state = windowState
             // Note: Add icon parameter when app-icon.png is placed in resources/icons/

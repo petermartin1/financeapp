@@ -187,7 +187,8 @@ class SnapshotScheduler(
         val now = Clock.System.now()
         val tz = TimeZone.currentSystemDefault()
         val nowLocal = now.toLocalDateTime(tz)
-        val targetDayOfWeek = DayOfWeek.entries[dayOfWeek - 1]
+        // Guard the index even though current callers pass 1..7 (R18).
+        val targetDayOfWeek = DayOfWeek.entries[dayOfWeek.coerceIn(1, 7) - 1]
 
         // Calculate days until target day of week
         val currentDayValue = nowLocal.dayOfWeek.ordinal + 1 // ISO: Monday=1..Sunday=7

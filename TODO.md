@@ -55,7 +55,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 - [x] **R15. Concurrent `loadData()` collectors. — FIXED (where it mattered).** `TransactionsViewModel` uses `flatMapLatest`; `DashboardViewModel:75` cancels the prior `observeJob`.
 - [~] **R16. Exception swallowing / no error surfacing. — PARTIAL.** Shared error channel added (`AppErrorBus`) and wired to a Snackbar; uncaught VM-scope exceptions now surface there (N6). Remaining: per-operation `try/catch` for specific, actionable messages (the global handler only relays `throwable.message`).
 - [~] **R17. Hardcoded `$` currency prefix. — PARTIAL.** Locale-correct separators are now fixed everywhere (N7), but `formatCurrency` still hardcodes the `$` symbol and ignores `Account.currency`. Remaining: thread the account's currency symbol through the `CurrencyText` call sites.
-- [ ] **R18. Weekly snapshot day-of-week indexing. — OPEN (LOW).** `SnapshotScheduler.kt:190` — only called with controlled `1..7`, so it won't actually throw; add a guard.
+- [x] **R18. Weekly snapshot day-of-week indexing. — FIXED.** `SnapshotScheduler` now `coerceIn(1, 7)`s the day-of-week before indexing `DayOfWeek.entries`.
 
 ## P2 — Medium (original)
 
@@ -76,7 +76,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 
 - [x] **R31. Dead code. — FIXED.** Removed `Finance.sq` (SQLDelight is not in the build — the app uses Exposed) and `PinPad.kt` (no callers; the lock UI uses `PinUnlockScreen`/`PinSetupScreen`). Build verified green afterwards.
 - [ ] **R32. Net-worth aggregations must exclude transfer legs. — OPEN (NARROW).** Per-account balances cancel transfer legs between two active accounts; residual risk is transfers to/from inactive accounts (excluded from the active list).
-- [ ] **R33. Services' scopes never `shutdown()`. — OPEN.** `PriceRefreshService` and `SnapshotScheduler` are both now started at bootstrap (N5) but neither is stopped on app close. Wire `shutdown()` to a desktop close hook. (Process exit currently reaps the daemon scopes, so this is cleanup, not a leak in practice.)
+- [x] **R33. Services' scopes never `shutdown()`. — FIXED.** The desktop `Main.kt` `onCloseRequest` now retrieves `PriceRefreshService` and `SnapshotScheduler` from Koin and calls `shutdown()` before `exitApplication()`.
 - [ ] **R34. Koin `single` vs `factory` for ViewModels. — OPEN.** `di/Modules.kt`.
 
 ## Agent findings discarded after verification (still discarded)
