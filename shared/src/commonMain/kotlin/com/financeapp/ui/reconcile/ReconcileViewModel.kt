@@ -107,20 +107,16 @@ class ReconcileViewModel(
         if (state.difference != 0L) return
 
         scope.launch {
-            // Mark selected transactions as reconciled
-            state.transactions
-                .filter { it.isSelected }
-                .forEach { txn ->
-                    transactionRepository.markTransactionReconciled(txn.id, true)
-                }
+            val reconciledIds = state.transactions.filter { it.isSelected }.map { it.id }
 
-            // Create reconciliation record
-            accountRepository.insertReconciliation(
+            // Mark the selected transactions reconciled and record the session atomically (R24).
+            accountRepository.completeReconciliation(
                 accountId = state.accountId,
                 statementDate = state.statementDate,
                 statementBalance = state.statementBalance,
-                isCompleted = true
+                transactionIds = reconciledIds
             )
+            transactionRepository.notifyTransactionsChanged()
 
             _uiState.value = ReconcileUiState(isCompleted = true)
         }

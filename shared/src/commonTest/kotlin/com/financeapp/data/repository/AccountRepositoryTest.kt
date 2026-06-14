@@ -731,4 +731,39 @@ class AccountRepositoryTest {
             cancelAndConsumeRemainingEvents()
         }
     }
+
+    // ============================================
+    // Atomic reconciliation (R24)
+    // ============================================
+
+    @Test
+    fun `completeReconciliation marks transactions reconciled and cleared and records the session`() = runTest {
+        val accountId = accountRepository.insertAccount(
+            TestDataFactory.createTestAccount(name = "Checking", type = AccountType.CHECKING)
+        )
+        val txn1 = transactionRepository.insertTransaction(
+            TestDataFactory.createTestTransaction(id = 0, accountId = accountId, amount = -2500, isCleared = false, isReconciled = false)
+        )
+        val txn2 = transactionRepository.insertTransaction(
+            TestDataFactory.createTestTransaction(id = 0, accountId = accountId, amount = -1500, isCleared = false, isReconciled = false)
+        )
+
+        val sessionId = accountRepository.completeReconciliation(
+            accountId = accountId,
+            statementDate = testDate(),
+            statementBalance = -4000,
+            transactionIds = listOf(txn1, txn2)
+        )
+
+        assertTrue(sessionId > 0)
+        // Both transactions reconciled implies cleared (N8), reflected in both balances.
+        assertEquals(-4000L, accountRepository.getReconciledBalance(accountId))
+        assertEquals(-4000L, accountRepository.getClearedBalance(accountId))
+        listOf(txn1, txn2).forEach { id ->
+            val txn = transactionRepository.getTransactionById(id)
+            assertNotNull(txn)
+            assertTrue(txn.isReconciled)
+            assertTrue(txn.isCleared)
+        }
+    }
 }

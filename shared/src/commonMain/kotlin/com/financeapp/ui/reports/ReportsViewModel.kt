@@ -19,6 +19,7 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
 class ReportsViewModel(
@@ -84,11 +85,12 @@ class ReportsViewModel(
 
     private fun calculateDateRange(period: ReportPeriod): Pair<LocalDate, LocalDate> {
         val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-        val startDate = when (period) {
-            ReportPeriod.ALL_TIME -> LocalDate(2000, 1, 1) // Far in the past
-            else -> now.minus(period.months, DateTimeUnit.MONTH)
+        return when (period) {
+            // "All time" must cover every transaction, including imports older than the old
+            // hardcoded 2000-01-01 floor and any future-dated/scheduled entries (R25).
+            ReportPeriod.ALL_TIME -> LocalDate(1970, 1, 1) to now.plus(100, DateTimeUnit.YEAR)
+            else -> now.minus(period.months, DateTimeUnit.MONTH) to now
         }
-        return Pair(startDate, now)
     }
 
     private suspend fun loadSpendingReport(startDate: LocalDate, endDate: LocalDate): SpendingReport {

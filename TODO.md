@@ -64,8 +64,8 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 - [ ] **R21. `EditTransactionDialog` caches category object. — OPEN (LOW).** `AddTransactionDialog.kt:422-436` passes `selectedCategory?.id`; a category deleted mid-edit yields a stale id.
 - [ ] **R22. PIN minimum length is 8. — OPEN.** `PinSetupScreen.kt:32`.
 - [x] **R23. Search has no debounce. — FIXED.** `TransactionsViewModel` debounces the filter flow (`SEARCH_DEBOUNCE_MS = 200ms`) so rapid typing doesn't refilter on every keystroke. See N10 for the re-query fix.
-- [ ] **R24. Bulk reconcile not atomic. — OPEN.** `ReconcileViewModel.completeReconciliation:103-125` loops per-txn marks + the record. (See also N8.)
-- [ ] **R25. Reports hardcode 2000-01-01 for "ALL TIME". — OPEN.** `ReportsViewModel.kt:86`.
+- [x] **R24. Bulk reconcile not atomic. — FIXED.** New `AccountRepository.completeReconciliation` marks all selected transactions reconciled+cleared and inserts the session record in one `transaction {}`; `ReconcileViewModel` calls it instead of looping per-txn marks + a separate insert. Test: `AccountRepositoryTest` (marks reconciled/cleared + records session + balances).
+- [x] **R25. Reports hardcode 2000-01-01 for "ALL TIME". — FIXED.** `ReportsViewModel.calculateDateRange` now spans `1970-01-01`..`now + 100y` for `ALL_TIME`, so older imports and future-dated/scheduled entries are no longer clipped.
 - [ ] **R26. `DatabaseSeeder` runs from `AppViewModel.init {}`. — OPEN.** `AppViewModel.kt:42,48-52`.
 - [ ] **R27. No R8/ProGuard rules. — OPEN (desktop-only today).**
 - [~] **R28. No global error boundary / crash reporter. — PARTIAL.** Global error boundary now exists: VM scopes route uncaught exceptions to `AppErrorBus` → Snackbar (N6/R16). Remaining: a persistent crash reporter/log sink.

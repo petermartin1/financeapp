@@ -16,5 +16,18 @@ interface AccountRepository {
     suspend fun getClearedBalance(id: Long): Long
     suspend fun getReconciledBalance(id: Long): Long
     suspend fun insertReconciliation(accountId: Long, statementDate: LocalDate, statementBalance: Long, isCompleted: Boolean): Long
+
+    /**
+     * Atomically marks [transactionIds] reconciled (and cleared) and records the completed
+     * reconciliation session in a single transaction, so a failure can't leave transactions
+     * reconciled with no session record (or vice versa). Returns the new session id.
+     */
+    suspend fun completeReconciliation(
+        accountId: Long,
+        statementDate: LocalDate,
+        statementBalance: Long,
+        transactionIds: List<Long>
+    ): Long
+
     fun notifyBalancesChanged()
 }

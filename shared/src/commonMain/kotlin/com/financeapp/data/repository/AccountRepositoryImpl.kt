@@ -260,6 +260,39 @@ class AccountRepositoryImpl(
         }
     }
 
+    override suspend fun completeReconciliation(
+        accountId: Long,
+        statementDate: LocalDate,
+        statementBalance: Long,
+        transactionIds: List<Long>
+    ): Long = withContext(ioDispatcher) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        val statementDateMillis = statementDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+
+        // Mark the transactions reconciled (and cleared, per N8) AND record the session in one
+        // transaction, so a failure can't leave a half-finished reconciliation (R24).
+        val sessionId = transaction(database) {
+            if (transactionIds.isNotEmpty()) {
+                Transactions.update({ Transactions.id inList transactionIds.map { it.toInt() } }) {
+                    it[Transactions.isReconciled] = true
+                    it[Transactions.isCleared] = true
+                    it[Transactions.updatedAt] = now
+                }
+            }
+
+            ReconciliationSessions.insert {
+                it[ReconciliationSessions.accountId] = accountId.toInt()
+                it[ReconciliationSessions.statementDate] = statementDateMillis
+                it[ReconciliationSessions.statementBalance] = statementBalance
+                it[ReconciliationSessions.isCompleted] = true
+                it[ReconciliationSessions.completedAt] = now
+                it[ReconciliationSessions.createdAt] = now
+            }[ReconciliationSessions.id].value.toLong()
+        }
+        notifyBalancesChanged()
+        sessionId
+    }
+
     override fun notifyBalancesChanged() {
         balanceRefreshTrigger.value += 1
     }
