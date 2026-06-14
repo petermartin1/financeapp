@@ -70,11 +70,11 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 - [ ] **R27. No R8/ProGuard rules. — OPEN (desktop-only today).**
 - [~] **R28. No global error boundary / crash reporter. — PARTIAL.** Global error boundary now exists: VM scopes route uncaught exceptions to `AppErrorBus` → Snackbar (N6/R16). Remaining: a persistent crash reporter/log sink.
 - [ ] **R29. `App.kt` navigation state is `remember` only. — OPEN (LOW for desktop).** `App.kt:105-107`.
-- [ ] **R30. Backup format has no schema-version header. — OPEN.**
+- [x] **R30. Backup format has no schema-version header. — N/A (not applicable).** There is no proprietary backup/restore format: `ExportRepository` only exports to standard **CSV/OFX** (round-tripped back through the file-import parsers). A schema-version header would break those interchange formats, so a version header doesn't apply. If a full versioned DB backup is added later, give *that* a header.
 
 ## P3 — Low (cleanups / hardening)
 
-- [ ] **R31. Dead code:** `Finance.sq` unused; also `PinPad.kt` has no callers now. Remove or document.
+- [x] **R31. Dead code. — FIXED.** Removed `Finance.sq` (SQLDelight is not in the build — the app uses Exposed) and `PinPad.kt` (no callers; the lock UI uses `PinUnlockScreen`/`PinSetupScreen`). Build verified green afterwards.
 - [ ] **R32. Net-worth aggregations must exclude transfer legs. — OPEN (NARROW).** Per-account balances cancel transfer legs between two active accounts; residual risk is transfers to/from inactive accounts (excluded from the active list).
 - [ ] **R33. Services' scopes never `shutdown()`. — OPEN.** `PriceRefreshService` and `SnapshotScheduler` are both now started at bootstrap (N5) but neither is stopped on app close. Wire `shutdown()` to a desktop close hook. (Process exit currently reaps the daemon scopes, so this is cleanup, not a leak in practice.)
 - [ ] **R34. Koin `single` vs `factory` for ViewModels. — OPEN.** `di/Modules.kt`.
