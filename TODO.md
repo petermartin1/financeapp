@@ -5,6 +5,8 @@
 # 🔴 Code Review Findings
 
 **Original review:** 2026-04-16. **Reassessed against live code + deeper audit:** 2026-06-07.
+**Second deep audit:** 2026-06-09 (re-verified N4–N10 and open R items against source; all confirmed.
+New issues from that pass are **N11–N26**; R13 downgraded to PARTIAL — see entry).
 Each original item (R1–R34) is verified against the *current* source and tagged
 **FIXED / PARTIAL / OPEN**. New issues from the 2026-06-07 audit are **N1–N10**.
 
@@ -33,9 +35,9 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 ## P0 — Critical (original)
 
 - [x] **R1. `HoldingWithPrice.marketValue` returns `0L` when price is null. — FIXED.**
-  `marketValue`/`gainLoss`/`gainLossPercent` are now `Long?`/`Double?` (null when price unknown); `InvestmentScreen` renders "—" and `InvestmentViewModel` totals/allocation cover priced holdings only. Test: `InvestmentTest`. (Residual: the same `?: 0L` pattern still lives in `PerformanceRepositoryImpl.computeTotalPortfolioValue:293`/`calculateHoldingPerformance:299`, which feed the Performance tab — fold into the R11/R12 pass.)
-- [ ] **R2. Brute-force lockout bypass — `failedAttempts` in-memory only. — OPEN.** `AppLockRepositoryImpl.kt:17`. Persist counter + `lockedUntil`.
-- [ ] **R3. No time-based lockout. — OPEN.** `PinUnlockScreen.kt:109`. Add exponential backoff.
+  `marketValue`/`gainLoss`/`gainLossPercent` are now `Long?`/`Double?` (null when price unknown); `InvestmentScreen` renders "—" and `InvestmentViewModel` totals/allocation cover priced holdings only. Test: `InvestmentTest`. (Residual `?: 0L` in the Performance tab now FIXED too — see R11/R12 entries: `PerformanceRepositoryImpl` excludes unpriced holdings from `getAllHoldingPerformance`/`getPerformanceSummary` and returns null from `getHoldingPerformance`.)
+- [x] **R2. Brute-force lockout bypass — `failedAttempts` in-memory only. — FIXED.** `AppLockRepositoryImpl` now persists the failure counter and `lockedUntil` in `PreferencesStore`, so a restart can't reset the lockout. `verifyPin` enforces the lockout server-side (refuses even the correct pin while locked). Tests: `AppLockRepositoryTest` (persist-across-instances / lockout-across-restart cases).
+- [x] **R3. No time-based lockout. — FIXED.** After 5 failures `AppLockRepositoryImpl` applies exponential backoff (30s, doubling, capped at 15min); `PinUnlockScreen` shows a live countdown and disables input while locked, re-enabling on expiry. Tests: `AppLockRepositoryTest` (expiry / growth cases).
 - [x] **R4. Transfer deletion orphans the counterpart. — FIXED.** `TransactionRepositoryImpl.deleteTransaction:241-268` now deletes *both* legs (plus tags/splits).
 - [ ] **R5. Split items not validated to sum to parent amount. — PARTIAL.** `TagRepositoryImpl.setSplitsForTransaction` is now wrapped in one `transaction {}`, but still no `Σsplits == parent.amount` validation (no caller checks it either).
 - [ ] **R6. PIN/password in mutable `String` in lock UI. — OPEN.** `PinUnlockScreen.kt:31,74` (`PinPad.kt` is now dead code). Back with a zeroable `SecureString`.
@@ -46,8 +48,8 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 
 - [ ] **R9. CSV parser quoting. — OPEN, RE-SCOPED.** Parsing is line-by-line (`CsvParser.kt:12-23`), so the real bug is **multi-line quoted fields are unsupported** (RFC-4180 corruption) + no error on unbalanced quotes — it does *not* "concatenate the rest of the file." Parse the whole text respecting quoted newlines.
 - [ ] **R10. AmountParser treats European decimals as US. — OPEN.** `AmountParser.kt:28-34`. `"1.234,56"` → 123¢.
-- [ ] **R11. Reinvested dividends don't update holding shares/cost basis. — OPEN.** `PerformanceRepositoryImpl.recordDividend:468-480` only inserts the event.
-- [ ] **R12. Holding chart uses previous snapshot value as gain base, not cost basis. — OPEN.** `PerformanceRepositoryImpl.getHoldingChartData:439-451`. Use `value - costBasis`.
+- [x] **R11. Reinvested dividends don't update holding shares/cost basis. — FIXED.** `PerformanceRepositoryImpl.recordDividend` now, for a reinvested dividend with a known price, buys `amount / price` shares: it adds those shares + the dividend amount to the holding's cost basis (and appends a matching `HoldingLot` when the position is lot-tracked, so lot recalculation can't drop the reinvested shares). No price → records the event only, no fabricated shares. Tests: `PerformanceRepositoryTest` (reinvest / cash / no-price / lot-consistency cases).
+- [x] **R12. Holding chart uses previous snapshot value as gain base, not cost basis. — FIXED.** `PerformanceRepositoryImpl.getHoldingChartData` now measures each point's gain/loss as `value - costBasis`. Test: `PerformanceRepositoryTest`.
 - [x] **R13. `addTransaction` submits `$0` on parse failure. — FIXED.** `AddTransactionDialog.kt:355` `enabled` guard requires `toDoubleOrNull() != null`, making the `?: 0L` fallback unreachable.
 - [ ] **R14. ViewModels' manual scopes never cleaned up. — OPEN.** `cleanup()` exists on 13 VMs but is called only from tests. Bounded leak (VMs injected once in `MainContent`); see N6 for the worse failure mode.
 - [x] **R15. Concurrent `loadData()` collectors. — FIXED (where it mattered).** `TransactionsViewModel` uses `flatMapLatest`; `DashboardViewModel:75` cancels the prior `observeJob`.
@@ -57,7 +59,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 
 ## P2 — Medium (original)
 
-- [ ] **R19. Legacy PIN hash compare. — OPEN.** `AppLockRepositoryImpl.hashLegacyPin:113-116` (unsalted SHA-256 + `==`, migration-only). Tighten to `MessageDigest.isEqual`.
+- [x] **R19. Legacy PIN hash compare. — FIXED.** `AppLockRepositoryImpl.matchesStoredPin` now compares the legacy unsalted SHA-256 hash with `MessageDigest.isEqual` (constant-time) instead of `==`, then upgrades to the salted hash. Folded into the R2/R3 rewrite.
 - [ ] **R20. Windows DPAPI migration returns plaintext key if store fails. — PARTIAL/OPEN.** `EncryptionKeyManager.desktop.kt:141-146` still returns the plaintext key (and leaves plaintext `.dbkey`) when DPAPI store fails.
 - [ ] **R21. `EditTransactionDialog` caches category object. — OPEN (LOW).** `AddTransactionDialog.kt:422-436` passes `selectedCategory?.id`; a category deleted mid-edit yields a stale id.
 - [ ] **R22. PIN minimum length is 8. — OPEN.** `PinSetupScreen.kt:32`.
@@ -88,8 +90,8 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 ## Suggested execution order
 
 1. ✅ P0 data integrity N1–N3 (done, 2026-06-07).
-2. P0 money/correctness: R11 (DRIP), R12 (chart base), and the residual `?: 0L` in `PerformanceRepositoryImpl` (performance-tab valuation) — one PR + tests. (R1 holdings-tab value done.)
-3. P0 auth: R2, R3, R6 — persist lockout + backoff + SecureString.
+2. ✅ P0 money/correctness: R11 (DRIP), R12 (chart base), and the residual `?: 0L` in `PerformanceRepositoryImpl` (performance-tab valuation) — done, 2026-06-14, with tests.
+3. P0 auth: R2, R3 ✅ (done, 2026-06-14 — persist lockout + exponential backoff + R19 constant-time legacy compare). R6 (SecureString) still open.
 4. P0 key storage: R7, R20 — Linux/Windows hardening.
 5. P0 import stability: R8, R9, R10 — before bulk imports.
 6. P1 robustness: N6 (supervisor scopes + error bus), N4 (scheduled dedup), N5 (start scheduler).

@@ -18,11 +18,14 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.financeapp.security.BiometricType
+import kotlinx.coroutines.delay
+import kotlin.time.Clock
 
 @Composable
 fun PinUnlockScreen(
     onPinEntered: (String) -> Unit,
     failedAttempts: Int,
+    lockedUntilEpochMs: Long? = null,
     biometricAvailable: Boolean = false,
     biometricType: BiometricType = BiometricType.NONE,
     onBiometricClick: () -> Unit = {},
@@ -31,6 +34,25 @@ fun PinUnlockScreen(
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+
+    // Tick down the lockout so the UI re-enables itself the moment it expires.
+    var remainingLockoutSeconds by remember(lockedUntilEpochMs) { mutableStateOf(0L) }
+    LaunchedEffect(lockedUntilEpochMs) {
+        if (lockedUntilEpochMs == null) {
+            remainingLockoutSeconds = 0L
+            return@LaunchedEffect
+        }
+        while (true) {
+            val remainingMs = lockedUntilEpochMs - Clock.System.now().toEpochMilliseconds()
+            if (remainingMs <= 0) {
+                remainingLockoutSeconds = 0L
+                break
+            }
+            remainingLockoutSeconds = (remainingMs + 999) / 1000
+            delay(500)
+        }
+    }
+    val isLockedOut = remainingLockoutSeconds > 0
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -56,10 +78,18 @@ fun PinUnlockScreen(
             modifier = Modifier.padding(bottom = 32.dp)
         )
 
-        if (failedAttempts > 0) {
+        if (isLockedOut) {
+            Text(
+                text = "Too many attempts. Try again in ${remainingLockoutSeconds}s.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        } else if (failedAttempts > 0) {
             Text(
                 text = if (failedAttempts >= 5)
-                    "Too many attempts. Try again later."
+                    "Incorrect password."
                 else
                     "Incorrect password. ${5 - failedAttempts} attempts remaining.",
                 color = MaterialTheme.colorScheme.error,
@@ -74,6 +104,7 @@ fun PinUnlockScreen(
             onValueChange = { password = it },
             label = { Text("Password") },
             singleLine = true,
+            enabled = !isLockedOut,
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password,
@@ -81,7 +112,7 @@ fun PinUnlockScreen(
             ),
             keyboardActions = KeyboardActions(
                 onDone = {
-                    if (password.isNotEmpty()) {
+                    if (password.isNotEmpty() && !isLockedOut) {
                         onPinEntered(password)
                         password = ""
                     }
@@ -101,12 +132,12 @@ fun PinUnlockScreen(
 
         Button(
             onClick = {
-                if (password.isNotEmpty()) {
+                if (password.isNotEmpty() && !isLockedOut) {
                     onPinEntered(password)
                     password = ""
                 }
             },
-            enabled = password.isNotEmpty() && failedAttempts < 5
+            enabled = password.isNotEmpty() && !isLockedOut
         ) {
             Text("Unlock")
         }

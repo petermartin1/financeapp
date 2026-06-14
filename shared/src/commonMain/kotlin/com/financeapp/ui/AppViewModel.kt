@@ -73,10 +73,13 @@ class AppViewModel(
     private fun checkLockSetup() {
         scope.launch {
             val isSetUp = appLockRepository.isLockSetUp()
+            // Reflect any persisted lockout so a restart can't silently clear it.
+            val lockout = appLockRepository.getLockoutState()
             _lockState.value = AppLockState(
                 isSetUp = isSetUp,
                 isLocked = isSetUp && !hasUnlockedThisSession,
-                failedAttempts = 0
+                failedAttempts = lockout.failedAttempts,
+                lockedUntilEpochMs = lockout.lockedUntilEpochMs
             )
         }
     }
@@ -95,18 +98,20 @@ class AppViewModel(
 
     fun verifyPin(pin: String) {
         scope.launch {
+            // verifyPin enforces the persisted lockout and updates the counter internally.
             val isValid = appLockRepository.verifyPin(pin)
             if (isValid) {
-                appLockRepository.resetFailedAttempts()
                 hasUnlockedThisSession = true
                 _lockState.value = _lockState.value.copy(
                     isLocked = false,
-                    failedAttempts = 0
+                    failedAttempts = 0,
+                    lockedUntilEpochMs = null
                 )
             } else {
-                appLockRepository.incrementFailedAttempts()
+                val lockout = appLockRepository.getLockoutState()
                 _lockState.value = _lockState.value.copy(
-                    failedAttempts = appLockRepository.getFailedAttempts()
+                    failedAttempts = lockout.failedAttempts,
+                    lockedUntilEpochMs = lockout.lockedUntilEpochMs
                 )
             }
         }
@@ -135,15 +140,17 @@ class AppViewModel(
                         hasUnlockedThisSession = true
                         _lockState.value = _lockState.value.copy(
                             isLocked = false,
-                            failedAttempts = 0
+                            failedAttempts = 0,
+                            lockedUntilEpochMs = null
                         )
                     }
                 }
                 BiometricResult.FAILED -> {
                     scope.launch {
-                        appLockRepository.incrementFailedAttempts()
+                        val lockout = appLockRepository.recordFailedAttempt()
                         _lockState.value = _lockState.value.copy(
-                            failedAttempts = appLockRepository.getFailedAttempts()
+                            failedAttempts = lockout.failedAttempts,
+                            lockedUntilEpochMs = lockout.lockedUntilEpochMs
                         )
                     }
                 }

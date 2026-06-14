@@ -80,6 +80,7 @@ fun App() {
                             viewModel.verifyPin(pin)
                         },
                         failedAttempts = lockState.failedAttempts,
+                        lockedUntilEpochMs = lockState.lockedUntilEpochMs,
                         biometricAvailable = viewModel.isBiometricAvailable(),
                         biometricType = viewModel.getBiometricType(),
                         onBiometricClick = {
