@@ -1,5 +1,7 @@
 package com.financeapp.ui.payees
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.matching.PayeeMatcher
 import com.financeapp.domain.model.Category
 import com.financeapp.domain.model.Payee
@@ -41,7 +43,7 @@ class PayeeManagementViewModel(
     private val tagRepository: TagRepository,
     private val payeeMatchingRepository: PayeeMatchingRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
     private val payeeMatcher = PayeeMatcher()
 
     private val _searchQuery = MutableStateFlow("")

@@ -1,5 +1,7 @@
 package com.financeapp.ui.fileimport
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.data.fileimport.CsvImportConfig
 import com.financeapp.data.fileimport.CsvPresets
 import com.financeapp.data.fileimport.DateFormat
@@ -32,7 +34,7 @@ class ImportViewModel(
     private val tagRepository: TagRepository,
     private val payeeMatcher: PayeeMatcher
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
 
     private val _uiState = MutableStateFlow(ImportUiState())
     val uiState: StateFlow<ImportUiState> = _uiState.asStateFlow()

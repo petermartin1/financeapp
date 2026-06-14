@@ -1,5 +1,7 @@
 package com.financeapp.ui.categories
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.model.Category
 import com.financeapp.domain.model.CategoryType
 import com.financeapp.domain.repository.CategoryRepository
@@ -21,7 +23,7 @@ data class CategoriesUiState(
 class CategoriesViewModel(
     private val categoryRepository: CategoryRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
 
     val uiState: StateFlow<CategoriesUiState> = categoryRepository.getAllCategories()
         .map { categories ->

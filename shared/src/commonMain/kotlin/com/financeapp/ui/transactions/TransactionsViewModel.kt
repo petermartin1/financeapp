@@ -1,5 +1,7 @@
 package com.financeapp.ui.transactions
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.model.Account
 import com.financeapp.domain.model.Transaction
 import com.financeapp.domain.model.TransactionWithDetails
@@ -53,7 +55,7 @@ class TransactionsViewModel(
     private val payeeRepository: PayeeRepository,
     private val tagRepository: TagRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
 
     private val _selectedAccountId = MutableStateFlow(0L)
     private val _filter = MutableStateFlow(TransactionFilter())

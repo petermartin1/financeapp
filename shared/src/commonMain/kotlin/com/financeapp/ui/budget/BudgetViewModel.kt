@@ -1,5 +1,7 @@
 package com.financeapp.ui.budget
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.model.Budget
 import com.financeapp.domain.model.BudgetSummary
 import com.financeapp.domain.repository.BudgetRepository
@@ -22,7 +24,7 @@ import kotlinx.datetime.*
 class BudgetViewModel(
     private val budgetRepository: BudgetRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
 
     private val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
     private val _selectedYear = MutableStateFlow(now.year)

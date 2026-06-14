@@ -1,5 +1,7 @@
 package com.financeapp.ui.investments
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.model.AccountType
 import com.financeapp.domain.model.AssetAllocation
 import com.financeapp.domain.model.Holding
@@ -41,7 +43,7 @@ class InvestmentViewModel(
     private val accountRepository: AccountRepository,
     private val priceRefreshService: PriceRefreshService
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
     private val _uiState = MutableStateFlow(InvestmentUiState())
     val uiState: StateFlow<InvestmentUiState> = _uiState.asStateFlow()
 

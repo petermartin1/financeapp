@@ -26,7 +26,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 - [ ] **N4. Scheduled-transaction catch-up can double-post on failure.**
   `ScheduledViewModel.enterDueTransactions:107-153` inserts each missed occurrence in its own DB transaction and advances `nextDate` only after the loop; a crash mid-catch-up re-posts already-entered occurrences (scheduled txns have no `importId`/dedup). Advance `nextDate` per occurrence, or wrap the whole catch-up atomically. (Also: due txns post only via a manual "Enter Due" button — no background poster.)
 - [ ] **N5. `SnapshotScheduler` is never started.** Registered as a Koin `single` with `createSnapshot()` on a manual button, but `startDaily/Weekly/MonthlySnapshots` are never called → automatic performance history never accrues. Start at bootstrap (and `shutdown()` — R33).
-- [ ] **N6. Non-supervisor `CoroutineScope(Dispatchers.Main)` in 15 ViewModels.** An unhandled exception in any `scope.launch {}` (e.g. a DB error in `TransactionsViewModel.addTransaction`, which has no try/catch) cancels the whole VM scope incl. the `stateIn` collector → screen silently stops updating. Use `SupervisorJob()` + per-op error handling. Severe form of R16/R28.
+- [x] **N6. Non-supervisor `CoroutineScope(Dispatchers.Main)` in 15 ViewModels. — FIXED.** Added `supervisedViewModelScope()` (`SupervisorJob()` + `CoroutineExceptionHandler`) and swapped all 18 VM scopes to it, so a failure in one `launch {}` no longer cancels the scope/`stateIn` collector, and uncaught exceptions are routed to the new shared `AppErrorBus` (surfaced as a Snackbar in `App.kt`). Test: `CoroutineScopesTest` (scope survives a failing child; error reported; scope still usable). Partially addresses R16/R28 — see those entries.
 - [ ] **N7. `String.format` uses the default locale → wrong separators.** `CurrencyText.kt:186,217` + ~10 duplicate formatters (`InvestmentScreen`, `LotComponents`, `ImportScreen`, …). Non-US locales produce mixed separators. Compounds R17.
 - [ ] **N8. Reconcile marks `isReconciled` but not `isCleared`.** `ReconcileViewModel.completeReconciliation` → `markTransactionReconciled` sets only `isReconciled`, so `getClearedBalance` (sums `isCleared`) excludes reconciled rows. Reconciled should imply cleared.
 - [ ] **N9. `importWithMappings` isn't atomic across steps.** Payees, aliases, transactions, tags are each committed separately (`ImportRepository:133-276`); a mid-way failure leaves orphaned payees/aliases or untagged transactions.
@@ -53,7 +53,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 - [x] **R13. `addTransaction` submits `$0` on parse failure. — FIXED.** `AddTransactionDialog.kt:355` `enabled` guard requires `toDoubleOrNull() != null`, making the `?: 0L` fallback unreachable.
 - [ ] **R14. ViewModels' manual scopes never cleaned up. — OPEN.** `cleanup()` exists on 13 VMs but is called only from tests. Bounded leak (VMs injected once in `MainContent`); see N6 for the worse failure mode.
 - [x] **R15. Concurrent `loadData()` collectors. — FIXED (where it mattered).** `TransactionsViewModel` uses `flatMapLatest`; `DashboardViewModel:75` cancels the prior `observeJob`.
-- [ ] **R16. Exception swallowing / no error surfacing. — OPEN.** See N6 (unhandled exceptions tear down non-supervisor scopes). Add a shared error channel.
+- [~] **R16. Exception swallowing / no error surfacing. — PARTIAL.** Shared error channel added (`AppErrorBus`) and wired to a Snackbar; uncaught VM-scope exceptions now surface there (N6). Remaining: per-operation `try/catch` for specific, actionable messages (the global handler only relays `throwable.message`).
 - [ ] **R17. Hardcoded `$` currency prefix. — OPEN.** `CurrencyText.formatCurrency:220` ignores `Account.currency`; ~10 duplicate formatters. See N7.
 - [ ] **R18. Weekly snapshot day-of-week indexing. — OPEN (LOW).** `SnapshotScheduler.kt:190` — only called with controlled `1..7`, so it won't actually throw; add a guard.
 
@@ -68,7 +68,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 - [ ] **R25. Reports hardcode 2000-01-01 for "ALL TIME". — OPEN.** `ReportsViewModel.kt:86`.
 - [ ] **R26. `DatabaseSeeder` runs from `AppViewModel.init {}`. — OPEN.** `AppViewModel.kt:42,48-52`.
 - [ ] **R27. No R8/ProGuard rules. — OPEN (desktop-only today).**
-- [ ] **R28. No global error boundary / crash reporter. — OPEN.** See N6.
+- [~] **R28. No global error boundary / crash reporter. — PARTIAL.** Global error boundary now exists: VM scopes route uncaught exceptions to `AppErrorBus` → Snackbar (N6/R16). Remaining: a persistent crash reporter/log sink.
 - [ ] **R29. `App.kt` navigation state is `remember` only. — OPEN (LOW for desktop).** `App.kt:105-107`.
 - [ ] **R30. Backup format has no schema-version header. — OPEN.**
 
@@ -94,7 +94,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 3. P0 auth: R2, R3 ✅ (done, 2026-06-14 — persist lockout + exponential backoff + R19 constant-time legacy compare). R6 (SecureString) still open.
 4. ✅ P0 key storage: R7, R20 — done, 2026-06-14 (refuse-without-keystore policy; no plaintext key fallback; legacy keys migrated into the OS key store).
 5. ✅ P0 import stability: R8, R9, R10 — done, 2026-06-14, with tests.
-6. P1 robustness: N6 (supervisor scopes + error bus), N4 (scheduled dedup), N5 (start scheduler).
+6. P1 robustness: N6 ✅ (supervisor scopes + error bus, done 2026-06-14). N4 (scheduled dedup), N5 (start scheduler) still open.
 7. P2/P3 — cleanup backlog (R17/N7 currency, R23/N10 search, …).
 
 ---

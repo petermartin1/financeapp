@@ -1,5 +1,7 @@
 package com.financeapp.ui.templates
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.model.TransactionTemplate
 import com.financeapp.domain.model.TransactionTemplateWithDetails
 import com.financeapp.domain.repository.TemplateRepository
@@ -32,7 +34,7 @@ class TemplatesViewModel(
     private val categoryRepository: CategoryRepository,
     private val payeeRepository: PayeeRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
 
     private val _uiState = MutableStateFlow(TemplatesUiState())
     val uiState: StateFlow<TemplatesUiState> = _uiState.asStateFlow()

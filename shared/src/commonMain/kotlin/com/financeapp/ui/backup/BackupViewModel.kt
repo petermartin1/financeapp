@@ -1,5 +1,7 @@
 package com.financeapp.ui.backup
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.data.backup.ExportRepository
 import com.financeapp.domain.model.BackupResult
 import com.financeapp.domain.model.ExportFormat
@@ -15,7 +17,7 @@ import kotlinx.coroutines.withContext
 class BackupViewModel(
     private val exportRepository: ExportRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
 
     private val _uiState = MutableStateFlow(BackupUiState())
     val uiState: StateFlow<BackupUiState> = _uiState.asStateFlow()

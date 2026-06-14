@@ -1,5 +1,7 @@
 package com.financeapp.ui.dashboard
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.model.DashboardConfig
 import com.financeapp.domain.model.DashboardWidget
 import com.financeapp.domain.model.DashboardWidgetType
@@ -43,7 +45,7 @@ class DashboardViewModel(
     private val preferencesRepository: PreferencesRepository,
     private val budgetRepository: BudgetRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
     private val json = Json { ignoreUnknownKeys = true }
     private var observeJob: Job? = null
 

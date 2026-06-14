@@ -1,5 +1,7 @@
 package com.financeapp.ui.investments
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.model.*
 import com.financeapp.domain.repository.InvestmentRepository
 import com.financeapp.domain.repository.PerformanceRepository
@@ -23,7 +25,7 @@ class HoldingDetailViewModel(
     private val performanceRepository: PerformanceRepository,
     private val priceRefreshService: PriceRefreshService
 ) {
-    private val viewModelScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val viewModelScope = supervisedViewModelScope()
 
     private val _holdingPerformance = MutableStateFlow<HoldingPerformance?>(null)
     val holdingPerformance: StateFlow<HoldingPerformance?> = _holdingPerformance.asStateFlow()

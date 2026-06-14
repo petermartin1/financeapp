@@ -1,5 +1,7 @@
 package com.financeapp.ui.accounts
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.model.Account
 import com.financeapp.domain.model.AccountType
 import com.financeapp.domain.model.AccountWithBalance
@@ -24,7 +26,7 @@ data class AccountsUiState(
 class AccountsViewModel(
     private val accountRepository: AccountRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
 
     val uiState: StateFlow<AccountsUiState> = accountRepository.getAccountsWithBalances()
         .map { accounts ->

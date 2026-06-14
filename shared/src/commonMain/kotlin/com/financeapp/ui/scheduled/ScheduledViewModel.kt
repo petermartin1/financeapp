@@ -1,5 +1,7 @@
 package com.financeapp.ui.scheduled
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.model.ScheduledTransaction
 import com.financeapp.domain.model.ScheduledTransactionWithDetails
 import com.financeapp.domain.model.Transaction
@@ -22,7 +24,7 @@ class ScheduledViewModel(
     private val transactionRepository: TransactionRepository,
     private val accountRepository: AccountRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
 
     private val _uiState = MutableStateFlow(ScheduledUiState())
     val uiState: StateFlow<ScheduledUiState> = _uiState.asStateFlow()

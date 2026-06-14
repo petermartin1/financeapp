@@ -1,5 +1,7 @@
 package com.financeapp.ui.reports
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.model.*
 import com.financeapp.domain.repository.CategoryRepository
 import com.financeapp.domain.repository.TransactionRepository
@@ -24,7 +26,7 @@ class ReportsViewModel(
     private val accountRepository: AccountRepository,
     private val categoryRepository: CategoryRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
 
     private val _uiState = MutableStateFlow(ReportsUiState())
     val uiState: StateFlow<ReportsUiState> = _uiState.asStateFlow()

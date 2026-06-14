@@ -51,6 +51,7 @@ import com.financeapp.ui.theme.ThemeMode
 import com.financeapp.ui.navigation.AppNavigationRail
 import com.financeapp.ui.search.SearchViewModel
 import com.financeapp.ui.search.GlobalSearchDialog
+import com.financeapp.ui.error.AppErrorBus
 import org.koin.compose.koinInject
 
 @Composable
@@ -59,39 +60,54 @@ fun App() {
     val lockState by viewModel.lockState.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    // Surface background-work failures routed through the shared error bus (N6 / R16 / R28).
+    LaunchedEffect(Unit) {
+        AppErrorBus.messages.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
     FinanceAppTheme(themeMode = themeMode) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            when {
-                // First time setup - no PIN set yet
-                !lockState.isSetUp -> {
-                    PinSetupScreen(
-                        onPinSet = { pin ->
-                            viewModel.setupPin(pin)
-                        }
-                    )
+            Box(modifier = Modifier.fillMaxSize()) {
+                when {
+                    // First time setup - no PIN set yet
+                    !lockState.isSetUp -> {
+                        PinSetupScreen(
+                            onPinSet = { pin ->
+                                viewModel.setupPin(pin)
+                            }
+                        )
+                    }
+                    // App is locked - need to enter PIN
+                    lockState.isLocked -> {
+                        PinUnlockScreen(
+                            onPinEntered = { pin ->
+                                viewModel.verifyPin(pin)
+                            },
+                            failedAttempts = lockState.failedAttempts,
+                            lockedUntilEpochMs = lockState.lockedUntilEpochMs,
+                            biometricAvailable = viewModel.isBiometricAvailable(),
+                            biometricType = viewModel.getBiometricType(),
+                            onBiometricClick = {
+                                viewModel.authenticateWithBiometric()
+                            }
+                        )
+                    }
+                    // Unlocked - show main content
+                    else -> {
+                        MainContent()
+                    }
                 }
-                // App is locked - need to enter PIN
-                lockState.isLocked -> {
-                    PinUnlockScreen(
-                        onPinEntered = { pin ->
-                            viewModel.verifyPin(pin)
-                        },
-                        failedAttempts = lockState.failedAttempts,
-                        lockedUntilEpochMs = lockState.lockedUntilEpochMs,
-                        biometricAvailable = viewModel.isBiometricAvailable(),
-                        biometricType = viewModel.getBiometricType(),
-                        onBiometricClick = {
-                            viewModel.authenticateWithBiometric()
-                        }
-                    )
-                }
-                // Unlocked - show main content
-                else -> {
-                    MainContent()
-                }
+
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
             }
         }
     }

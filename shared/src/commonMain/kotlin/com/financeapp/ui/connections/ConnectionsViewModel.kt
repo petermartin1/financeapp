@@ -1,5 +1,7 @@
 package com.financeapp.ui.connections
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.data.ofx.BankConfigs
 import com.financeapp.data.ofx.BankConnectionInfo
 import com.financeapp.data.ofx.OfxRepository
@@ -21,7 +23,7 @@ import kotlinx.datetime.toLocalDateTime
 class ConnectionsViewModel(
     private val ofxRepository: OfxRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val scope = supervisedViewModelScope()
 
     private val _uiState = MutableStateFlow(ConnectionsUiState())
     val uiState: StateFlow<ConnectionsUiState> = _uiState.asStateFlow()

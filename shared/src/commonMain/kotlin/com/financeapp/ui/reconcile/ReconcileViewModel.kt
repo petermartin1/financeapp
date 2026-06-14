@@ -1,5 +1,7 @@
 package com.financeapp.ui.reconcile
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.model.Transaction
 import com.financeapp.domain.repository.TransactionRepository
 import com.financeapp.domain.repository.AccountRepository
@@ -19,7 +21,7 @@ class ReconcileViewModel(
     private val transactionRepository: TransactionRepository,
     private val accountRepository: AccountRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
 
     private val _uiState = MutableStateFlow(ReconcileUiState())
     val uiState: StateFlow<ReconcileUiState> = _uiState.asStateFlow()

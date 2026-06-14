@@ -1,5 +1,7 @@
 package com.financeapp.ui.tags
 
+import com.financeapp.ui.supervisedViewModelScope
+
 import com.financeapp.domain.model.Tag
 import com.financeapp.domain.repository.TagRepository
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +22,7 @@ data class TagsUiState(
 class TagsViewModel(
     private val tagRepository: TagRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
 
     val uiState: StateFlow<TagsUiState> = tagRepository.getAllTags()
         .map { tags ->

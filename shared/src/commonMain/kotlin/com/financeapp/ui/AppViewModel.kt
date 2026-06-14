@@ -30,7 +30,7 @@ class AppViewModel(
         private var hasUnlockedThisSession = false
     }
 
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = supervisedViewModelScope()
 
     private val _lockState = MutableStateFlow(AppLockState())
     val lockState: StateFlow<AppLockState> = _lockState.asStateFlow()
