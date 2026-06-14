@@ -12,25 +12,74 @@ actual class EncryptionKeyManager {
 
     private val keyFile = File(System.getProperty("user.home"), ".financeapp/.dbkey")
 
-    actual fun getOrCreateKey(): String {
-        // macOS: use Keychain
-        if (isMacOS()) {
-            val keychainKey = getFromKeychain()
-            if (keychainKey != null) return keychainKey
-            val newKey = generateKey()
-            if (storeInKeychain(newKey)) return newKey
+    actual fun getOrCreateKey(): String = when {
+        isMacOS() -> keyFromKeystore(
+            keystoreName = "macOS Keychain",
+            lookup = ::getFromKeychain,
+            store = ::storeInKeychain,
+            keystoreIsFile = false
+        )
+        isWindows() -> keyFromKeystore(
+            keystoreName = "Windows DPAPI",
+            lookup = ::getFromDpapi,
+            store = ::storeInDpapi,
+            // DPAPI persists the (encrypted) key in keyFile itself, so it is not a separate
+            // plaintext file to delete after migration.
+            keystoreIsFile = true
+        )
+        LinuxSecretService.isAvailable() -> keyFromKeystore(
+            keystoreName = "Secret Service",
+            lookup = { LinuxSecretService.lookup(LINUX_KEY_ATTRIBUTE) },
+            store = { LinuxSecretService.store(LINUX_KEY_ATTRIBUTE, "FinanceApp Database Key", it) },
+            keystoreIsFile = false
+        )
+        else -> throw KeyStorageException(NO_KEYSTORE_MESSAGE)
+    }
+
+    /**
+     * Resolves the key from the OS key store, migrating a legacy plaintext key file into it
+     * when present (so existing encrypted databases stay readable). Refuses to fall back to a
+     * plaintext key on disk: if the key store write fails, it throws.
+     */
+    private fun keyFromKeystore(
+        keystoreName: String,
+        lookup: () -> String?,
+        store: (String) -> Boolean,
+        keystoreIsFile: Boolean
+    ): String {
+        lookup()?.let { return it }
+
+        // No key in the store yet: adopt an existing plaintext key if one is present (to
+        // preserve access to an already-encrypted database), otherwise mint a fresh one.
+        val legacyKey = readLegacyPlaintextKey()
+        val key = legacyKey ?: generateKey()
+
+        if (!store(key)) {
+            throw KeyStorageException(
+                "Failed to store the database encryption key in $keystoreName; refusing to " +
+                    "write it to disk in plaintext."
+            )
         }
 
-        // Windows: use DPAPI
-        if (isWindows()) {
-            val dpapiKey = getFromDpapi()
-            if (dpapiKey != null) return dpapiKey
-            val newKey = generateKey()
-            if (storeInDpapi(newKey)) return newKey
+        // Remove the now-migrated plaintext file (unless the key store *is* that file, as with
+        // DPAPI, where store() already overwrote it with the protected blob).
+        if (legacyKey != null && !keystoreIsFile && keyFile.exists()) {
+            secureDeleteFile(keyFile)
         }
+        return key
+    }
 
-        // Linux: try secret-tool, then file fallback
-        return getOrCreateFileKey()
+    /** Reads a pre-existing plaintext AES-256 key file (legacy format), or null if absent/invalid. */
+    private fun readLegacyPlaintextKey(): String? {
+        if (!keyFile.exists()) return null
+        val contents = keyFile.readText().trim()
+        if (contents.isEmpty()) return null
+        return try {
+            // A valid AES-256 key is exactly 32 bytes; a DPAPI-protected blob is longer.
+            if (Base64.getDecoder().decode(contents).size == 32) contents else null
+        } catch (e: IllegalArgumentException) {
+            null
+        }
     }
 
     // ==============================================================
@@ -118,32 +167,9 @@ actual class EncryptionKeyManager {
             """.trimIndent()
 
             val (exitCode, output) = runPowerShellCommand(script)
-            if (exitCode == 0 && output.isNotEmpty()) {
-                output
-            } else {
-                // DPAPI decrypt failed — attempt migration only if it looks like a plaintext AES key
-                migratePlaintextKeyToDpapi(encryptedBase64)
-            }
-        } catch (e: Exception) {
-            // Do not attempt migration on exception — too risky
-            null
-        }
-    }
-
-    private fun migratePlaintextKeyToDpapi(candidateKey: String): String? {
-        return try {
-            val decoded = Base64.getDecoder().decode(candidateKey)
-            // AES-256 key must be exactly 32 bytes
-            if (decoded.size != 32) {
-                // Not a valid plaintext AES-256 key — likely a corrupted DPAPI blob
-                return null
-            }
-            if (storeInDpapi(candidateKey)) {
-                candidateKey
-            } else {
-                // DPAPI store failed but we validated it's a real AES key
-                candidateKey
-            }
+            // On any decrypt failure return null; the caller decides whether to migrate a
+            // legacy plaintext key or mint a new one (it never falls back to plaintext).
+            if (exitCode == 0 && output.isNotEmpty()) output else null
         } catch (e: Exception) {
             null
         }
@@ -169,40 +195,6 @@ actual class EncryptionKeyManager {
             true
         } catch (e: Exception) {
             false
-        }
-    }
-
-    // ==============================================================
-    // Linux: Secret Service with File-Based Fallback
-    // ==============================================================
-
-    private fun getOrCreateFileKey(): String {
-        // Try secret-tool first on Linux
-        if (!isMacOS() && !isWindows() && LinuxSecretService.isAvailable()) {
-            val existing = LinuxSecretService.lookup("database-encryption-key")
-            if (existing != null) return existing
-
-            // Generate and store in secret service
-            val newKey = generateKey()
-            if (LinuxSecretService.store("database-encryption-key", "FinanceApp Database Key", newKey)) {
-                // Migrate: if old plaintext file exists, securely delete it
-                if (keyFile.exists()) {
-                    secureDeleteFile(keyFile)
-                }
-                return newKey
-            }
-            // secret-tool store failed, fall through to file-based
-        }
-
-        keyFile.parentFile?.mkdirs()
-
-        return if (keyFile.createNewFile()) {
-            val key = generateKey()
-            keyFile.writeText(key)
-            setRestrictedPermissions(keyFile)
-            key
-        } else {
-            keyFile.readText().trim()
         }
     }
 
@@ -239,5 +231,14 @@ actual class EncryptionKeyManager {
         } catch (e: Exception) {
             // Best-effort secure deletion
         }
+    }
+
+    private companion object {
+        private const val LINUX_KEY_ATTRIBUTE = "database-encryption-key"
+        private const val NO_KEYSTORE_MESSAGE =
+            "No OS key store is available to protect the database encryption key " +
+                "(Secret Service / Keychain / DPAPI). Refusing to write the key to disk in " +
+                "plaintext. On Linux, install gnome-keyring or KeePassXC and ensure secret-tool " +
+                "is on the PATH, then restart the app."
     }
 }

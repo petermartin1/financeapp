@@ -300,50 +300,50 @@ actual class SecureCredentialStore actual constructor() {
         }
     }
 
+    /**
+     * Master key for the encrypted-file credential fallback. Stored only in the OS Secret
+     * Service; refuses to persist a plaintext key file. A legacy plaintext master key is
+     * migrated into the Secret Service (preserving existing credentials) then deleted.
+     *
+     * Callers (storeInEncryptedFile/retrieveFromEncryptedFile) catch the thrown
+     * [KeyStorageException], so credential storage simply fails gracefully where no Secret
+     * Service is available rather than silently writing an unprotected key.
+     */
     private fun getOrCreateMasterKey(): ByteArray {
-        // On Linux, try secret-tool first
-        if (!isMacOS() && !isWindows() && LinuxSecretService.isAvailable()) {
-            val existing = LinuxSecretService.lookup("credential-master-key")
-            if (existing != null) {
-                return try {
-                    Base64.getDecoder().decode(existing)
-                } catch (e: Exception) {
-                    // Invalid data in secret service, fall through to file-based
-                    generateAndStoreMasterKey()
-                }
-            }
-            // No key in secret service yet
-            val key = ByteArray(32)
-            SecureRandom().nextBytes(key)
-            val encoded = Base64.getEncoder().encodeToString(key)
-            if (LinuxSecretService.store("credential-master-key", "FinanceApp Credential Key", encoded)) {
-                // Migrate: if old plaintext file exists, securely delete it
-                if (masterKeyFile.exists()) {
-                    secureDeleteFile(masterKeyFile)
-                }
-                return key
-            }
-            // secret-tool store failed, fall through to file-based
+        if (!LinuxSecretService.isAvailable()) {
+            throw KeyStorageException(
+                "No Secret Service is available to protect the credential master key; " +
+                    "refusing to store it on disk in plaintext."
+            )
         }
 
-        return if (masterKeyFile.exists()) {
-            val encodedKey = masterKeyFile.readText().trim()
-            Base64.getDecoder().decode(encodedKey)
-        } else {
-            generateAndStoreMasterKey()
+        LinuxSecretService.lookup(CRED_KEY_ATTRIBUTE)?.let { existing ->
+            runCatching { Base64.getDecoder().decode(existing) }.getOrNull()?.let { return it }
         }
+
+        // Adopt a legacy plaintext master key if present, otherwise mint a fresh one.
+        val key = readLegacyPlaintextMasterKey() ?: ByteArray(32).also { SecureRandom().nextBytes(it) }
+        val encoded = Base64.getEncoder().encodeToString(key)
+        if (!LinuxSecretService.store(CRED_KEY_ATTRIBUTE, "FinanceApp Credential Key", encoded)) {
+            throw KeyStorageException(
+                "Failed to store the credential master key in the Secret Service; refusing to " +
+                    "fall back to a plaintext key file."
+            )
+        }
+        if (masterKeyFile.exists()) {
+            secureDeleteFile(masterKeyFile)
+        }
+        return key
     }
 
-    private fun generateAndStoreMasterKey(): ByteArray {
-        val key = ByteArray(32)
-        SecureRandom().nextBytes(key)
-
-        masterKeyFile.parentFile?.mkdirs()
-        val encodedKey = Base64.getEncoder().encodeToString(key)
-        masterKeyFile.writeText(encodedKey)
-        setRestrictedPermissions(masterKeyFile)
-
-        return key
+    private fun readLegacyPlaintextMasterKey(): ByteArray? {
+        if (!masterKeyFile.exists()) return null
+        return try {
+            val decoded = Base64.getDecoder().decode(masterKeyFile.readText().trim())
+            if (decoded.size == 32) decoded else null
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun sanitizeFilename(key: String): String {
@@ -376,5 +376,9 @@ actual class SecureCredentialStore actual constructor() {
         } catch (e: Exception) {
             // Best-effort secure deletion
         }
+    }
+
+    private companion object {
+        private const val CRED_KEY_ATTRIBUTE = "credential-master-key"
     }
 }

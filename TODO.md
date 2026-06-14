@@ -41,7 +41,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 - [x] **R4. Transfer deletion orphans the counterpart. — FIXED.** `TransactionRepositoryImpl.deleteTransaction:241-268` now deletes *both* legs (plus tags/splits).
 - [ ] **R5. Split items not validated to sum to parent amount. — PARTIAL.** `TagRepositoryImpl.setSplitsForTransaction` is now wrapped in one `transaction {}`, but still no `Σsplits == parent.amount` validation (no caller checks it either).
 - [ ] **R6. PIN/password in mutable `String` in lock UI. — OPEN.** `PinUnlockScreen.kt:31,74` (`PinPad.kt` is now dead code). Back with a zeroable `SecureString`.
-- [ ] **R7. Linux fallback writes encryption keys as plaintext Base64. — OPEN.** `EncryptionKeyManager.desktop.kt:197-206`; same for the credential master key in `SecureCredentialStore.desktop.kt:337-347`. Require Secret Service or wrap with a PBKDF2 KEK.
+- [x] **R7. Linux fallback writes encryption keys as plaintext Base64. — FIXED (refuse-without-keystore policy).** `EncryptionKeyManager.desktop.kt` no longer has a plaintext file fallback: it resolves the DB key from Keychain/DPAPI/Secret Service, migrates a legacy plaintext key file into the key store (preserving existing encrypted DBs) then secure-deletes it, and throws `KeyStorageException` when no key store is available. `SecureCredentialStore.desktop.kt` master key gets the same treatment (throws; callers catch and fail gracefully). Platform shell-out paths remain untested (no CI keystore); logic verified by compile + review.
 - [ ] **R8. Import `fitId` uses `hashCode()` + per-file index → false dups across overlapping imports. — OPEN.** `QifParser.kt:126`, `CsvParser.kt:54`. Stable hash over `(date, amount, payee, memo)`.
 
 ## P1 — High (original)
@@ -60,7 +60,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 ## P2 — Medium (original)
 
 - [x] **R19. Legacy PIN hash compare. — FIXED.** `AppLockRepositoryImpl.matchesStoredPin` now compares the legacy unsalted SHA-256 hash with `MessageDigest.isEqual` (constant-time) instead of `==`, then upgrades to the salted hash. Folded into the R2/R3 rewrite.
-- [ ] **R20. Windows DPAPI migration returns plaintext key if store fails. — PARTIAL/OPEN.** `EncryptionKeyManager.desktop.kt:141-146` still returns the plaintext key (and leaves plaintext `.dbkey`) when DPAPI store fails.
+- [x] **R20. Windows DPAPI migration returns plaintext key if store fails. — FIXED.** The `migratePlaintextKeyToDpapi` path that returned the plaintext key on DPAPI-store failure is gone; `getFromDpapi` now returns null on any decrypt failure and the shared `keyFromKeystore` helper throws `KeyStorageException` if the DPAPI store write fails instead of returning/leaving a plaintext key. Folded into the R7 rewrite.
 - [ ] **R21. `EditTransactionDialog` caches category object. — OPEN (LOW).** `AddTransactionDialog.kt:422-436` passes `selectedCategory?.id`; a category deleted mid-edit yields a stale id.
 - [ ] **R22. PIN minimum length is 8. — OPEN.** `PinSetupScreen.kt:32`.
 - [ ] **R23. Search has no debounce. — OPEN.** See N10.
@@ -92,7 +92,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 1. ✅ P0 data integrity N1–N3 (done, 2026-06-07).
 2. ✅ P0 money/correctness: R11 (DRIP), R12 (chart base), and the residual `?: 0L` in `PerformanceRepositoryImpl` (performance-tab valuation) — done, 2026-06-14, with tests.
 3. P0 auth: R2, R3 ✅ (done, 2026-06-14 — persist lockout + exponential backoff + R19 constant-time legacy compare). R6 (SecureString) still open.
-4. P0 key storage: R7, R20 — Linux/Windows hardening.
+4. ✅ P0 key storage: R7, R20 — done, 2026-06-14 (refuse-without-keystore policy; no plaintext key fallback; legacy keys migrated into the OS key store).
 5. P0 import stability: R8, R9, R10 — before bulk imports.
 6. P1 robustness: N6 (supervisor scopes + error bus), N4 (scheduled dedup), N5 (start scheduler).
 7. P2/P3 — cleanup backlog (R17/N7 currency, R23/N10 search, …).
