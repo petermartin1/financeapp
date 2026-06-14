@@ -84,7 +84,7 @@ class ScheduledViewModel(
             val scheduled = scheduledTransactionRepository.getScheduledTransactionById(id)
                 ?: return@launch
 
-            val newDate = calculateNextDate(scheduled.nextDate, scheduled.frequency)
+            val newDate = nextScheduledDate(scheduled.nextDate, scheduled.frequency)
             val newDateMillis = newDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
 
             // Check if past end date
@@ -99,59 +99,47 @@ class ScheduledViewModel(
 
     fun enterDueTransactions() {
         scope.launch {
-            var entered = 0
             val today = Clock.System.now()
                 .toLocalDateTime(TimeZone.currentSystemDefault()).date
             val todayMillis = today.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
 
             val dueTransactions = scheduledTransactionRepository.getDueScheduledTransactions(todayMillis)
 
-            for (scheduled in dueTransactions) {
-                // Skip if nextDate is already past endDate (safety check)
-                if (scheduled.endDate != null && scheduled.nextDate > scheduled.endDate) {
-                    scheduledTransactionRepository.updateScheduledTransactionActive(scheduled.id, false)
-                    continue
-                }
+            // Plan the catch-up for each schedule, then look up which occurrences are already
+            // posted. Each occurrence has a deterministic import id, so a catch-up that crashed
+            // part-way can be re-run without double-posting the occurrences it already entered (N4).
+            val plans = dueTransactions.associateWith { computeDueEntries(it, today, emptySet()) }
+            val candidateImportIds = plans.values.flatMap { plan -> plan.occurrences.map { it.importId } }
+            val existingImportIds = transactionRepository.getExistingImportIds(candidateImportIds)
 
-                // Loop to catch up all missed occurrences
-                var currentDate = scheduled.nextDate
-                while (currentDate <= today) {
-                    // Check if we've passed the end date
-                    if (scheduled.endDate != null && currentDate > scheduled.endDate) {
-                        break
-                    }
+            var entered = 0
+            for (scheduled in dueTransactions) {
+                val plan = plans.getValue(scheduled)
+                for (occurrence in plan.occurrences) {
+                    if (occurrence.importId in existingImportIds) continue // already posted
 
                     val now = Clock.System.now()
-
-                    // Create the transaction for this occurrence
-                    val transaction = Transaction(
-                        accountId = scheduled.accountId,
-                        date = currentDate,
-                        amount = scheduled.amount,
-                        payeeId = scheduled.payeeId,
-                        categoryId = scheduled.categoryId,
-                        memo = scheduled.memo,
-                        isCleared = false,
-                        createdAt = now,
-                        updatedAt = now
+                    transactionRepository.insertTransaction(
+                        Transaction(
+                            accountId = scheduled.accountId,
+                            date = occurrence.date,
+                            amount = scheduled.amount,
+                            payeeId = scheduled.payeeId,
+                            categoryId = scheduled.categoryId,
+                            memo = scheduled.memo,
+                            isCleared = false,
+                            importId = occurrence.importId,
+                            createdAt = now,
+                            updatedAt = now
+                        )
                     )
-
-                    transactionRepository.insertTransaction(transaction)
                     entered++
-
-                    // Advance to next occurrence
-                    currentDate = calculateNextDate(currentDate, scheduled.frequency)
                 }
 
-                // Update the scheduled transaction's next date
-                val newDateMillis = currentDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
-
-                // Check if next occurrence would be past end date
-                val endDateMillis = scheduled.endDate?.atStartOfDayIn(TimeZone.UTC)?.toEpochMilliseconds()
-                if (endDateMillis != null && newDateMillis > endDateMillis) {
+                if (plan.deactivate) {
                     scheduledTransactionRepository.updateScheduledTransactionActive(scheduled.id, false)
                 } else {
-                    scheduledTransactionRepository.updateScheduledTransactionNextDate(scheduled.id, newDateMillis)
+                    scheduledTransactionRepository.updateScheduledTransactionNextDate(scheduled.id, plan.newNextDateMillis)
                 }
             }
             if (entered > 0) {
@@ -167,16 +155,6 @@ class ScheduledViewModel(
 
     fun cleanup() {
         scope.cancel()
-    }
-
-    private fun calculateNextDate(current: LocalDate, frequency: TransactionFrequency): LocalDate {
-        return when (frequency) {
-            TransactionFrequency.DAILY -> current.plus(1, DateTimeUnit.DAY)
-            TransactionFrequency.WEEKLY -> current.plus(7, DateTimeUnit.DAY)
-            TransactionFrequency.BIWEEKLY -> current.plus(14, DateTimeUnit.DAY)
-            TransactionFrequency.MONTHLY -> current.plus(1, DateTimeUnit.MONTH)
-            TransactionFrequency.YEARLY -> current.plus(1, DateTimeUnit.YEAR)
-        }
     }
 }
 

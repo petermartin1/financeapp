@@ -23,9 +23,9 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 
 ## 🆕 New findings — still OPEN
 
-- [ ] **N4. Scheduled-transaction catch-up can double-post on failure.**
-  `ScheduledViewModel.enterDueTransactions:107-153` inserts each missed occurrence in its own DB transaction and advances `nextDate` only after the loop; a crash mid-catch-up re-posts already-entered occurrences (scheduled txns have no `importId`/dedup). Advance `nextDate` per occurrence, or wrap the whole catch-up atomically. (Also: due txns post only via a manual "Enter Due" button — no background poster.)
-- [ ] **N5. `SnapshotScheduler` is never started.** Registered as a Koin `single` with `createSnapshot()` on a manual button, but `startDaily/Weekly/MonthlySnapshots` are never called → automatic performance history never accrues. Start at bootstrap (and `shutdown()` — R33).
+- [x] **N4. Scheduled-transaction catch-up can double-post on failure. — FIXED.**
+  Each caught-up occurrence now gets a deterministic `importId` (`SCHEDULED_<id>_<dateMillis>`); `ScheduledViewModel.enterDueTransactions` plans the catch-up (extracted to the pure `computeDueEntries`) and skips occurrences whose id is already present (`getExistingImportIds`), so a crashed/partial catch-up re-runs without double-posting. Test: `ScheduledEntryPlannerTest` (catch-up, idempotent re-run, end-date, nothing-due). (Background poster — still just the manual "Enter Due" button — remains a separate enhancement.)
+- [x] **N5. `SnapshotScheduler` is never started. — FIXED.** `AppViewModel` now injects the scheduler and calls `startDailySnapshots()` at bootstrap (alongside the price-refresh service), so daily performance history accrues automatically. (Its `shutdown()` is still unwired — tracked under R33.)
 - [x] **N6. Non-supervisor `CoroutineScope(Dispatchers.Main)` in 15 ViewModels. — FIXED.** Added `supervisedViewModelScope()` (`SupervisorJob()` + `CoroutineExceptionHandler`) and swapped all 18 VM scopes to it, so a failure in one `launch {}` no longer cancels the scope/`stateIn` collector, and uncaught exceptions are routed to the new shared `AppErrorBus` (surfaced as a Snackbar in `App.kt`). Test: `CoroutineScopesTest` (scope survives a failing child; error reported; scope still usable). Partially addresses R16/R28 — see those entries.
 - [ ] **N7. `String.format` uses the default locale → wrong separators.** `CurrencyText.kt:186,217` + ~10 duplicate formatters (`InvestmentScreen`, `LotComponents`, `ImportScreen`, …). Non-US locales produce mixed separators. Compounds R17.
 - [ ] **N8. Reconcile marks `isReconciled` but not `isCleared`.** `ReconcileViewModel.completeReconciliation` → `markTransactionReconciled` sets only `isReconciled`, so `getClearedBalance` (sums `isCleared`) excludes reconciled rows. Reconciled should imply cleared.
@@ -76,7 +76,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 
 - [ ] **R31. Dead code:** `Finance.sq` unused; also `PinPad.kt` has no callers now. Remove or document.
 - [ ] **R32. Net-worth aggregations must exclude transfer legs. — OPEN (NARROW).** Per-account balances cancel transfer legs between two active accounts; residual risk is transfers to/from inactive accounts (excluded from the active list).
-- [ ] **R33. Services' scopes never `shutdown()`. — OPEN.** `PriceRefreshService` (started, never stopped); `SnapshotScheduler` (never started — N5).
+- [ ] **R33. Services' scopes never `shutdown()`. — OPEN.** `PriceRefreshService` and `SnapshotScheduler` are both now started at bootstrap (N5) but neither is stopped on app close. Wire `shutdown()` to a desktop close hook. (Process exit currently reaps the daemon scopes, so this is cleanup, not a leak in practice.)
 - [ ] **R34. Koin `single` vs `factory` for ViewModels. — OPEN.** `di/Modules.kt`.
 
 ## Agent findings discarded after verification (still discarded)
@@ -94,7 +94,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 3. P0 auth: R2, R3 ✅ (done, 2026-06-14 — persist lockout + exponential backoff + R19 constant-time legacy compare). R6 (SecureString) still open.
 4. ✅ P0 key storage: R7, R20 — done, 2026-06-14 (refuse-without-keystore policy; no plaintext key fallback; legacy keys migrated into the OS key store).
 5. ✅ P0 import stability: R8, R9, R10 — done, 2026-06-14, with tests.
-6. P1 robustness: N6 ✅ (supervisor scopes + error bus, done 2026-06-14). N4 (scheduled dedup), N5 (start scheduler) still open.
+6. ✅ P1 robustness: N6 (supervisor scopes + error bus), N4 (scheduled dedup), N5 (start scheduler) — done 2026-06-14.
 7. P2/P3 — cleanup backlog (R17/N7 currency, R23/N10 search, …).
 
 ---

@@ -5,6 +5,7 @@ import com.financeapp.domain.model.AppLockState
 import com.financeapp.domain.repository.AppLockRepository
 import com.financeapp.domain.repository.PreferencesRepository
 import com.financeapp.domain.service.PriceRefreshService
+import com.financeapp.domain.service.SnapshotScheduler
 import com.financeapp.security.BiometricAuth
 import com.financeapp.security.BiometricResult
 import com.financeapp.security.BiometricType
@@ -21,7 +22,8 @@ class AppViewModel(
     private val biometricAuth: BiometricAuth,
     private val preferencesRepository: PreferencesRepository,
     private val priceRefreshService: PriceRefreshService,
-    private val databaseSeeder: DatabaseSeeder
+    private val databaseSeeder: DatabaseSeeder,
+    private val snapshotScheduler: SnapshotScheduler
 ) {
     companion object {
         // Track if user has unlocked in this session.
@@ -43,6 +45,7 @@ class AppViewModel(
         checkLockSetup()
         loadThemeMode()
         startPriceRefreshService()
+        startSnapshotScheduler()
     }
 
     private fun seedDatabaseIfNeeded() {
@@ -54,6 +57,12 @@ class AppViewModel(
     private fun startPriceRefreshService() {
         // Start automatic price refresh every 15 minutes for investment holdings
         priceRefreshService.startAutoRefresh(intervalMinutes = 15)
+    }
+
+    private fun startSnapshotScheduler() {
+        // Accrue daily portfolio performance history automatically (the scheduler was
+        // previously registered but never started, so history never accumulated — N5).
+        snapshotScheduler.startDailySnapshots()
     }
 
     private fun loadThemeMode() {
