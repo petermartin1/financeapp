@@ -3,6 +3,7 @@ package com.financeapp.data.repository
 import com.financeapp.db.schema.SplitItems
 import com.financeapp.db.schema.Tags
 import com.financeapp.db.schema.TransactionTags
+import com.financeapp.db.schema.Transactions
 import com.financeapp.domain.model.SplitItem
 import com.financeapp.domain.model.Tag
 import com.financeapp.domain.repository.TagRepository
@@ -146,6 +147,22 @@ class TagRepositoryImpl(
 
     override suspend fun setSplitsForTransaction(transactionId: Long, splits: List<SplitItem>): Unit = withContext(ioDispatcher) {
         transaction(database) {
+            // Splits must account for the whole transaction: their amounts have to sum to the
+            // parent amount, otherwise the books don't balance (R5). An empty list just clears
+            // the splits (the transaction reverts to a single, unsplit line).
+            if (splits.isNotEmpty()) {
+                val parentAmount = Transactions
+                    .selectAll().where { Transactions.id eq transactionId.toInt() }
+                    .singleOrNull()
+                    ?.get(Transactions.amount)
+                    ?: throw IllegalArgumentException("Cannot set splits: transaction $transactionId not found")
+
+                val splitSum = splits.sumOf { it.amount }
+                require(splitSum == parentAmount) {
+                    "Split amounts must sum to the transaction amount ($parentAmount cents) but summed to $splitSum cents"
+                }
+            }
+
             // Clear existing splits
             SplitItems.deleteWhere { SplitItems.transactionId eq transactionId.toInt() }
 

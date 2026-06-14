@@ -363,6 +363,10 @@ class TransactionRepositoryImpl(
         transaction(database) {
             Transactions.update({ Transactions.id eq id.toInt() }) {
                 it[Transactions.isReconciled] = isReconciled
+                // Reconciling implies cleared, otherwise getClearedBalance (which sums
+                // isCleared rows) would exclude reconciled transactions (N8). Un-reconciling
+                // leaves the cleared flag untouched.
+                if (isReconciled) it[Transactions.isCleared] = true
                 it[Transactions.updatedAt] = now
             }
         }

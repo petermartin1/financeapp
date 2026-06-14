@@ -342,9 +342,9 @@ class TagRepositoryTest {
         val transaction = TestDataFactory.createTestTransaction(accountId = testAccountId, amount = 10000)
         val transactionId = transactionRepository.insertTransaction(transaction)
 
-        // Set initial splits
+        // Set initial splits (must sum to the transaction amount, R5)
         val initialSplits = listOf(
-            SplitItem(id = 0, transactionId = transactionId, categoryId = null, amount = 5000, memo = "Initial")
+            SplitItem(id = 0, transactionId = transactionId, categoryId = null, amount = 10000, memo = "Initial")
         )
         tagRepository.setSplitsForTransaction(transactionId, initialSplits)
 
@@ -369,7 +369,7 @@ class TagRepositoryTest {
         val transactionId = transactionRepository.insertTransaction(transaction)
 
         val splits = listOf(
-            SplitItem(id = 0, transactionId = transactionId, categoryId = null, amount = 5000, memo = "Split 1")
+            SplitItem(id = 0, transactionId = transactionId, categoryId = null, amount = 10000, memo = "Split 1")
         )
         tagRepository.setSplitsForTransaction(transactionId, splits)
 
@@ -393,7 +393,8 @@ class TagRepositoryTest {
 
     @Test
     fun `split items should preserve category and amount data`() = runTest {
-        val transaction = TestDataFactory.createTestTransaction(accountId = testAccountId)
+        // The single split must equal the transaction amount (R5).
+        val transaction = TestDataFactory.createTestTransaction(accountId = testAccountId, amount = 12345)
         val transactionId = transactionRepository.insertTransaction(transaction)
 
         val split = SplitItem(
@@ -488,5 +489,56 @@ class TagRepositoryTest {
 
         val tags = tagRepository.getTagsForTransaction(transactionId)
         assertEquals(10, tags.size)
+    }
+
+    // ============================================
+    // Split validation (R5)
+    // ============================================
+
+    @Test
+    fun `setSplitsForTransaction accepts splits that sum to the transaction amount`() = runTest {
+        val txnId = transactionRepository.insertTransaction(
+            TestDataFactory.createTestTransaction(id = 0, accountId = testAccountId, amount = -10000)
+        )
+        val splits = listOf(
+            SplitItem(transactionId = txnId, categoryId = null, amount = -6000, memo = "groceries"),
+            SplitItem(transactionId = txnId, categoryId = null, amount = -4000, memo = "household")
+        )
+
+        tagRepository.setSplitsForTransaction(txnId, splits)
+
+        assertEquals(2, tagRepository.getSplitsForTransaction(txnId).size)
+    }
+
+    @Test
+    fun `setSplitsForTransaction rejects splits that do not sum to the transaction amount`() = runTest {
+        val txnId = transactionRepository.insertTransaction(
+            TestDataFactory.createTestTransaction(id = 0, accountId = testAccountId, amount = -10000)
+        )
+        val splits = listOf(
+            SplitItem(transactionId = txnId, categoryId = null, amount = -6000, memo = "groceries"),
+            SplitItem(transactionId = txnId, categoryId = null, amount = -3000, memo = "household")
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            tagRepository.setSplitsForTransaction(txnId, splits)
+        }
+        // The invalid splits must not have been persisted.
+        assertTrue(tagRepository.getSplitsForTransaction(txnId).isEmpty())
+    }
+
+    @Test
+    fun `setSplitsForTransaction with an empty list clears splits`() = runTest {
+        val txnId = transactionRepository.insertTransaction(
+            TestDataFactory.createTestTransaction(id = 0, accountId = testAccountId, amount = -10000)
+        )
+        tagRepository.setSplitsForTransaction(
+            txnId,
+            listOf(SplitItem(transactionId = txnId, categoryId = null, amount = -10000, memo = null))
+        )
+
+        tagRepository.setSplitsForTransaction(txnId, emptyList())
+
+        assertTrue(tagRepository.getSplitsForTransaction(txnId).isEmpty())
     }
 }

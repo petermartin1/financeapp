@@ -597,4 +597,26 @@ class TransactionRepositoryTest {
             cancelAndConsumeRemainingEvents()
         }
     }
+
+    // ========================================
+    // Reconciliation implies cleared (N8)
+    // ========================================
+
+    @Test
+    fun `markTransactionReconciled also marks the transaction cleared`() = runTest {
+        val id = repository.insertTransaction(
+            TestDataFactory.createTestTransaction(
+                id = 0, accountId = testAccountId, amount = -5000, isCleared = false
+            )
+        )
+
+        repository.markTransactionReconciled(id, true)
+
+        val retrieved = repository.getTransactionById(id)
+        assertNotNull(retrieved)
+        assertTrue(retrieved.isReconciled, "transaction should be reconciled")
+        assertTrue(retrieved.isCleared, "a reconciled transaction must also count as cleared")
+        // The cleared balance (which sums isCleared rows) must now include it.
+        assertEquals(-5000L, accountRepository.getClearedBalance(testAccountId))
+    }
 }
