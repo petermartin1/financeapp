@@ -1,5 +1,7 @@
 package com.financeapp.ui.investments
 
+import java.util.Locale
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -119,7 +121,7 @@ fun InvestmentScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "${formatCurrency(uiState.portfolio.totalGainLoss)} (${String.format("%.2f", uiState.portfolio.totalGainLossPercent)}%)",
+                                text = "${formatCurrency(uiState.portfolio.totalGainLoss)} (${String.format(Locale.ROOT, "%.2f", uiState.portfolio.totalGainLossPercent)}%)",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = if (uiState.portfolio.totalGainLoss >= 0)
                                     Color(0xFF4CAF50) else Color(0xFFF44336)
@@ -291,7 +293,7 @@ private fun HoldingItem(
             Column {
                 Text(holding.holding.name ?: "")
                 Text(
-                    "${String.format("%.4f", holding.holding.shares)} shares @ ${formatCurrency(holding.currentPrice ?: 0)}",
+                    "${String.format(Locale.ROOT, "%.4f", holding.holding.shares)} shares @ ${formatCurrency(holding.currentPrice ?: 0)}",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(
@@ -311,7 +313,7 @@ private fun HoldingItem(
                 val gainLossPercent = holding.gainLossPercent
                 Text(
                     text = if (gainLoss != null && gainLossPercent != null) {
-                        "${formatCurrency(gainLoss)} (${String.format("%.2f", gainLossPercent)}%)"
+                        "${formatCurrency(gainLoss)} (${String.format(Locale.ROOT, "%.2f", gainLossPercent)}%)"
                     } else "—",
                     style = MaterialTheme.typography.bodySmall,
                     color = when {
@@ -425,7 +427,7 @@ private fun AllocationChart(allocation: List<AssetAllocation>) {
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "${String.format("%.1f", item.percentage)}%",
+                        text = "${String.format(Locale.ROOT, "%.1f", item.percentage)}%",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(modifier = Modifier.width(16.dp))
@@ -712,7 +714,7 @@ private fun formatCurrency(cents: Long): String {
     val absCents = kotlin.math.abs(cents)
     val wholeDollars = absCents / 100
     val centsPart = absCents % 100
-    return "$${String.format("%,d", wholeDollars)}.${centsPart.toString().padStart(2, '0')}"
+    return "$${String.format(Locale.ROOT, "%,d", wholeDollars)}.${centsPart.toString().padStart(2, '0')}"
 }
 
 private fun buildLotAnalytics(lots: List<HoldingLot>, currentPrice: Long?): List<LotAnalytics> {

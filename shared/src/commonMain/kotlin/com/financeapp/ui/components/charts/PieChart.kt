@@ -1,5 +1,7 @@
 package com.financeapp.ui.components.charts
 
+import java.util.Locale
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -137,7 +139,7 @@ fun PieChart(
                         ChartLegendItem(
                             label = slice.label,
                             color = slice.color,
-                            value = String.format("%.1f%%", percentage)
+                            value = String.format(Locale.ROOT, "%.1f%%", percentage)
                         )
                     }
                 }
@@ -274,7 +276,7 @@ fun AnimatedPieChart(
                         ChartLegendItem(
                             label = slice.label,
                             color = slice.color,
-                            value = String.format("%.1f%%", percentage)
+                            value = String.format(Locale.ROOT, "%.1f%%", percentage)
                         )
                     }
                 }

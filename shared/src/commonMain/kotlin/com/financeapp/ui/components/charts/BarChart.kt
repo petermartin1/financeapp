@@ -1,5 +1,7 @@
 package com.financeapp.ui.components.charts
 
+import java.util.Locale
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -297,7 +299,7 @@ fun HorizontalBarChart(
 
                 // Value
                 Text(
-                    text = String.format("%.0f", bar.value),
+                    text = String.format(Locale.ROOT, "%.0f", bar.value),
                     modifier = Modifier.width(60.dp),
                     style = MaterialTheme.typography.bodySmall
                 )

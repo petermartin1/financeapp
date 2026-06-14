@@ -14,11 +14,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -47,7 +51,7 @@ data class TransactionsUiState(
     val accounts: List<Account> = emptyList()
 )
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class TransactionsViewModel(
     private val transactionRepository: TransactionRepository,
     private val accountRepository: AccountRepository,
@@ -63,18 +67,24 @@ class TransactionsViewModel(
     var currentAccountId: Long = 0
         private set
 
-    val uiState: StateFlow<TransactionsUiState> = combine(
-        _selectedAccountId,
-        _filter,
-        accountRepository.getAccountsWithBalances()
-    ) { accountId, filter, accountsWithBalances ->
-        Triple(accountId, filter, accountsWithBalances)
-    }.flatMapLatest { (accountId, filter, accountsWithBalances) ->
-        if (accountId == 0L) {
-            return@flatMapLatest kotlinx.coroutines.flow.flowOf(TransactionsUiState())
+    // Transactions are queried by account only. Filter/search changes must NOT re-subscribe
+    // this DB query (N10) — the filter is applied in-memory downstream instead.
+    private val transactionsForAccount: Flow<List<TransactionWithDetails>> =
+        _selectedAccountId.flatMapLatest { accountId ->
+            if (accountId == 0L) flowOf(emptyList())
+            else transactionRepository.getTransactionsWithDetailsByAccount(accountId)
         }
 
-        transactionRepository.getTransactionsWithDetailsByAccount(accountId).map { transactions ->
+    val uiState: StateFlow<TransactionsUiState> = combine(
+        _selectedAccountId,
+        transactionsForAccount,
+        accountRepository.getAccountsWithBalances(),
+        // R23: debounce so rapid typing in search doesn't refilter on every keystroke.
+        _filter.debounce(SEARCH_DEBOUNCE_MS)
+    ) { accountId, transactions, accountsWithBalances, filter ->
+        if (accountId == 0L) {
+            TransactionsUiState()
+        } else {
             val accountInfo = accountsWithBalances.firstOrNull { it.account.id == accountId }
             val accountName = accountInfo?.account?.name ?: ""
             val accountBalance = accountInfo?.balance ?: 0L
@@ -318,5 +328,11 @@ class TransactionsViewModel(
      */
     fun cleanup() {
         scope.cancel()
+    }
+
+    private companion object {
+        // Debounce window for search/filter changes so the in-memory filter isn't recomputed
+        // on every keystroke (R23). Short enough to feel instant.
+        private const val SEARCH_DEBOUNCE_MS = 200L
     }
 }

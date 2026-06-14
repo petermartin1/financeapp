@@ -27,10 +27,10 @@ Each original item (R1–R34) is verified against the *current* source and tagge
   Each caught-up occurrence now gets a deterministic `importId` (`SCHEDULED_<id>_<dateMillis>`); `ScheduledViewModel.enterDueTransactions` plans the catch-up (extracted to the pure `computeDueEntries`) and skips occurrences whose id is already present (`getExistingImportIds`), so a crashed/partial catch-up re-runs without double-posting. Test: `ScheduledEntryPlannerTest` (catch-up, idempotent re-run, end-date, nothing-due). (Background poster — still just the manual "Enter Due" button — remains a separate enhancement.)
 - [x] **N5. `SnapshotScheduler` is never started. — FIXED.** `AppViewModel` now injects the scheduler and calls `startDailySnapshots()` at bootstrap (alongside the price-refresh service), so daily performance history accrues automatically. (Its `shutdown()` is still unwired — tracked under R33.)
 - [x] **N6. Non-supervisor `CoroutineScope(Dispatchers.Main)` in 15 ViewModels. — FIXED.** Added `supervisedViewModelScope()` (`SupervisorJob()` + `CoroutineExceptionHandler`) and swapped all 18 VM scopes to it, so a failure in one `launch {}` no longer cancels the scope/`stateIn` collector, and uncaught exceptions are routed to the new shared `AppErrorBus` (surfaced as a Snackbar in `App.kt`). Test: `CoroutineScopesTest` (scope survives a failing child; error reported; scope still usable). Partially addresses R16/R28 — see those entries.
-- [ ] **N7. `String.format` uses the default locale → wrong separators.** `CurrencyText.kt:186,217` + ~10 duplicate formatters (`InvestmentScreen`, `LotComponents`, `ImportScreen`, …). Non-US locales produce mixed separators. Compounds R17.
+- [x] **N7. `String.format` uses the default locale → wrong separators. — FIXED.** Every `String.format` in `ui/` now passes `Locale.ROOT` (consistent `.`/`,` separators regardless of JVM locale); the percentage formatter is extracted to the testable `formatPercent`. Test: `CurrencyTextTest` (formats correctly under `Locale.GERMANY`).
 - [ ] **N8. Reconcile marks `isReconciled` but not `isCleared`.** `ReconcileViewModel.completeReconciliation` → `markTransactionReconciled` sets only `isReconciled`, so `getClearedBalance` (sums `isCleared`) excludes reconciled rows. Reconciled should imply cleared.
 - [ ] **N9. `importWithMappings` isn't atomic across steps.** Payees, aliases, transactions, tags are each committed separately (`ImportRepository:133-276`); a mid-way failure leaves orphaned payees/aliases or untagged transactions.
-- [ ] **N10. Search re-queries the DB on every keystroke.** `TransactionsViewModel:64-97` feeds `_filter` into the `combine` upstream of `flatMapLatest`, so each character cancels + re-subscribes the full-account query. No debounce (sharper R23).
+- [x] **N10. Search re-queries the DB on every keystroke. — FIXED.** `TransactionsViewModel` now queries transactions by account only (via `transactionsForAccount`/`flatMapLatest`), and the filter is applied in a downstream `combine` — so search/filter changes no longer cancel + re-subscribe the DB query. Verified by compile + review (VM-flow timing tests need infra not present).
 
 ## P0 — Critical (original)
 
@@ -54,7 +54,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 - [ ] **R14. ViewModels' manual scopes never cleaned up. — OPEN.** `cleanup()` exists on 13 VMs but is called only from tests. Bounded leak (VMs injected once in `MainContent`); see N6 for the worse failure mode.
 - [x] **R15. Concurrent `loadData()` collectors. — FIXED (where it mattered).** `TransactionsViewModel` uses `flatMapLatest`; `DashboardViewModel:75` cancels the prior `observeJob`.
 - [~] **R16. Exception swallowing / no error surfacing. — PARTIAL.** Shared error channel added (`AppErrorBus`) and wired to a Snackbar; uncaught VM-scope exceptions now surface there (N6). Remaining: per-operation `try/catch` for specific, actionable messages (the global handler only relays `throwable.message`).
-- [ ] **R17. Hardcoded `$` currency prefix. — OPEN.** `CurrencyText.formatCurrency:220` ignores `Account.currency`; ~10 duplicate formatters. See N7.
+- [~] **R17. Hardcoded `$` currency prefix. — PARTIAL.** Locale-correct separators are now fixed everywhere (N7), but `formatCurrency` still hardcodes the `$` symbol and ignores `Account.currency`. Remaining: thread the account's currency symbol through the `CurrencyText` call sites.
 - [ ] **R18. Weekly snapshot day-of-week indexing. — OPEN (LOW).** `SnapshotScheduler.kt:190` — only called with controlled `1..7`, so it won't actually throw; add a guard.
 
 ## P2 — Medium (original)
@@ -63,7 +63,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 - [x] **R20. Windows DPAPI migration returns plaintext key if store fails. — FIXED.** The `migratePlaintextKeyToDpapi` path that returned the plaintext key on DPAPI-store failure is gone; `getFromDpapi` now returns null on any decrypt failure and the shared `keyFromKeystore` helper throws `KeyStorageException` if the DPAPI store write fails instead of returning/leaving a plaintext key. Folded into the R7 rewrite.
 - [ ] **R21. `EditTransactionDialog` caches category object. — OPEN (LOW).** `AddTransactionDialog.kt:422-436` passes `selectedCategory?.id`; a category deleted mid-edit yields a stale id.
 - [ ] **R22. PIN minimum length is 8. — OPEN.** `PinSetupScreen.kt:32`.
-- [ ] **R23. Search has no debounce. — OPEN.** See N10.
+- [x] **R23. Search has no debounce. — FIXED.** `TransactionsViewModel` debounces the filter flow (`SEARCH_DEBOUNCE_MS = 200ms`) so rapid typing doesn't refilter on every keystroke. See N10 for the re-query fix.
 - [ ] **R24. Bulk reconcile not atomic. — OPEN.** `ReconcileViewModel.completeReconciliation:103-125` loops per-txn marks + the record. (See also N8.)
 - [ ] **R25. Reports hardcode 2000-01-01 for "ALL TIME". — OPEN.** `ReportsViewModel.kt:86`.
 - [ ] **R26. `DatabaseSeeder` runs from `AppViewModel.init {}`. — OPEN.** `AppViewModel.kt:42,48-52`.
@@ -95,7 +95,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 4. ✅ P0 key storage: R7, R20 — done, 2026-06-14 (refuse-without-keystore policy; no plaintext key fallback; legacy keys migrated into the OS key store).
 5. ✅ P0 import stability: R8, R9, R10 — done, 2026-06-14, with tests.
 6. ✅ P1 robustness: N6 (supervisor scopes + error bus), N4 (scheduled dedup), N5 (start scheduler) — done 2026-06-14.
-7. P2/P3 — cleanup backlog (R17/N7 currency, R23/N10 search, …).
+7. P2/P3 — cleanup backlog: N7 ✅ (locale separators), R23/N10 ✅ (search debounce + no re-query) — done 2026-06-14. R17 partial (currency symbol), plus R5/R18/R21/R22/R24/R25/R26/R29–R34 remaining.
 
 ---
 

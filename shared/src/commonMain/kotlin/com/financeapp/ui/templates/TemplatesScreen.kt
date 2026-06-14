@@ -1,5 +1,7 @@
 package com.financeapp.ui.templates
 
+import java.util.Locale
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -226,7 +228,7 @@ private fun TemplateDialog(
     var selectedCategoryId by remember { mutableStateOf(template?.template?.categoryId) }
     var amountText by remember {
         mutableStateOf(template?.template?.amount?.let {
-            String.format("%.2f", kotlin.math.abs(it) / 100.0)
+            String.format(Locale.ROOT, "%.2f", kotlin.math.abs(it) / 100.0)
         } ?: "")
     }
     var isExpense by remember { mutableStateOf((template?.template?.amount ?: -1) < 0) }

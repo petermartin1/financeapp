@@ -1,5 +1,7 @@
 package com.financeapp.ui.transactions
 
+import java.util.Locale
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -456,7 +458,7 @@ fun EditTransactionDialog(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
-                    text = "$${String.format("%.2f", abs(txn.amount) / 100.0)}",
+                    text = "$${String.format(Locale.ROOT, "%.2f", abs(txn.amount) / 100.0)}",
                     style = MaterialTheme.typography.bodyLarge,
                     color = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                 )

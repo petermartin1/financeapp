@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.financeapp.ui.theme.FinanceTypography
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
@@ -177,14 +178,7 @@ fun PercentageText(
         else -> LocalTextStyle.current.color
     }
 
-    val sign = when {
-        percentage > 0 && showSign -> "+"
-        percentage < 0 -> "-"
-        else -> ""
-    }
-
-    val formattedValue = String.format("%.${decimals}f", abs(percentage))
-    val formattedText = "$sign$formattedValue%"
+    val formattedText = formatPercent(percentage, decimals, showSign)
 
     Text(
         text = formattedText,
@@ -192,6 +186,21 @@ fun PercentageText(
         style = style,
         color = displayColor
     )
+}
+
+/**
+ * Formats a percentage with a fixed number of decimals, independent of the JVM default locale
+ * (always "." decimal separator). Negative values get "-"; positive values get "+" when
+ * [showSign] is true. (N7)
+ */
+fun formatPercent(value: Double, decimals: Int = 1, showSign: Boolean = true): String {
+    val sign = when {
+        value > 0 && showSign -> "+"
+        value < 0 -> "-"
+        else -> ""
+    }
+    val formattedValue = String.format(Locale.ROOT, "%.${decimals}f", abs(value))
+    return "$sign$formattedValue%"
 }
 
 /**
@@ -213,8 +222,9 @@ fun formatCurrency(amountCents: Long, showSign: Boolean = false): String {
         else -> ""
     }
 
-    // Format with thousands separator using integer-only math
-    val dollarsStr = String.format("%,d", wholeDollars)
+    // Format with thousands separator. Locale.ROOT keeps the grouping/decimal separators
+    // consistent ("$1,234.56") regardless of the JVM default locale (N7).
+    val dollarsStr = String.format(Locale.ROOT, "%,d", wholeDollars)
     val centsStr = cents.toString().padStart(2, '0')
 
     return "$sign$$dollarsStr.$centsStr"

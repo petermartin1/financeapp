@@ -1,5 +1,7 @@
 package com.financeapp.ui.investments
 
+import java.util.Locale
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -633,7 +635,7 @@ private fun formatCurrency(cents: Long): String {
     val wholeDollars = absCents / 100
     val centsPart = absCents % 100
     val sign = if (cents < 0) "-" else ""
-    return "${sign}${'$'}${String.format("%,d", wholeDollars)}.${centsPart.toString().padStart(2, '0')}"
+    return "${sign}${'$'}${String.format(Locale.ROOT, "%,d", wholeDollars)}.${centsPart.toString().padStart(2, '0')}"
 }
 
 private fun formatShares(shares: Double): String {
