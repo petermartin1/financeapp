@@ -275,7 +275,9 @@ class PerformanceRepositoryImpl(
     }
 
     override fun getAllHoldingPerformance(): Flow<List<HoldingPerformance>> = flow {
-        val holdings = investmentRepository.getAllHoldings()
+        // Holdings without a known price cannot be valued; including them would report a
+        // fake -100% loss and skew allocation, so they are excluded from the performance tab.
+        val holdings = pricedHoldings()
         val totalPortfolioValue = computeTotalPortfolioValue(holdings)
         val performances = holdings.map { holding ->
             calculateHoldingPerformance(holding, totalPortfolioValue)
@@ -285,15 +287,22 @@ class PerformanceRepositoryImpl(
 
     override suspend fun getHoldingPerformance(holdingId: Long): HoldingPerformance? = withContext(Dispatchers.IO) {
         val holding = investmentRepository.getHoldingById(holdingId) ?: return@withContext null
+        // No price means no valuation — surface null rather than a fabricated $0 position.
+        if (investmentRepository.getLatestPrice(holding.symbol) == null) return@withContext null
         val totalPortfolioValue = computeTotalPortfolioValue()
         calculateHoldingPerformance(holding, totalPortfolioValue)
     }
 
-    private suspend fun computeTotalPortfolioValue(holdings: List<Holding>? = null): Long {
+    /** Current holdings that have a known latest price (the only ones that can be valued). */
+    private suspend fun pricedHoldings(holdings: List<Holding>? = null): List<Holding> {
         val allHoldings = holdings ?: investmentRepository.getAllHoldings()
+        return allHoldings.filter { investmentRepository.getLatestPrice(it.symbol) != null }
+    }
+
+    private suspend fun computeTotalPortfolioValue(holdings: List<Holding>? = null): Long {
+        val allHoldings = holdings ?: pricedHoldings()
         return allHoldings.sumOf { h ->
-            val q = investmentRepository.getLatestPrice(h.symbol)
-            val price = q?.price ?: 0L
+            val price = investmentRepository.getLatestPrice(h.symbol)?.price ?: return@sumOf 0L
             kotlin.math.round(h.shares * price).toLong()
         }
     }
@@ -344,7 +353,7 @@ class PerformanceRepositoryImpl(
     }
 
     override suspend fun getPerformanceSummary(): PerformanceSummary = withContext(Dispatchers.IO) {
-        val holdings = investmentRepository.getAllHoldings()
+        val holdings = pricedHoldings()
         val totalPortfolioValue = computeTotalPortfolioValue(holdings)
         val holdingPerformances = holdings.map { calculateHoldingPerformance(it, totalPortfolioValue) }
 
@@ -440,19 +449,19 @@ class PerformanceRepositoryImpl(
                 .orderBy(PortfolioSnapshots.date to SortOrder.ASC)
                 .toList()
 
-            var previousValue: Long? = null
             val snapshots = rows.map { row ->
                 val value = row[HoldingSnapshots.marketValue]
-                val baseValue = previousValue ?: row[HoldingSnapshots.costBasis]
+                // Gain/loss is always measured against the holding's cost basis, not the
+                // previous snapshot's value (which would report period-over-period change
+                // mislabeled as total gain/loss).
+                val costBasis = row[HoldingSnapshots.costBasis]
 
-                val gainLoss = value - baseValue
-                val gainLossPercent = if (baseValue > 0) {
-                    (gainLoss.toDouble() / baseValue.toDouble()) * 100.0
+                val gainLoss = value - costBasis
+                val gainLossPercent = if (costBasis > 0) {
+                    (gainLoss.toDouble() / costBasis.toDouble()) * 100.0
                 } else {
                     0.0
                 }
-
-                previousValue = value
 
                 PerformanceDataPoint(
                     date = row[PortfolioSnapshots.date],
@@ -470,9 +479,17 @@ class PerformanceRepositoryImpl(
     }
 
     override suspend fun recordDividend(dividend: DividendEvent): Long = withContext(Dispatchers.IO) {
-        transaction(database) {
-            DividendEvents.insertAndGetId {
-                it[holdingId] = dividend.holdingId.toInt()
+        // A reinvested dividend buys additional shares at the latest known price. Without a
+        // price we cannot determine the share count, so we record the event only rather than
+        // fabricating a position. (Fetched before the transaction since it suspends.)
+        val reinvestPrice = if (dividend.isReinvested) {
+            investmentRepository.getLatestPrice(dividend.symbol)?.price
+        } else null
+
+        val holdingId = dividend.holdingId.toInt()
+        val (eventId, reinvested) = transaction(database) {
+            val insertedId = DividendEvents.insertAndGetId {
+                it[DividendEvents.holdingId] = holdingId
                 it[symbol] = dividend.symbol
                 it[paymentDate] = dividend.paymentDate
                 it[amount] = dividend.amount
@@ -480,7 +497,42 @@ class PerformanceRepositoryImpl(
                 it[shares] = dividend.shares
                 it[isReinvested] = dividend.isReinvested
             }.value.toLong()
+
+            if (dividend.isReinvested && reinvestPrice != null && reinvestPrice > 0) {
+                val newShares = dividend.amount.toDouble() / reinvestPrice.toDouble()
+                val holdingRow = Holdings.selectAll()
+                    .where { Holdings.id eq holdingId }
+                    .singleOrNull()
+                if (holdingRow != null) {
+                    Holdings.update({ Holdings.id eq holdingId }) {
+                        it[shares] = holdingRow[Holdings.shares] + newShares
+                        it[costBasis] = holdingRow[Holdings.costBasis] + dividend.amount
+                    }
+                    // If the position is tracked as lots, append a matching lot so the lot
+                    // totals stay equal to the holding — otherwise a later recalculation
+                    // from lots would silently drop the reinvested shares.
+                    val hasLots = HoldingLots.selectAll()
+                        .where { HoldingLots.holdingId eq holdingId }
+                        .limit(1)
+                        .any()
+                    if (hasLots) {
+                        HoldingLots.insert {
+                            it[HoldingLots.holdingId] = holdingId
+                            it[acquiredDate] = dividend.paymentDate
+                            it[purpose] = "Dividend reinvestment"
+                            it[shares] = newShares
+                            it[costBasis] = dividend.amount
+                            it[notes] = null
+                        }
+                    }
+                    return@transaction insertedId to true
+                }
+            }
+            insertedId to false
         }
+
+        if (reinvested) investmentRepository.notifyHoldingsChanged()
+        eventId
     }
 
     override fun getHoldingDividends(holdingId: Long): Flow<List<DividendEvent>> = flow {
