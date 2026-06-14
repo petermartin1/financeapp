@@ -14,9 +14,8 @@ class QifParser {
                 return Result.failure(ImportError.ParseError("Empty QIF file"))
             }
 
-            val transactions = mutableListOf<ImportedTransaction>()
+            val rawTransactions = mutableListOf<RawImported>()
             var currentTransaction = QifTransaction()
-            var sequence = 0
 
             for (line in lines) {
                 when {
@@ -25,11 +24,7 @@ class QifParser {
                     }
                     line == "^" -> {
                         // End of transaction
-                        val imported = currentTransaction.toImportedTransaction(sequence)
-                        if (imported != null) {
-                            transactions.add(imported)
-                            sequence++
-                        }
+                        currentTransaction.toRawImported()?.let { rawTransactions.add(it) }
                         currentTransaction = QifTransaction()
                     }
                     line.startsWith("D") -> {
@@ -62,13 +57,10 @@ class QifParser {
 
             // Handle last transaction if file doesn't end with ^
             if (currentTransaction.date != null && (currentTransaction.amountT != null || currentTransaction.amountU != null)) {
-                val imported = currentTransaction.toImportedTransaction(sequence)
-                if (imported != null) {
-                    transactions.add(imported)
-                }
+                currentTransaction.toRawImported()?.let { rawTransactions.add(it) }
             }
 
-            Result.success(transactions)
+            Result.success(rawTransactions.withStableFitIds("QIF"))
         } catch (e: Exception) {
             Result.failure(ImportError.ParseError("Failed to parse QIF: ${e.message}"))
         }
@@ -116,19 +108,15 @@ class QifParser {
         var cleared: String? = null,
         var category: String? = null
     ) {
-        fun toImportedTransaction(sequence: Int): ImportedTransaction? {
+        fun toRawImported(): RawImported? {
             val d = date ?: return null
             // Prefer U (higher precision) over T when both are present
             val a = amountU ?: amountT ?: return null
             val name = payee ?: memo ?: "Unknown"
 
-            // Generate unique ID with sequence to avoid collisions
-            val fitId = "QIF_${d}_${a}_${name.hashCode()}_$sequence"
-
             val type = if (a >= 0) TransactionType.CREDIT else TransactionType.DEBIT
 
-            return ImportedTransaction(
-                fitId = fitId,
+            return RawImported(
                 date = d,
                 amount = a,
                 name = name,

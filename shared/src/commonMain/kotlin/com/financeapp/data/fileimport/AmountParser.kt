@@ -25,12 +25,9 @@ object AmountParser {
         if (amountStr.isBlank()) return null
 
         try {
-            // Clean the string: remove currency symbols, commas, spaces
-            var cleaned = amountStr
-                .replace("$", "")
-                .replace(",", "")
-                .replace(" ", "")
-                .trim()
+            // Clean the string: keep only digits, separators and sign/paren markers. This
+            // drops currency symbols ($, €, £, "USD", …) and any thousands spaces.
+            var cleaned = amountStr.filter { it.isDigit() || it in ".,-+()" }
 
             if (cleaned.isEmpty()) return null
 
@@ -55,6 +52,10 @@ object AmountParser {
             }
 
             if (cleaned.isEmpty()) return null
+
+            // Normalize US ("1,234.56") and European ("1.234,56") separators to a canonical
+            // form using "." as the decimal point and no thousands separators.
+            cleaned = normalizeSeparators(cleaned)
 
             // Split on decimal point
             val parts = cleaned.split(".")
@@ -102,6 +103,46 @@ object AmountParser {
 
         } catch (e: Exception) {
             return null
+        }
+    }
+
+    /**
+     * Resolves "." vs "," as decimal/thousands separators, returning a string that uses "."
+     * as the decimal point with no thousands separators.
+     *
+     * Rules:
+     * - Both separators present: the right-most one is the decimal point; the other is the
+     *   thousands separator. (e.g. "1.234,56" -> "1234.56", "1,234.56" -> "1234.56")
+     * - One separator type, appearing more than once: it is a thousands separator
+     *   (e.g. "1.234.567" -> "1234567").
+     * - A single "." is the decimal point (US default: "12.345" -> "12.345").
+     * - A single "," with exactly 3 trailing digits is a US thousands separator
+     *   ("1,234" -> "1234"); otherwise it is a European decimal comma
+     *   ("1234,56" -> "1234.56", "1,5" -> "1.5").
+     */
+    private fun normalizeSeparators(value: String): String {
+        val hasDot = value.contains('.')
+        val hasComma = value.contains(',')
+
+        return when {
+            hasDot && hasComma -> {
+                val decimalSep = if (value.lastIndexOf('.') > value.lastIndexOf(',')) '.' else ','
+                val thousandsSep = if (decimalSep == '.') ',' else '.'
+                value.replace(thousandsSep.toString(), "").replace(decimalSep, '.')
+            }
+            hasDot || hasComma -> {
+                val sep = if (hasDot) '.' else ','
+                val occurrences = value.count { it == sep }
+                val digitsAfter = value.length - value.lastIndexOf(sep) - 1
+                // Repeated separators are always thousands; a single comma grouping 3 digits
+                // is a US thousands separator. Everything else is the decimal point.
+                if (occurrences > 1 || (sep == ',' && digitsAfter == 3)) {
+                    value.replace(sep.toString(), "")
+                } else {
+                    value.replace(sep, '.')
+                }
+            }
+            else -> value
         }
     }
 

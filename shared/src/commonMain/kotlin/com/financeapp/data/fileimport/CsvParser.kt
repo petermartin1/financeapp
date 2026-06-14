@@ -9,30 +9,26 @@ class CsvParser {
         config: CsvImportConfig
     ): Result<List<ImportedTransaction>> {
         return try {
-            val lines = content.lines()
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
+            // Tokenize the whole document so quoted fields may contain commas and newlines
+            // (RFC 4180), rather than splitting on physical lines first.
+            val rows = parseCsvRows(content)
 
-            if (lines.isEmpty()) {
+            if (rows.isEmpty()) {
                 return Result.failure(ImportError.ParseError("Empty CSV file"))
             }
 
             // Skip header rows
-            val dataLines = lines.drop(config.headerRows)
+            val dataRows = rows.drop(config.headerRows)
 
-            val transactions = dataLines.mapIndexedNotNull { index, line ->
-                parseLine(line, config, index)
-            }
+            val raw = dataRows.mapNotNull { columns -> parseRow(columns, config) }
 
-            Result.success(transactions)
+            Result.success(raw.withStableFitIds("CSV"))
         } catch (e: Exception) {
             Result.failure(ImportError.ParseError("Failed to parse CSV: ${e.message}"))
         }
     }
 
-    private fun parseLine(line: String, config: CsvImportConfig, rowIndex: Int): ImportedTransaction? {
-        val columns = parseCsvLine(line)
-
+    private fun parseRow(columns: List<String>, config: CsvImportConfig): RawImported? {
         if (columns.size <= maxOf(
                 config.dateColumn,
                 config.amountColumn,
@@ -50,13 +46,9 @@ class CsvParser {
         val date = parseDate(dateStr, config.dateFormat) ?: return null
         val amount = parseAmount(amountStr, config)
 
-        // Generate a unique ID from date + amount + description + row index to avoid collisions
-        val fitId = "${date}_${amount}_${description.hashCode()}_$rowIndex"
-
         val type = if (amount >= 0) TransactionType.CREDIT else TransactionType.DEBIT
 
-        return ImportedTransaction(
-            fitId = fitId,
+        return RawImported(
             date = date,
             amount = amount,
             name = description.trim(),
@@ -66,32 +58,50 @@ class CsvParser {
         )
     }
 
-    private fun parseCsvLine(line: String): List<String> {
-        val result = mutableListOf<String>()
-        var current = StringBuilder()
+    /**
+     * Splits the entire CSV document into rows of fields, honoring quoted fields that contain
+     * commas, escaped quotes (""), and embedded newlines. Fully-empty rows are dropped.
+     */
+    private fun parseCsvRows(content: String): List<List<String>> {
+        val rows = mutableListOf<List<String>>()
+        var currentRow = mutableListOf<String>()
+        val field = StringBuilder()
         var inQuotes = false
         var i = 0
 
-        while (i < line.length) {
-            val char = line[i]
+        fun endField() {
+            currentRow.add(field.toString().trim())
+            field.clear()
+        }
+        fun endRow() {
+            endField()
+            rows.add(currentRow)
+            currentRow = mutableListOf()
+        }
+
+        while (i < content.length) {
+            val char = content[i]
             when {
-                char == '"' && inQuotes && i + 1 < line.length && line[i + 1] == '"' -> {
-                    // Escaped quote ("") inside quoted field - convert to single quote
-                    current.append('"')
-                    i++ // Skip the second quote
+                inQuotes -> when {
+                    char == '"' && i + 1 < content.length && content[i + 1] == '"' -> {
+                        field.append('"') // escaped quote
+                        i++
+                    }
+                    char == '"' -> inQuotes = false
+                    else -> field.append(char) // commas and newlines are literal inside quotes
                 }
-                char == '"' -> inQuotes = !inQuotes
-                char == ',' && !inQuotes -> {
-                    result.add(current.toString().trim())
-                    current = StringBuilder()
-                }
-                else -> current.append(char)
+                char == '"' -> inQuotes = true
+                char == ',' -> endField()
+                char == '\n' -> endRow()
+                char == '\r' -> { /* part of CRLF; row break handled by \n */ }
+                else -> field.append(char)
             }
             i++
         }
-        result.add(current.toString().trim())
+        // Flush the trailing field/row (file may not end with a newline).
+        endRow()
 
-        return result
+        return rows.filter { row -> row.any { it.isNotEmpty() } }
     }
 
     private fun parseDate(dateStr: String, format: DateFormat): LocalDate? {
