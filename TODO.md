@@ -66,7 +66,7 @@ Each original item (R1–R34) is verified against the *current* source and tagge
 - [x] **R23. Search has no debounce. — FIXED.** `TransactionsViewModel` debounces the filter flow (`SEARCH_DEBOUNCE_MS = 200ms`) so rapid typing doesn't refilter on every keystroke. See N10 for the re-query fix.
 - [x] **R24. Bulk reconcile not atomic. — FIXED.** New `AccountRepository.completeReconciliation` marks all selected transactions reconciled+cleared and inserts the session record in one `transaction {}`; `ReconcileViewModel` calls it instead of looping per-txn marks + a separate insert. Test: `AccountRepositoryTest` (marks reconciled/cleared + records session + balances).
 - [x] **R25. Reports hardcode 2000-01-01 for "ALL TIME". — FIXED.** `ReportsViewModel.calculateDateRange` now spans `1970-01-01`..`now + 100y` for `ALL_TIME`, so older imports and future-dated/scheduled entries are no longer clipped.
-- [ ] **R26. `DatabaseSeeder` runs from `AppViewModel.init {}`. — OPEN.** `AppViewModel.kt:42,48-52`.
+- [~] **R26. `DatabaseSeeder` runs from `AppViewModel.init {}`. — WON'T FIX (not a bug).** `DatabaseSeeder.seedIfEmpty` only inserts *default categories* (no fake accounts/transactions) and only when none exist — desirable first-run onboarding. The remaining point is purely where it's triggered; moving it yields no behavioral benefit. Left as-is by design.
 - [ ] **R27. No R8/ProGuard rules. — OPEN (desktop-only today).**
 - [~] **R28. No global error boundary / crash reporter. — PARTIAL.** Global error boundary now exists: VM scopes route uncaught exceptions to `AppErrorBus` → Snackbar (N6/R16). Remaining: a persistent crash reporter/log sink.
 - [ ] **R29. `App.kt` navigation state is `remember` only. — OPEN (LOW for desktop).** `App.kt:105-107`.
