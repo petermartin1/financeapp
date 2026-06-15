@@ -159,8 +159,13 @@ class AppLockRepositoryImpl(
 
     private fun deriveKey(pin: String, salt: ByteArray, iterations: Int, algorithm: String): ByteArray {
         val spec = PBEKeySpec(pin.toCharArray(), salt, iterations, DERIVED_KEY_LENGTH_BITS)
-        val factory = SecretKeyFactory.getInstance(algorithm)
-        return factory.generateSecret(spec).encoded
+        try {
+            val factory = SecretKeyFactory.getInstance(algorithm)
+            return factory.generateSecret(spec).encoded
+        } finally {
+            // Zero the password CharArray copy held by the spec rather than leaving it to GC (R6).
+            spec.clearPassword()
+        }
     }
 
     private fun hashLegacyPin(pin: String): String {
