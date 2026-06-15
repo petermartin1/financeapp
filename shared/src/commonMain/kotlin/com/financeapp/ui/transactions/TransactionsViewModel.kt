@@ -1,6 +1,7 @@
 package com.financeapp.ui.transactions
 
 import com.financeapp.ui.supervisedViewModelScope
+import com.financeapp.ui.launchReporting
 
 import com.financeapp.domain.model.Account
 import com.financeapp.domain.model.Transaction
@@ -192,7 +193,7 @@ class TransactionsViewModel(
         isCleared: Boolean,
         tagIds: List<Long> = emptyList()
     ) {
-        scope.launch {
+        scope.launchReporting("save the transaction") {
             // Get or create payee
             val payeeId = payeeName?.let { name ->
                 val existing = payeeRepository.getPayeeByName(name)
@@ -227,7 +228,7 @@ class TransactionsViewModel(
     }
 
     fun deleteTransaction(id: Long) {
-        scope.launch {
+        scope.launchReporting("delete the transaction") {
             transactionRepository.deleteTransaction(id)
 
             // Notify transaction list and account list to refresh
@@ -237,7 +238,7 @@ class TransactionsViewModel(
     }
 
     fun toggleCleared(transaction: Transaction) {
-        scope.launch {
+        scope.launchReporting("update the transaction") {
             transactionRepository.updateTransaction(
                 transaction.copy(
                     isCleared = !transaction.isCleared,
@@ -251,7 +252,7 @@ class TransactionsViewModel(
     }
 
     fun setCleared(transaction: Transaction, cleared: Boolean) {
-        scope.launch {
+        scope.launchReporting("update the transaction") {
             transactionRepository.updateTransaction(
                 transaction.copy(
                     isCleared = cleared,
@@ -271,7 +272,7 @@ class TransactionsViewModel(
         isCleared: Boolean,
         tagIds: List<Long>
     ) {
-        scope.launch {
+        scope.launchReporting("save your changes") {
             transactionRepository.updateTransaction(
                 transaction.copy(
                     categoryId = categoryId,
@@ -302,7 +303,7 @@ class TransactionsViewModel(
         memo: String?,
         date: LocalDate
     ) {
-        scope.launch {
+        scope.launchReporting("create the transfer") {
             // Get account names for memo
             val fromAccount = accountRepository.getAccountById(currentAccountId)
             val toAccount = accountRepository.getAccountById(toAccountId)

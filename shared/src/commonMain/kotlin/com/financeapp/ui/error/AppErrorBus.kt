@@ -19,11 +19,13 @@ object AppErrorBus {
     )
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
-    fun report(message: String) {
+    /** Surfaces [message] to the UI and records it (with [throwable], if any) to the crash log. */
+    fun report(message: String, throwable: Throwable? = null) {
         _messages.tryEmit(message)
+        CrashLog.record(message, throwable)
     }
 
     fun report(throwable: Throwable) {
-        report(throwable.message?.takeIf { it.isNotBlank() } ?: "Something went wrong. Please try again.")
+        report(throwable.message?.takeIf { it.isNotBlank() } ?: "Something went wrong. Please try again.", throwable)
     }
 }

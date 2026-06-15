@@ -1,6 +1,7 @@
 package com.financeapp.ui.reconcile
 
 import com.financeapp.ui.supervisedViewModelScope
+import com.financeapp.ui.launchReporting
 
 import com.financeapp.domain.model.Transaction
 import com.financeapp.domain.repository.TransactionRepository
@@ -106,7 +107,7 @@ class ReconcileViewModel(
         val state = _uiState.value
         if (state.difference != 0L) return
 
-        scope.launch {
+        scope.launchReporting("complete the reconciliation") {
             val reconciledIds = state.transactions.filter { it.isSelected }.map { it.id }
 
             // Mark the selected transactions reconciled and record the session atomically (R24).
