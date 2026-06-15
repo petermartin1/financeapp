@@ -42,6 +42,7 @@ fun CurrencyText(
     style: TextStyle = FinanceTypography.currencyMedium,
     color: Color? = null,
     showSign: Boolean = false,
+    currencyCode: String = "USD",
     fontWeight: FontWeight? = null,
     textAlign: TextAlign? = null,
     overflow: TextOverflow = TextOverflow.Clip,
@@ -53,7 +54,7 @@ fun CurrencyText(
         else -> LocalTextStyle.current.color
     }
 
-    val formattedText = formatCurrency(amountCents, showSign)
+    val formattedText = formatCurrency(amountCents, currencyCode, showSign)
 
     Text(
         text = formattedText,
@@ -132,13 +133,15 @@ fun CurrencyTextSmall(
 fun BalanceText(
     amountCents: Long,
     modifier: Modifier = Modifier,
-    color: Color? = null
+    color: Color? = null,
+    currencyCode: String = "USD"
 ) {
     CurrencyText(
         amountCents = amountCents,
         modifier = modifier,
         style = FinanceTypography.balance,
-        color = color
+        color = color,
+        currencyCode = currencyCode
     )
 }
 
@@ -211,7 +214,14 @@ fun formatPercent(value: Double, decimals: Int = 1, showSign: Boolean = true): S
  * @param showSign Whether to show + for positive amounts
  * @return Formatted currency string (e.g., "$1,234.56" or "-$1,234.56")
  */
-fun formatCurrency(amountCents: Long, showSign: Boolean = false): String {
+fun formatCurrency(amountCents: Long, showSign: Boolean = false): String =
+    formatCurrency(amountCents, currencyCode = "USD", showSign = showSign)
+
+/**
+ * Formats an amount in cents using the symbol for [currencyCode] (R17). Amounts are stored as
+ * integer cents app-wide, so all currencies use 2 decimal places; only the symbol varies.
+ */
+fun formatCurrency(amountCents: Long, currencyCode: String, showSign: Boolean = false): String {
     val absCents = abs(amountCents)
     val wholeDollars = absCents / 100
     val cents = absCents % 100
@@ -227,7 +237,21 @@ fun formatCurrency(amountCents: Long, showSign: Boolean = false): String {
     val dollarsStr = String.format(Locale.ROOT, "%,d", wholeDollars)
     val centsStr = cents.toString().padStart(2, '0')
 
-    return "$sign$$dollarsStr.$centsStr"
+    return "$sign${currencySymbol(currencyCode)}$dollarsStr.$centsStr"
+}
+
+/**
+ * Maps an ISO-4217 currency code to a display symbol, falling back to a code-prefixed form
+ * (e.g. "SEK 1,234.56") for currencies without a well-known symbol.
+ */
+fun currencySymbol(currencyCode: String): String = when (currencyCode.uppercase()) {
+    "", "USD", "CAD", "AUD", "NZD", "HKD", "SGD", "MXN" -> "$"
+    "EUR" -> "€"
+    "GBP" -> "£"
+    "JPY", "CNY" -> "¥"
+    "INR" -> "₹"
+    "CHF" -> "CHF "
+    else -> "$currencyCode "
 }
 
 /**

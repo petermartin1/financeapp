@@ -31,6 +31,18 @@ class CurrencyTextTest {
     }
 
     @Test
+    fun `formatCurrency uses the symbol for the given currency code`() {
+        withLocale(Locale.GERMANY) {
+            assertEquals("€1,234.56", formatCurrency(123_456, currencyCode = "EUR"))
+            assertEquals("£1,234.56", formatCurrency(123_456, currencyCode = "GBP"))
+            assertEquals("-¥1,234.56", formatCurrency(-123_456, currencyCode = "JPY"))
+            assertEquals("$1,234.56", formatCurrency(123_456, currencyCode = "USD"))
+            // Unknown codes fall back to a code-prefixed form.
+            assertEquals("SEK 1,234.56", formatCurrency(123_456, currencyCode = "SEK"))
+        }
+    }
+
+    @Test
     fun `formatPercent is locale independent and signed`() {
         withLocale(Locale.GERMANY) {
             assertEquals("+12.3%", formatPercent(12.34, decimals = 1))

@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.AccountType
 import com.financeapp.domain.model.AccountWithBalance
+import com.financeapp.ui.components.formatCurrency
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -240,7 +241,7 @@ private fun AccountCard(
                 horizontalAlignment = Alignment.End
             ) {
                 Text(
-                    text = formatCurrency(accountWithBalance.balance),
+                    text = formatCurrency(accountWithBalance.balance, accountWithBalance.account.currency),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = if (accountWithBalance.balance >= 0)
@@ -250,7 +251,7 @@ private fun AccountCard(
                 )
                 if (accountWithBalance.clearedBalance != accountWithBalance.balance) {
                     Text(
-                        text = "Cleared: ${formatCurrency(accountWithBalance.clearedBalance)}",
+                        text = "Cleared: ${formatCurrency(accountWithBalance.clearedBalance, accountWithBalance.account.currency)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -273,12 +274,4 @@ private fun AccountType.displayName(): String = when (this) {
     AccountType.CREDIT_CARD -> "Credit Cards"
     AccountType.INVESTMENT -> "Investments"
     AccountType.CASH -> "Cash"
-}
-
-private fun formatCurrency(cents: Long): String {
-    val absCents = kotlin.math.abs(cents)
-    val wholeDollars = absCents / 100
-    val centsPart = absCents % 100
-    val sign = if (cents < 0) "-" else ""
-    return "$sign$$wholeDollars.${centsPart.toString().padStart(2, '0')}"
 }
