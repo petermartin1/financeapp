@@ -1,5 +1,10 @@
 package com.financeapp.data.fileimport
 
+import com.financeapp.db.schema.PayeeAliases
+import com.financeapp.db.schema.Payees
+import com.financeapp.db.schema.TransactionTags
+import com.financeapp.db.schema.Transactions
+import com.financeapp.domain.matching.PayeeMatcher
 import com.financeapp.domain.model.MatchType
 import com.financeapp.domain.model.Payee
 import com.financeapp.domain.model.PayeeAlias
@@ -16,6 +21,13 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlin.time.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.transactions.transaction
 
 class ImportRepository(
     private val transactionRepository: TransactionRepository,
@@ -23,6 +35,8 @@ class ImportRepository(
     private val accountRepository: AccountRepository,
     private val payeeMatchingRepository: PayeeMatchingRepository,
     private val tagRepository: TagRepository,
+    private val database: Database,
+    private val payeeMatcher: PayeeMatcher = PayeeMatcher(),
     private val ofxParser: OfxParser = OfxParser(),
     private val csvParser: CsvParser = CsvParser(),
     private val qifParser: QifParser = QifParser()
@@ -140,9 +154,9 @@ class ImportRepository(
         }
 
         try {
-            val now = Clock.System.now()
+            val nowMillis = Clock.System.now().toEpochMilliseconds()
 
-            // Step 1: Check for existing import IDs
+            // --- Reads / dedup precomputation (no writes) ---
             val importIds = transactions.map { it.fitId }
             val existingIds = transactionRepository.getExistingImportIds(importIds)
             val newTransactions = transactions.filter { it.fitId !in existingIds }
@@ -157,112 +171,107 @@ class ImportRepository(
                 ))
             }
 
-            // Step 2: Create new payees from mappings
-            // Deduplicate by name (case-insensitive) to avoid unique constraint violations
-            val aliasesToCreate = mutableListOf<PayeeAlias>()
+            val existingPayeesByName = payeeRepository.getAllPayees().first()
+                .associateBy { it.name.lowercase() }
 
-            // Get all existing payees to check for duplicates
-            val existingPayees = payeeRepository.getAllPayees().first()
-            val existingPayeesByName = existingPayees.associateBy { it.name.lowercase() }
-
+            // New payees to create (deduplicated by name, skipping ones that already exist)
             val newPayeesToCreate = payeeMappings.values
                 .filter { it.createNew && it.newPayeeName != null }
                 .groupBy { it.newPayeeName!!.lowercase() }
                 .mapNotNull { (normalizedName, mappings) ->
-                    // Skip if a payee with this name already exists in the database
-                    if (normalizedName in existingPayeesByName) {
-                        null
-                    } else {
-                        // Use the first mapping's data for each unique payee name
-                        val firstMapping = mappings.first()
-                        Payee(
-                            name = firstMapping.newPayeeName!!,
-                            defaultCategoryId = firstMapping.categoryId
-                        )
+                    if (normalizedName in existingPayeesByName) null
+                    else Payee(name = mappings.first().newPayeeName!!, defaultCategoryId = mappings.first().categoryId)
+                }
+
+            // --- All writes in ONE transaction so a mid-way failure leaves nothing behind (N9) ---
+            transaction(database) {
+                // Payees
+                val newPayeeIds = newPayeesToCreate.associate { payee ->
+                    val id = Payees.insert {
+                        it[Payees.name] = payee.name
+                        it[Payees.defaultCategoryId] = payee.defaultCategoryId?.toInt()
+                    }[Payees.id].value.toLong()
+                    payee.name.lowercase() to id
+                }
+
+                // Resolve payee ids per imported name, collecting alias candidates to remember
+                val payeeMap = mutableMapOf<String, Long>()
+                // normalized alias name -> (canonical payee id, preferred category id)
+                val aliasByNormalizedName = LinkedHashMap<String, Pair<Long, Long?>>()
+                for ((importedName, mapping) in payeeMappings) {
+                    val payeeId = when {
+                        mapping.createNew && mapping.newPayeeName != null ->
+                            newPayeeIds[mapping.newPayeeName.lowercase()]
+                                ?: existingPayeesByName[mapping.newPayeeName.lowercase()]?.id
+                        mapping.resolvedPayeeId != null -> mapping.resolvedPayeeId
+                        else -> null
+                    }
+                    if (payeeId != null) {
+                        payeeMap[importedName.lowercase()] = payeeId
+                        if (mapping.rememberMapping) {
+                            val normalized = payeeMatcher.normalize(importedName)
+                            if (normalized.isNotBlank()) {
+                                aliasByNormalizedName[normalized] =
+                                    payeeId to (if (mapping.applyCategory) mapping.categoryId else null)
+                            }
+                        }
                     }
                 }
 
-            val newPayeeIds = if (newPayeesToCreate.isNotEmpty()) {
-                payeeRepository.batchInsertPayees(newPayeesToCreate)
-            } else {
-                emptyMap()
-            }
-
-            // Step 3: Build complete payee name -> ID map
-            val payeeMap = mutableMapOf<String, Long>()
-            for ((importedName, mapping) in payeeMappings) {
-                val payeeId = when {
-                    mapping.createNew && mapping.newPayeeName != null -> {
-                        // Check if we created a new payee with this name
-                        newPayeeIds[mapping.newPayeeName.lowercase()]
-                            // Or if a payee with this name already existed
-                            ?: existingPayeesByName[mapping.newPayeeName.lowercase()]?.id
-                    }
-                    mapping.resolvedPayeeId != null -> {
-                        mapping.resolvedPayeeId
-                    }
-                    else -> null
-                }
-
-                if (payeeId != null) {
-                    payeeMap[importedName.lowercase()] = payeeId
-
-                    // Save alias if user wants to remember this mapping
-                    if (mapping.rememberMapping) {
-                        aliasesToCreate.add(
-                            PayeeAlias(
-                                aliasName = importedName,
-                                canonicalPayeeId = payeeId,
-                                matchType = MatchType.MANUAL,
-                                confidence = null,
-                                preferredCategoryId = if (mapping.applyCategory) mapping.categoryId else null,
-                                createdAt = now
-                            )
-                        )
+                // Aliases — skip any whose normalized name is already stored (mirrors batchInsertAliases)
+                if (aliasByNormalizedName.isNotEmpty()) {
+                    val existingAliasNames = PayeeAliases
+                        .select(PayeeAliases.aliasName)
+                        .where { PayeeAliases.aliasName inList aliasByNormalizedName.keys.toList() }
+                        .map { it[PayeeAliases.aliasName] }
+                        .toSet()
+                    for ((normalized, info) in aliasByNormalizedName) {
+                        if (normalized in existingAliasNames) continue
+                        val (canonicalPayeeId, preferredCategoryId) = info
+                        PayeeAliases.insert {
+                            it[PayeeAliases.aliasName] = normalized
+                            it[PayeeAliases.canonicalPayeeId] = canonicalPayeeId.toInt()
+                            it[PayeeAliases.matchType] = MatchType.MANUAL.name
+                            it[PayeeAliases.confidence] = null
+                            it[PayeeAliases.preferredCategoryId] = preferredCategoryId?.toInt()
+                            it[PayeeAliases.createdAt] = nowMillis
+                        }
                     }
                 }
-            }
 
-            // Step 4: Batch insert aliases
-            if (aliasesToCreate.isNotEmpty()) {
-                payeeMatchingRepository.batchInsertAliases(aliasesToCreate)
-            }
+                // Transactions and their tags together, so a tagged import never leaves a
+                // transaction inserted but its tags missing.
+                for (importedTxn in newTransactions) {
+                    val mapping = payeeMappings[importedTxn.name]
+                    val dateMillis = importedTxn.date.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+                    val txnId = Transactions.insert {
+                        it[Transactions.accountId] = accountId.toInt()
+                        it[Transactions.date] = dateMillis
+                        it[Transactions.amount] = importedTxn.amount
+                        it[Transactions.payeeId] = payeeMap[importedTxn.name.lowercase()]?.toInt()
+                        it[Transactions.categoryId] = (if (mapping?.applyCategory == true) mapping.categoryId else null)?.toInt()
+                        it[Transactions.memo] = importedTxn.memo
+                        it[Transactions.checkNumber] = importedTxn.checkNumber
+                        it[Transactions.isCleared] = false
+                        it[Transactions.importId] = importedTxn.fitId
+                        it[Transactions.transactionType] = importedTxn.type.name
+                        it[Transactions.sic] = importedTxn.sic
+                        it[Transactions.createdAt] = nowMillis
+                        it[Transactions.updatedAt] = nowMillis
+                    }[Transactions.id].value.toLong()
 
-            // Step 5: Create transactions
-            val transactionsToInsert = newTransactions.map { importedTxn ->
-                val mapping = payeeMappings[importedTxn.name]
-                Transaction(
-                    accountId = accountId,
-                    date = importedTxn.date,
-                    amount = importedTxn.amount,
-                    payeeId = payeeMap[importedTxn.name.lowercase()],
-                    categoryId = if (mapping?.applyCategory == true) mapping.categoryId else null,
-                    memo = importedTxn.memo,
-                    checkNumber = importedTxn.checkNumber,
-                    isCleared = false,
-                    importId = importedTxn.fitId,
-                    transactionType = importedTxn.type.name,
-                    sic = importedTxn.sic,
-                    createdAt = now,
-                    updatedAt = now
-                )
-            }
-
-            // Step 6: Batch insert transactions
-            val insertedTransactionIds = transactionRepository.batchInsertTransactions(transactionsToInsert)
-
-            // Step 7: Apply tags from mappings
-            for ((index, importedTxn) in newTransactions.withIndex()) {
-                val mapping = payeeMappings[importedTxn.name]
-                if (mapping != null && mapping.tagIds.isNotEmpty()) {
-                    val transactionId = insertedTransactionIds[index]
-                    tagRepository.setTransactionTags(transactionId, mapping.tagIds)
+                    for (tagId in mapping?.tagIds?.distinct().orEmpty()) {
+                        TransactionTags.insert {
+                            it[TransactionTags.transactionId] = txnId.toInt()
+                            it[TransactionTags.tagId] = tagId.toInt()
+                        }
+                    }
                 }
             }
 
-            // Step 8: Notify that balances have changed
             accountRepository.notifyBalancesChanged()
             payeeRepository.notifyPayeesChanged()
+            transactionRepository.notifyTransactionsChanged()
 
             return@withContext Result.success(ImportSummary(
                 totalInFile = transactions.size,

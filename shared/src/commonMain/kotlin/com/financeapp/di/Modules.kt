@@ -99,7 +99,7 @@ val sharedModule = module {
     single { YahooFinanceClient(get()) }
     single<QuoteRepository> { QuoteRepositoryImpl(get(), get(), get()) }
     single<PerformanceRepository> { PerformanceRepositoryImpl(get(), get(), get()) }
-    single { ImportRepository(get(), get(), get(), get(), get()) }
+    single { ImportRepository(get(), get(), get(), get(), get(), get()) }
     single { OfxClient() }
     single { SecureCredentialStore() }
     single { OfxRepository(get(), get(), get(), get()) }

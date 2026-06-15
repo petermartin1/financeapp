@@ -1,0 +1,126 @@
+package com.financeapp.data.fileimport
+
+import com.financeapp.data.repository.AccountRepositoryImpl
+import com.financeapp.data.repository.PayeeMatchingRepositoryImpl
+import com.financeapp.data.repository.PayeeRepositoryImpl
+import com.financeapp.data.repository.TagRepositoryImpl
+import com.financeapp.data.repository.TransactionRepositoryImpl
+import com.financeapp.domain.matching.PayeeMatcher
+import com.financeapp.domain.model.PayeeMapping
+import com.financeapp.domain.model.Tag
+import com.financeapp.test.TestDataFactory
+import com.financeapp.test.clearAllTables
+import com.financeapp.test.createTestDatabase
+import com.financeapp.test.testDate
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
+import org.jetbrains.exposed.sql.Database
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class ImportRepositoryTest {
+
+    private val dispatcher = UnconfinedTestDispatcher()
+    private lateinit var database: Database
+    private lateinit var transactionRepository: TransactionRepositoryImpl
+    private lateinit var payeeRepository: PayeeRepositoryImpl
+    private lateinit var tagRepository: TagRepositoryImpl
+    private lateinit var importRepository: ImportRepository
+
+    @BeforeTest
+    fun setup() {
+        database = createTestDatabase()
+        transactionRepository = TransactionRepositoryImpl(database, dispatcher)
+        payeeRepository = PayeeRepositoryImpl(database, dispatcher)
+        tagRepository = TagRepositoryImpl(database, dispatcher)
+        importRepository = ImportRepository(
+            transactionRepository = transactionRepository,
+            payeeRepository = payeeRepository,
+            accountRepository = AccountRepositoryImpl(database, dispatcher),
+            payeeMatchingRepository = PayeeMatchingRepositoryImpl(database, PayeeMatcher(), dispatcher),
+            tagRepository = tagRepository,
+            database = database
+        )
+    }
+
+    @AfterTest
+    fun tearDown() {
+        database.clearAllTables()
+    }
+
+    private suspend fun insertAccount(): Long =
+        AccountRepositoryImpl(database, dispatcher).insertAccount(TestDataFactory.createTestAccount())
+
+    private fun importedTxn(fitId: String, name: String) = ImportedTransaction(
+        fitId = fitId,
+        date = testDate(),
+        amount = -5000,
+        name = name,
+        memo = null,
+        checkNumber = null,
+        type = TransactionType.DEBIT
+    )
+
+    @Test
+    fun `importWithMappings creates payee, transaction, alias and tags`() = runTest {
+        val accountId = insertAccount()
+        val tagId = tagRepository.insertTag(Tag(name = "Groceries", color = null))
+
+        val mappings = mapOf(
+            "WHOLE FOODS" to PayeeMapping(
+                importedName = "WHOLE FOODS",
+                resolvedPayeeId = null,
+                createNew = true,
+                newPayeeName = "Whole Foods",
+                categoryId = null,
+                tagIds = listOf(tagId),
+                applyCategory = false,
+                rememberMapping = true
+            )
+        )
+
+        val result = importRepository.importWithMappings(listOf(importedTxn("F1", "WHOLE FOODS")), accountId, mappings)
+
+        assertTrue(result.isSuccess, "import should succeed")
+        assertEquals(1, result.getOrThrow().imported)
+        assertTrue(payeeRepository.getAllPayees().first().any { it.name == "Whole Foods" })
+
+        val saved = transactionRepository.getTransactionByImportId("F1")
+        requireNotNull(saved) { "imported transaction should exist" }
+        assertTrue(tagRepository.getTagsForTransaction(saved.id).any { it.id == tagId })
+    }
+
+    @Test
+    fun `importWithMappings rolls back everything when a step fails (atomicity)`() = runTest {
+        val accountId = insertAccount()
+
+        // Reference a tag id that does not exist -> FK violation when tagging the transaction,
+        // which must roll back the payee and transaction inserted earlier in the same step.
+        val mappings = mapOf(
+            "ACME" to PayeeMapping(
+                importedName = "ACME",
+                resolvedPayeeId = null,
+                createNew = true,
+                newPayeeName = "Acme Corp",
+                categoryId = null,
+                tagIds = listOf(999_999L),
+                applyCategory = false,
+                rememberMapping = true
+            )
+        )
+
+        val result = importRepository.importWithMappings(listOf(importedTxn("F2", "ACME")), accountId, mappings)
+
+        assertTrue(result.isFailure, "import should fail on the bad tag reference")
+        // Nothing must have been persisted — no orphaned payee, no transaction.
+        assertTrue(payeeRepository.getAllPayees().first().none { it.name == "Acme Corp" }, "payee must be rolled back")
+        assertNull(transactionRepository.getTransactionByImportId("F2"), "transaction must be rolled back")
+    }
+}
