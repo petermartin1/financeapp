@@ -11,20 +11,17 @@ below.
 
 **Stack note:** Despite `CLAUDE.md` naming SQLDelight, this codebase uses **Exposed ORM 0.47 + H2** with **foreign-key enforcement ON** (so delete paths must hand-clean child rows). The shared module targets `jvm("desktop")` only — that's why `java.*`/`String.format` compile in `commonMain` (they would break the KMP contract if an iOS/native target were added).
 
-## P1 — High
+## Open — needs a product decision
 
-- [ ] **R14. ViewModels' manual scopes never cleaned up.** `cleanup()` exists on 13 VMs but is called only from tests. Bounded leak (VMs injected once in `MainContent`); the worse failure mode was removed by the supervised-scope work.
+- [ ] **R32. Net-worth definition for inactive accounts (NARROW).** Net worth sums balances of *active* accounts only (`getAccountsWithBalances` → `getAllAccounts` filters `isActive`). A transfer between an active and an inactive account therefore counts only the active leg. Whether an inactive (closed) account's balance should still count toward net worth is a product call, not a code bug — not changing money semantics on a guess.
 
-## P2 — Medium
+## Resolved / won't-fix (2026-06-19)
 
-- [ ] **R21. `EditTransactionDialog` caches category object (LOW).** `AddTransactionDialog.kt:422-436` passes `selectedCategory?.id`; a category deleted mid-edit yields a stale id.
-- [ ] **R22. PIN minimum length is 8.** `PinSetupScreen.kt:32`.
-- [ ] **R27. No R8/ProGuard rules (desktop-only today).**
-- [ ] **R29. `App.kt` navigation state is `remember` only (LOW for desktop).** `App.kt:105-107`.
-
-## P3 — Low
-
-- [ ] **R32. Net-worth aggregations must exclude transfer legs (NARROW).** Per-account balances cancel transfer legs between two active accounts; residual risk is transfers to/from inactive accounts (excluded from the active list).
+- **R21. FIXED.** `updateTransaction` now drops a `categoryId` that no longer references a live category, so a category deleted while the Edit dialog is open can't cause an FK violation that loses the edit — the transaction just becomes uncategorized (`TransactionRepositoryImpl`, regression test in `TransactionRepositoryTest`). `EditTransactionDialog` also clears a stale selection when the category list updates.
+- **R14. Won't-fix.** VMs are Koin singletons (see R34) — created once, alive for the app's lifetime; `cleanup()` only matters if instances are recreated, which never happens. Calling it would cancel a live singleton's scope. Not a leak. Desktop shutdown already stops the long-lived services (R33).
+- **R22. Won't-fix.** An 8-character minimum password is a reasonable policy and far stronger than the old 4-digit PIN. No change warranted.
+- **R27. Won't-fix.** The desktop JVM packaging has no R8/ProGuard step. Revisit if/when an Android build ships.
+- **R29. Won't-fix.** Desktop is a single long-lived window with no Android-style process death or config-change recreation, so `remember`-based nav state is correct. Revisit for Android.
 
 ## Agent findings discarded after verification (still discarded)
 

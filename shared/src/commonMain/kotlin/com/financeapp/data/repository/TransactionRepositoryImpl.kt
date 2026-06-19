@@ -218,12 +218,19 @@ class TransactionRepositoryImpl(
         val dateMillis = transaction.date.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
 
         org.jetbrains.exposed.sql.transactions.transaction(database) {
+            // R21: the edit dialog may hold a category that was deleted elsewhere while it was
+            // open. Drop a categoryId that no longer references a live category so the rest of
+            // the user's edit still saves instead of failing with an FK violation.
+            val safeCategoryId = transaction.categoryId?.takeIf { id ->
+                Categories.selectAll().where { Categories.id eq id.toInt() }.any()
+            }
+
             Transactions.update({ Transactions.id eq transaction.id.toInt() }) {
                 it[accountId] = transaction.accountId.toInt()
                 it[date] = dateMillis
                 it[amount] = transaction.amount
                 it[payeeId] = transaction.payeeId?.toInt()
-                it[categoryId] = transaction.categoryId?.toInt()
+                it[categoryId] = safeCategoryId?.toInt()
                 it[memo] = transaction.memo
                 it[checkNumber] = transaction.checkNumber
                 it[isCleared] = transaction.isCleared

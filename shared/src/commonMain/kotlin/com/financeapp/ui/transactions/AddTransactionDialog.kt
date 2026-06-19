@@ -430,9 +430,16 @@ fun EditTransactionDialog(
     var selectedDate by remember { mutableStateOf(txn.date) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
 
-    // Update selected category when categories load
+    // Keep the selected category in sync with the live list (R21): resolve it once categories
+    // load, and drop it if it was deleted elsewhere while this dialog was open so we never save
+    // a stale category id.
     LaunchedEffect(categoriesState.categories) {
-        if (selectedCategory == null && txn.categoryId != null) {
+        val current = selectedCategory
+        if (current != null) {
+            if (categoriesState.categories.none { it.id == current.id }) {
+                selectedCategory = null
+            }
+        } else if (txn.categoryId != null) {
             selectedCategory = categoriesState.categories.find { it.id == txn.categoryId }
         }
     }

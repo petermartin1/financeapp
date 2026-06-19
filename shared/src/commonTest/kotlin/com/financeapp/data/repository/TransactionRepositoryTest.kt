@@ -619,4 +619,36 @@ class TransactionRepositoryTest {
         // The cleared balance (which sums isCleared rows) must now include it.
         assertEquals(-5000L, accountRepository.getClearedBalance(testAccountId))
     }
+
+    // ========================================
+    // Stale category id on update (R21)
+    // ========================================
+
+    @Test
+    fun `updateTransaction nulls a categoryId that no longer exists instead of failing`() = runTest {
+        // R21: an Edit dialog can hold a category that was deleted elsewhere while it was open.
+        // Saving with that stale id must not throw an FK violation and lose the user's edit;
+        // the transaction should simply become uncategorized.
+        val categoryRepository = CategoryRepositoryImpl(database, testDispatcher)
+        val categoryId = categoryRepository.insertCategory(
+            TestDataFactory.createTestCategory(name = "Soon Deleted")
+        )
+        val txnId = repository.insertTransaction(
+            TestDataFactory.createTestTransaction(
+                id = 0, accountId = testAccountId, amount = -2500, categoryId = categoryId
+            )
+        )
+
+        // The category is removed (e.g. from the Categories screen) while the edit dialog is open.
+        categoryRepository.deleteCategory(categoryId)
+
+        // The dialog still holds the stale category object and saves with its id.
+        val stale = repository.getTransactionById(txnId)!!.copy(categoryId = categoryId, memo = "edited")
+        repository.updateTransaction(stale)
+
+        val saved = repository.getTransactionById(txnId)
+        assertNotNull(saved)
+        assertEquals("edited", saved.memo, "the rest of the edit must be saved")
+        assertNull(saved.categoryId, "the deleted category must be dropped, not cause an FK failure")
+    }
 }
