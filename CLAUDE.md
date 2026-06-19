@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Personal finance app built with Kotlin/Compose Multiplatform. Replaces Quicken functionality with a local-first, privacy-focused design. **Targets desktop (JVM) only** — the `androidApp` shell exists but is currently unused, and the `shared` module declares only the `jvm("desktop")` target.
+Personal finance app built with Kotlin/Compose Multiplatform. Replaces Quicken functionality with a local-first, privacy-focused design. **Targets desktop (JVM) only** — the `shared` module declares only the `jvm("desktop")` target, and the only application module is `desktopApp`. There is no Android (or iOS) module or build.
 
 ## Build Commands
 
@@ -23,7 +23,8 @@ Personal finance app built with Kotlin/Compose Multiplatform. Replaces Quicken f
 ```
 
 > The schema is defined as Exposed table objects in Kotlin (see below), so there is no
-> code-generation step. `androidApp` is a non-functional shell; there is no Android build.
+> code-generation step. There is no Android build — `settings.gradle.kts` includes only
+> `:shared` and `:desktopApp`.
 
 ## Architecture
 
@@ -32,7 +33,6 @@ Personal finance app built with Kotlin/Compose Multiplatform. Replaces Quicken f
   - `commonMain/`: code common to all targets (today, effectively desktop)
   - `desktopMain/`: desktop (JVM) `actual` implementations
 - **desktopApp/**: Desktop (JVM) application shell
-- **androidApp/**: Android application shell — present but unused
 
 ### Key Technologies
 - **UI**: Compose Multiplatform with Material 3
