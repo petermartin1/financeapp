@@ -2,21 +2,18 @@
 
 ---
 
-# 🔴 Code Review Findings — Open Items
+# 🟢 Code Review Findings — All Closed
 
-**Original review:** 2026-04-16; reassessed 2026-06-07 and 2026-06-09. The bulk of the
-findings (most of R1–R34 and N1–N10) have been fixed and removed from this file — see git
-history for the implementations and their regression tests. Only the outstanding items remain
-below.
+**Original review:** 2026-04-16; reassessed 2026-06-07/06-09; closed out 2026-06-19. Every
+R1–R34 and N1–N10 finding is now fixed (with regression tests, see git history) or documented
+won't-fix/by-design. **No open findings remain.** The final dispositions are kept below for the
+record.
 
 **Stack note:** Despite `CLAUDE.md` naming SQLDelight, this codebase uses **Exposed ORM 0.47 + H2** with **foreign-key enforcement ON** (so delete paths must hand-clean child rows). The shared module targets `jvm("desktop")` only — that's why `java.*`/`String.format` compile in `commonMain` (they would break the KMP contract if an iOS/native target were added).
 
-## Open — needs a product decision
-
-- [ ] **R32. Net-worth definition for inactive accounts (NARROW).** Net worth sums balances of *active* accounts only (`getAccountsWithBalances` → `getAllAccounts` filters `isActive`). A transfer between an active and an inactive account therefore counts only the active leg. Whether an inactive (closed) account's balance should still count toward net worth is a product call, not a code bug — not changing money semantics on a guess.
-
 ## Resolved / won't-fix (2026-06-19)
 
+- **R32. By design (decided 2026-06-19).** Net worth sums balances of *active* accounts only (`getAccountsWithBalances` → `getAllAccounts` filters `isActive`). A transfer between an active and an inactive account counts only the active leg. This is intended: net worth reflects accounts you currently hold, so a closed/inactive account's balance is correctly excluded. Keeping as-is.
 - **R21. FIXED.** `updateTransaction` now drops a `categoryId` that no longer references a live category, so a category deleted while the Edit dialog is open can't cause an FK violation that loses the edit — the transaction just becomes uncategorized (`TransactionRepositoryImpl`, regression test in `TransactionRepositoryTest`). `EditTransactionDialog` also clears a stale selection when the category list updates.
 - **R14. Won't-fix.** VMs are Koin singletons (see R34) — created once, alive for the app's lifetime; `cleanup()` only matters if instances are recreated, which never happens. Calling it would cancel a live singleton's scope. Not a leak. Desktop shutdown already stops the long-lived services (R33).
 - **R22. Won't-fix.** An 8-character minimum password is a reasonable policy and far stronger than the old 4-digit PIN. No change warranted.
