@@ -37,6 +37,9 @@ kotlin {
 
                 implementation(libs.koin.core)
                 implementation(libs.koin.compose)
+
+                // Argon2id key derivation
+                implementation(libs.bouncycastle)
             }
         }
 
