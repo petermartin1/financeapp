@@ -559,13 +559,31 @@ class TransactionRepositoryTest {
         )
 
         // Act
-        val existing = repository.getExistingImportIds(listOf("ID1", "ID2", "ID3"))
+        val existing = repository.getExistingImportIds(testAccountId, listOf("ID1", "ID2", "ID3"))
 
         // Assert
         assertEquals(2, existing.size)
         assertTrue(existing.contains("ID1"))
         assertTrue(existing.contains("ID2"))
         assertFalse(existing.contains("ID3"))
+    }
+
+    @Test
+    fun `getExistingImportIds is scoped per account so identical ids in another account are not duplicates`() = runTest {
+        val otherAccountId = accountRepository.insertAccount(
+            TestDataFactory.createTestAccount(name = "Second Account")
+        )
+        repository.insertTransaction(
+            TestDataFactory.createTestTransaction(id = 0, accountId = testAccountId, importId = "DUP")
+        )
+
+        // The same import id used by a different account must not be seen as already present.
+        val forOther = repository.getExistingImportIds(otherAccountId, listOf("DUP"))
+        assertTrue(forOther.isEmpty(), "import id from another account must not count as a duplicate")
+
+        // But re-importing into the same account still dedups.
+        val forSame = repository.getExistingImportIds(testAccountId, listOf("DUP"))
+        assertTrue(forSame.contains("DUP"))
     }
 
     // ========================================

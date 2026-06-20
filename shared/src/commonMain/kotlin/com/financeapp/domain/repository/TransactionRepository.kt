@@ -18,7 +18,7 @@ interface TransactionRepository {
     suspend fun deleteTransaction(id: Long)
     suspend fun getRecentTransactions(limit: Int): List<TransactionWithDetails>
     suspend fun getTransactionByImportId(importId: String): Transaction?
-    suspend fun getExistingImportIds(importIds: List<String>): Set<String>
+    suspend fun getExistingImportIds(accountId: Long, importIds: List<String>): Set<String>
     suspend fun getSpendingByCategory(): Map<String, Long>
     suspend fun markTransactionReconciled(id: Long, isReconciled: Boolean)
 

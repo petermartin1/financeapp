@@ -109,8 +109,13 @@ class ScheduledViewModel(
             // posted. Each occurrence has a deterministic import id, so a catch-up that crashed
             // part-way can be re-run without double-posting the occurrences it already entered (N4).
             val plans = dueTransactions.associateWith { computeDueEntries(it, today, emptySet()) }
-            val candidateImportIds = plans.values.flatMap { plan -> plan.occurrences.map { it.importId } }
-            val existingImportIds = transactionRepository.getExistingImportIds(candidateImportIds)
+            // Import-id dedup is scoped per account, so group each schedule's candidate ids by the
+            // account it posts into before checking which are already present.
+            val existingImportIds = dueTransactions
+                .flatMap { sched -> plans.getValue(sched).occurrences.map { sched.accountId to it.importId } }
+                .groupBy({ it.first }, { it.second })
+                .flatMap { (accountId, ids) -> transactionRepository.getExistingImportIds(accountId, ids) }
+                .toSet()
 
             var entered = 0
             for (scheduled in dueTransactions) {

@@ -312,13 +312,16 @@ class TransactionRepositoryImpl(
         }
     }
 
-    override suspend fun getExistingImportIds(importIds: List<String>): Set<String> = withContext(ioDispatcher) {
+    override suspend fun getExistingImportIds(accountId: Long, importIds: List<String>): Set<String> = withContext(ioDispatcher) {
         if (importIds.isEmpty()) return@withContext emptySet()
 
         transaction(database) {
             Transactions
                 .select(Transactions.importId)
-                .where { Transactions.importId inList importIds }
+                .where {
+                    (Transactions.accountId eq accountId.toInt()) and
+                        (Transactions.importId inList importIds)
+                }
                 .mapNotNull { it[Transactions.importId] }
                 .toSet()
         }

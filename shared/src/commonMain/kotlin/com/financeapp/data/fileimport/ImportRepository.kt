@@ -158,7 +158,7 @@ class ImportRepository(
 
             // --- Reads / dedup precomputation (no writes) ---
             val importIds = transactions.map { it.fitId }
-            val existingIds = transactionRepository.getExistingImportIds(importIds)
+            val existingIds = transactionRepository.getExistingImportIds(accountId, importIds)
             val newTransactions = transactions.filter { it.fitId !in existingIds }
             val duplicates = transactions.size - newTransactions.size
 
@@ -295,9 +295,9 @@ class ImportRepository(
         try {
             val now = Clock.System.now()
 
-            // Step 1: Check for existing import IDs in a single query
+            // Step 1: Check for existing import IDs in a single query (scoped to this account)
             val importIds = transactions.map { it.fitId }
-            val existingIds = transactionRepository.getExistingImportIds(importIds)
+            val existingIds = transactionRepository.getExistingImportIds(accountId, importIds)
 
             // Filter out duplicates
             val newTransactions = transactions.filter { it.fitId !in existingIds }
