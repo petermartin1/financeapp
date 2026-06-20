@@ -233,6 +233,27 @@ actual class EncryptionKeyManager {
         }
     }
 
+    /** Returns the existing keystore key without creating one, or null if absent. */
+    fun peekExistingKey(): String? = when {
+        isMacOS() -> getFromKeychain()
+        isWindows() -> getFromDpapi()
+        LinuxSecretService.isAvailable() -> LinuxSecretService.lookup(LINUX_KEY_ATTRIBUTE)
+        else -> null
+    }
+
+    /** Removes the keystore key after a successful migration to the password vault. */
+    fun deleteKey() {
+        try {
+            when {
+                isMacOS() -> ProcessRunner.run(
+                    listOf("security", "delete-generic-password", "-s", serviceName, "-a", accountName)
+                )
+                isWindows() -> if (keyFile.exists()) secureDeleteFile(keyFile)
+                LinuxSecretService.isAvailable() -> LinuxSecretService.clear(LINUX_KEY_ATTRIBUTE)
+            }
+        } catch (_: Exception) { /* best effort */ }
+    }
+
     private companion object {
         private const val LINUX_KEY_ATTRIBUTE = "database-encryption-key"
         private const val NO_KEYSTORE_MESSAGE =
