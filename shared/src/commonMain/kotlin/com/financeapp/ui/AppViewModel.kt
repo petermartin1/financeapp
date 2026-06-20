@@ -41,8 +41,16 @@ class AppViewModel(
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
     init {
-        seedDatabaseIfNeeded()
         checkLockSetup()
+    }
+
+    private var started = false
+
+    /** Runs DB-backed startup exactly once, after the vault is unlocked. */
+    fun startPostUnlock() {
+        if (started) return
+        started = true
+        seedDatabaseIfNeeded()
         loadThemeMode()
         startPriceRefreshService()
         startSnapshotScheduler()

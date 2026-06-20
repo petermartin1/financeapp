@@ -42,8 +42,12 @@ import com.financeapp.ui.templates.TemplatesScreen
 import com.financeapp.ui.templates.TemplatesViewModel
 import com.financeapp.ui.accounts.AccountsViewModel
 import com.financeapp.ui.categories.CategoriesViewModel
-import com.financeapp.ui.lock.PinSetupScreen
-import com.financeapp.ui.lock.PinUnlockScreen
+import com.financeapp.ui.VaultViewModel
+import com.financeapp.ui.VaultGate
+import com.financeapp.ui.lock.VaultSetupScreen
+import com.financeapp.ui.lock.VaultMigrateScreen
+import com.financeapp.ui.lock.VaultUnlockScreen
+import com.financeapp.ui.lock.RecoveryKeyDialog
 import com.financeapp.ui.transactions.TransactionsScreen
 import com.financeapp.ui.transactions.TransactionsViewModel
 import com.financeapp.ui.theme.FinanceAppTheme
@@ -56,10 +60,49 @@ import org.koin.compose.koinInject
 
 @Composable
 fun App() {
-    val viewModel: AppViewModel = koinInject()
-    val lockState by viewModel.lockState.collectAsState()
-    val themeMode by viewModel.themeMode.collectAsState()
+    val vaultViewModel: VaultViewModel = koinInject()
+    val gate by vaultViewModel.gate.collectAsState()
+    val recoveryToShow by vaultViewModel.recoveryToShow.collectAsState()
+    val vaultError by vaultViewModel.error.collectAsState()
 
+    FinanceAppTheme(themeMode = ThemeMode.SYSTEM) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (gate) {
+                    VaultGate.Loading -> Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) { CircularProgressIndicator() }
+                    VaultGate.Setup -> VaultSetupScreen(
+                        vaultViewModel::checkStrength,
+                        vaultViewModel::setUp
+                    )
+                    VaultGate.Migrate -> VaultMigrateScreen(
+                        vaultViewModel::checkStrength,
+                        vaultViewModel::migrate
+                    )
+                    VaultGate.Locked -> VaultUnlockScreen(
+                        vaultError,
+                        vaultViewModel::unlock,
+                        vaultViewModel::unlockWithRecovery
+                    )
+                    // First DB touch is deferred to UnlockedApp(), which is only composed once Unlocked.
+                    VaultGate.Unlocked -> UnlockedApp()
+                }
+                recoveryToShow?.let { RecoveryKeyDialog(it, vaultViewModel::dismissRecovery) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UnlockedApp() {
+    val appViewModel: AppViewModel = koinInject()   // first DB touch happens here, post-unlock
+    LaunchedEffect(Unit) { appViewModel.startPostUnlock() }
+    val themeMode by appViewModel.themeMode.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     // Surface background-work failures routed through the shared error bus (N6 / R16 / R28).
     LaunchedEffect(Unit) {
@@ -74,36 +117,7 @@ fun App() {
             color = MaterialTheme.colorScheme.background
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                when {
-                    // First time setup - no PIN set yet
-                    !lockState.isSetUp -> {
-                        PinSetupScreen(
-                            onPinSet = { pin ->
-                                viewModel.setupPin(pin)
-                            }
-                        )
-                    }
-                    // App is locked - need to enter PIN
-                    lockState.isLocked -> {
-                        PinUnlockScreen(
-                            onPinEntered = { pin ->
-                                viewModel.verifyPin(pin)
-                            },
-                            failedAttempts = lockState.failedAttempts,
-                            lockedUntilEpochMs = lockState.lockedUntilEpochMs,
-                            biometricAvailable = viewModel.isBiometricAvailable(),
-                            biometricType = viewModel.getBiometricType(),
-                            onBiometricClick = {
-                                viewModel.authenticateWithBiometric()
-                            }
-                        )
-                    }
-                    // Unlocked - show main content
-                    else -> {
-                        MainContent()
-                    }
-                }
-
+                MainContent()
                 SnackbarHost(
                     hostState = snackbarHostState,
                     modifier = Modifier.align(Alignment.BottomCenter)

@@ -23,6 +23,7 @@ import com.financeapp.domain.repository.CategoryRepository
 import com.financeapp.domain.repository.PayeeRepository
 import com.financeapp.domain.repository.TransactionRepository
 import com.financeapp.ui.AppViewModel
+import com.financeapp.ui.VaultViewModel
 import com.financeapp.ui.accounts.AccountsViewModel
 import com.financeapp.ui.categories.CategoriesViewModel
 import com.financeapp.ui.connections.ConnectionsViewModel
@@ -109,6 +110,7 @@ val sharedModule = module {
     single { DatabaseSeeder(get()) }
 
     single { AppViewModel(get(), get(), get(), get(), get(), get()) }
+    single { VaultViewModel(get(), get()) }
     single { AccountsViewModel(get()) }
     single { TransactionsViewModel(get(), get(), get(), get(), get()) }
     single { CategoriesViewModel(get()) }
