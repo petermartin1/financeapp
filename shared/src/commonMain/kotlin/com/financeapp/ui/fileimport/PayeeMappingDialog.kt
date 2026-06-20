@@ -112,6 +112,15 @@ fun PayeeMappingDialog(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
+                    // Surface names found earlier in THIS file that look like the current one,
+                    // so the user can map them to the same payee consistently. (Computed in the
+                    // resolver as UnresolvedPayee.similarInImport.)
+                    if (currentPayee.similarInImport.isNotEmpty()) {
+                        item {
+                            SimilarInFileSection(similarNames = currentPayee.similarInImport)
+                        }
+                    }
+
                     // Always show mode selection - let user choose
                     item {
                         Card(
@@ -516,6 +525,52 @@ private fun MappingModeSelector(
                     "Create a new payee with a custom name",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SimilarInFileSection(
+    similarNames: List<String>,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Similar names in this file",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+            Text(
+                "Map these to the same payee to keep them grouped:",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            similarNames.forEach { name ->
+                Text(
+                    "• $name",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
                 )
             }
         }
