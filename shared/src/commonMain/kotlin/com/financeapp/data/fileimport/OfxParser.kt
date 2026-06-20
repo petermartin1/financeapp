@@ -116,7 +116,8 @@ class OfxParser {
             val sic = extractTag(block, "SIC")
 
             val date = parseOfxDate(dateStr)
-            val amount = parseAmount(amountStr)
+            // Skip the transaction when the amount can't be parsed rather than importing $0.00.
+            val amount = parseAmount(amountStr) ?: continue
             val type = parseTransactionType(typeStr)
 
             transactions.add(ImportedTransaction(
@@ -163,8 +164,8 @@ class OfxParser {
         return LocalDate(year, month, day)
     }
 
-    private fun parseAmount(amountStr: String): Long {
-        return AmountParser.parseToCentsOrZero(amountStr)
+    private fun parseAmount(amountStr: String): Long? {
+        return AmountParser.parseToCents(amountStr)
     }
 
     private fun parseTransactionType(typeStr: String): TransactionType {

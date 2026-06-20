@@ -44,7 +44,8 @@ class CsvParser {
         val memo = config.memoColumn?.let { columns.getOrNull(it) }
 
         val date = parseDate(dateStr, config.dateFormat) ?: return null
-        val amount = parseAmount(amountStr, config)
+        // Drop the row when the amount can't be parsed rather than silently importing $0.00.
+        val amount = parseAmount(amountStr, config) ?: return null
 
         val type = if (amount >= 0) TransactionType.CREDIT else TransactionType.DEBIT
 
@@ -111,17 +112,17 @@ class CsvParser {
                 DateFormat.MM_DD_YYYY -> {
                     val parts = cleaned.split("/", "-")
                     if (parts.size != 3) return null
-                    LocalDate(parts[2].toInt(), parts[0].toInt(), parts[1].toInt())
+                    LocalDate(normalizeYear(parts[2]), parts[0].toInt(), parts[1].toInt())
                 }
                 DateFormat.DD_MM_YYYY -> {
                     val parts = cleaned.split("/", "-")
                     if (parts.size != 3) return null
-                    LocalDate(parts[2].toInt(), parts[1].toInt(), parts[0].toInt())
+                    LocalDate(normalizeYear(parts[2]), parts[1].toInt(), parts[0].toInt())
                 }
                 DateFormat.YYYY_MM_DD -> {
                     val parts = cleaned.split("/", "-")
                     if (parts.size != 3) return null
-                    LocalDate(parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
+                    LocalDate(normalizeYear(parts[0]), parts[1].toInt(), parts[2].toInt())
                 }
             }
         } catch (e: Exception) {
@@ -129,15 +130,24 @@ class CsvParser {
         }
     }
 
-    private fun parseAmount(amountStr: String, config: CsvImportConfig): Long {
-        var amount = AmountParser.parseToCentsOrZero(amountStr)
+    /**
+     * Resolves a year token to a four-digit year. A two-digit year is expanded with the common
+     * pivot (00–68 -> 2000–2068, 69–99 -> 1969–1999) so "12/31/24" is 2024, not the year 24.
+     */
+    private fun normalizeYear(token: String): Int {
+        val year = token.toInt()
+        return if (token.length <= 2) {
+            if (year < 69) 2000 + year else 1900 + year
+        } else {
+            year
+        }
+    }
+
+    private fun parseAmount(amountStr: String, config: CsvImportConfig): Long? {
+        val amount = AmountParser.parseToCents(amountStr) ?: return null
 
         // Apply sign inversion if configured
-        if (config.invertAmount) {
-            amount = -amount
-        }
-
-        return amount
+        return if (config.invertAmount) -amount else amount
     }
 }
 

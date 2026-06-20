@@ -89,4 +89,28 @@ class CsvParserTest {
         assertTrue(txns.any { it.name == "Coffee" })
         assertTrue(txns.any { it.name == "Paycheck" })
     }
+
+    @Test
+    fun `row with an unparseable amount is dropped, not imported as zero`() {
+        val content = "Date,Amount,Description\n" +
+            "01/15/2024,-50.00,Coffee\n" +
+            "01/16/2024,N/A,Mystery\n"
+
+        val txns = parser.parse(content, config).getOrThrow()
+
+        assertEquals(1, txns.size)
+        assertEquals("Coffee", txns[0].name)
+        assertTrue(txns.none { it.name == "Mystery" }, "a row with an unparseable amount must not be imported as \$0")
+    }
+
+    @Test
+    fun `two-digit year is expanded to the current century`() {
+        val content = "Date,Amount,Description\n" +
+            "01/15/24,-50.00,Coffee\n"
+
+        val txns = parser.parse(content, config).getOrThrow()
+
+        assertEquals(1, txns.size)
+        assertEquals(2024, txns[0].date.year)
+    }
 }

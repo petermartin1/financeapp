@@ -39,6 +39,14 @@ class AmountParserTest {
     @Test fun `french space thousands with decimal comma`() =
         assertEquals(123456L, AmountParser.parseToCents("1 234,56"))
 
+    // --- Trailing minus (accounting / mainframe exports) ---
+
+    @Test fun `trailing minus is negative`() =
+        assertEquals(-12345L, AmountParser.parseToCents("123.45-"))
+
+    @Test fun `european trailing minus is negative`() =
+        assertEquals(-12345L, AmountParser.parseToCents("123,45-"))
+
     // --- Invalid ---
 
     @Test fun `blank is null`() = assertNull(AmountParser.parseToCents("   "))

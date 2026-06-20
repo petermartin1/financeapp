@@ -51,6 +51,12 @@ object AmountParser {
                 cleaned = cleaned.drop(1).trim()
             }
 
+            // Handle trailing minus sign (e.g. "123.45-" used by some accounting/mainframe exports)
+            if (cleaned.endsWith("-")) {
+                isNegative = true
+                cleaned = cleaned.dropLast(1).trim()
+            }
+
             if (cleaned.isEmpty()) return null
 
             // Normalize US ("1,234.56") and European ("1.234,56") separators to a canonical
