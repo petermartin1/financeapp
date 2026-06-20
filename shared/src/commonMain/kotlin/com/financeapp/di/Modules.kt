@@ -110,7 +110,7 @@ val sharedModule = module {
     single { DatabaseSeeder(get()) }
 
     single { AppViewModel(get(), get(), get(), get(), get(), get()) }
-    single { VaultViewModel(get(), get()) }
+    single { VaultViewModel(get(), get(), get()) }
     single { AccountsViewModel(get()) }
     single { TransactionsViewModel(get(), get(), get(), get(), get()) }
     single { CategoriesViewModel(get()) }

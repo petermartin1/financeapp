@@ -1,9 +1,11 @@
 package com.financeapp.ui
 
+import com.financeapp.domain.repository.AppLockRepository
 import com.financeapp.security.vault.KeyVault
 import com.financeapp.security.vault.LegacyKeyMigration
 import com.financeapp.security.vault.PasswordStrength
 import com.financeapp.security.vault.RecoveryKey
+import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,7 +15,9 @@ enum class VaultGate { Loading, Setup, Migrate, Locked, Unlocked }
 
 class VaultViewModel(
     private val keyVault: KeyVault,
-    private val migration: LegacyKeyMigration
+    private val migration: LegacyKeyMigration,
+    private val appLock: AppLockRepository,
+    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() }
 ) {
     private val scope = supervisedViewModelScope()
 
@@ -58,13 +62,27 @@ class VaultViewModel(
     }
 
     fun unlock(password: CharArray) {
-        scope.launch {
-            if (keyVault.unlock(password) != null) {
-                _error.value = null
-                _gate.value = VaultGate.Unlocked
+        scope.launch { attemptUnlock(password) }
+    }
+
+    suspend fun attemptUnlock(password: CharArray): Boolean {
+        if (appLock.getLockoutState().isLockedOut(now())) {
+            _error.value = "Too many attempts. Try again later."
+            return false
+        }
+        return if (keyVault.unlock(password) != null) {
+            appLock.resetFailedAttempts()
+            _error.value = null
+            _gate.value = VaultGate.Unlocked
+            true
+        } else {
+            val st = appLock.recordFailedAttempt()
+            _error.value = if (st.lockedUntilEpochMs != null) {
+                "Incorrect password. Too many attempts — try again later."
             } else {
-                _error.value = "Incorrect password."
+                "Incorrect password."
             }
+            false
         }
     }
 
