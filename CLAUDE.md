@@ -89,6 +89,13 @@ actual class DatabaseDriverFactory(...) { ... }
 - **Stock quotes**: Yahoo Finance or Alpha Vantage
 
 ## Encryption
-The H2 database is encrypted at rest with AES (`CIPHER=AES`). The key is generated and held in
-the OS key store via `EncryptionKeyManager` (Keychain on macOS, DPAPI on Windows, Secret Service
-on Linux); the app refuses to fall back to a plaintext key file. See `SECURITY.md`.
+The H2 database is encrypted at rest with AES (`CIPHER=AES`) and **sealed by the user's master
+password** via envelope encryption: a random Data Encryption Key (the H2 file secret) is wrapped
+with AES-256-GCM under an Argon2id key derived from the master password, plus an optional wrap
+under a recovery key. The vault lives at `~/.financeapp/vault.json`; the OS keystore no longer
+holds the DB key. The master password is required on every launch and the DB is opened only after
+unlock. Core code: `com.financeapp.security.vault.KeyVault` (and the `security.vault` package);
+the unlock gate is `VaultViewModel` driving `App.kt`. `EncryptionKeyManager` is retained only for
+the one-time migration of an existing keystore key into the vault, and `SecureCredentialStore`
+still uses the OS keystore for OFX/bank logins. See `SECURITY.md` for the full design, threat
+model, and limitations.

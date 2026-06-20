@@ -1,5 +1,45 @@
 # Security Documentation
 
+## Database Encryption & Master Password Vault
+
+The local H2 database (`~/.financeapp/finance.mv.db`) is encrypted at rest and **sealed by a key
+derived from your master password** — it cannot be opened without that password (or a recovery
+key). This is the app's primary at-rest protection.
+
+### How it works (envelope encryption)
+
+- A random 256-bit **Data Encryption Key (DEK)** is the database's encryption secret.
+- The DEK is never stored in the clear. It is **wrapped** (encrypted) with **AES-256-GCM** under a
+  **Key-Encryption-Key (KEK)** derived from your master password via **Argon2id**
+  (memory-hard: 64 MiB, 3 iterations, parallelism 4).
+- A separate, optional copy of the DEK is wrapped under a high-entropy **recovery key** so a
+  forgotten password is recoverable. The recovery key is shown once at setup; store it safely.
+- All of this lives in `~/.financeapp/vault.json` (only encrypted material; written atomically
+  with owner-only `0600` permissions). The OS keystore is **no longer used to hold the DB key**.
+- On every launch the master password is required: it derives the KEK, unwraps the DEK, and opens
+  the database. A wrong password fails the AES-GCM authentication tag and yields nothing.
+- The vault auto-locks after idle inactivity, and online guessing is throttled by the existing
+  lockout/backoff (5 attempts → exponential backoff).
+
+Implementation: `com.financeapp.security.vault.KeyVault` and the `security.vault` package.
+
+### What this protects against
+- A stolen/copied database file, stolen disk, or leaked backup — useless without the password.
+- Other OS accounts, and same-user processes **while the app is closed** (nothing on disk or in
+  the keystore can open the DB without the password).
+- Offline brute force — throttled by Argon2id's per-guess cost.
+- Tampering with the vault — detected by AES-GCM authentication.
+
+### Known limitations (inherent to a local desktop app)
+- **Malware running as you while the app is unlocked** can read the DEK/plaintext from process
+  memory. Auto-lock shrinks this window but cannot eliminate it (the JVM cannot truly `mlock`).
+- **A weak master password** caps the real strength — Argon2id raises per-guess cost but cannot
+  rescue low entropy. A strength policy enforces a minimum (12 chars or a 4-word passphrase).
+- **No hardware-bound keys** (Secure Enclave/TPM) on desktop JVM.
+- **Swap/hibernation** can page decrypted data to disk — enable OS full-disk encryption
+  (FileVault on macOS, BitLocker on Windows) for defense in depth.
+- The recovery key is a second full-power credential; it must be stored securely by the user.
+
 ## OFX (Open Financial Exchange) Security
 
 ### Protocol Limitations
@@ -107,11 +147,12 @@ The OFX protocol has inherent security limitations that users and developers sho
 ## Security Features Implemented
 
 ### Authentication & Access Control
-- ✅ Encrypted database (H2 with AES)
-- ✅ PBKDF2 key derivation (100,000 iterations)
-- ✅ Secure credential storage (Keychain/encrypted files)
-- ✅ Rate limiting (5 attempts, 15-min lockout)
-- ✅ Exponential backoff
+- ✅ Encrypted database (H2 with AES), sealed by a master-password-derived key (see top section)
+- ✅ Argon2id key derivation for the master password (64 MiB, t=3, p=4); envelope-encrypted DEK
+- ✅ Recovery key for forgotten-password recovery
+- ✅ Master password required on every launch + idle auto-lock
+- ✅ Secure credential storage for OFX/bank logins (Keychain/encrypted files)
+- ✅ Rate limiting (5 attempts, exponential backoff up to 15-min lockout)
 
 ### Network Security
 - ✅ HTTPS-only connections
