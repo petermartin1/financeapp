@@ -96,17 +96,24 @@ class ReportsViewModel(
     private suspend fun loadSpendingReport(startDate: LocalDate, endDate: LocalDate): SpendingReport {
         val transactions = transactionRepository.getTransactionsByDateRange(startDate, endDate).first()
 
-        // Filter to expenses only (negative amounts), excluding transfers, and group by category
+        val categories = categoryRepository.getAllCategories().first()
+        val categoriesById = categories.associateBy { it.id }
+        val categoryNames = categories.associate { it.id to it.name }.toMutableMap()
+
+        // Spending = negative, non-transfer outflows. Exclude income- and transfer-typed
+        // categories (a refund/charge-back tagged with an income category is not spending),
+        // consistent with the dashboard's getSpendingByCategory. Uncategorized outflows are
+        // still shown as "Uncategorized".
         val expensesByCategory = transactions
             .filter { it.transferId == null }
             .filter { it.amount < 0 }
+            .filter { txn ->
+                val type = txn.categoryId?.let { categoriesById[it]?.type }
+                type == null || type == CategoryType.EXPENSE
+            }
             .groupBy { it.categoryId }
 
         val totalSpent = expensesByCategory.values.flatten().sumOf { kotlin.math.abs(it.amount) }
-
-        // Get category names from category repository (avoids loading all transactions)
-        val categories = categoryRepository.getAllCategories().first()
-        val categoryNames = categories.associate { it.id to it.name }.toMutableMap()
 
         val categorySpending = expensesByCategory.map { (categoryId, txns) ->
             val amount = txns.sumOf { kotlin.math.abs(it.amount) }

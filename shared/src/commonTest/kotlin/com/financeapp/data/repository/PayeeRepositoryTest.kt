@@ -59,6 +59,15 @@ class PayeeRepositoryTest {
     }
 
     @Test
+    fun `mergePayees into itself is a no-op and does not delete the payee`() = runTest {
+        val id = payeeRepository.insertPayee(Payee(id = 0, name = "Amazon"))
+
+        payeeRepository.mergePayees(id, id)
+
+        assertNotNull(payeeRepository.getPayeeById(id), "merging a payee into itself must not delete it")
+    }
+
+    @Test
     fun `getPayeeById should return null for non-existent payee`() = runTest {
         val result = payeeRepository.getPayeeById(99999L)
         assertNull(result)

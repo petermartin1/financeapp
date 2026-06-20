@@ -157,6 +157,8 @@ class PayeeRepositoryImpl(
     }
 
     override suspend fun mergePayees(sourceId: Long, targetId: Long): Unit = withContext(ioDispatcher) {
+        // Merging a payee into itself would reassign references and then delete the payee.
+        if (sourceId == targetId) return@withContext
         transaction(database) {
             // Update all transactions from source payee to target payee
             Transactions.update({ Transactions.payeeId eq sourceId.toInt() }) {
