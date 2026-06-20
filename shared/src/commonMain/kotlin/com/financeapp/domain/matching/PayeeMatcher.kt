@@ -59,14 +59,16 @@ class PayeeMatcher {
                 continue
             }
 
-            // Check substring match - but only if first tokens are similar
-            // This prevents "IBJI ARLINGTON" matching "ARLINGTON HEIGHTS ANIM" just because one contains "ARLINGTON"
-            if (normalizedImported.contains(normalizedPayee) || normalizedPayee.contains(normalizedImported)) {
-                if (firstTokenPassesGate(normalizedImported, normalizedPayee, 0.6)) {
-                    val similarity = 0.95 // High but not perfect
-                    matches.add(PayeeMatch(payee, similarity, MatchType.SUBSTRING))
-                    continue
-                }
+            // Check whole-token containment: the stored payee's name appears as a contiguous
+            // run of whole tokens inside the imported name (or vice versa). This catches OFX
+            // names carrying a leading processor prefix ("SQ *BLUE BOTTLE COFFEE" -> "Blue Bottle")
+            // while rejecting raw character substrings ("bp" inside "subprime") and names that
+            // merely share a location suffix ("IBJI ARLINGTON" vs "ARLINGTON HEIGHTS ANIM").
+            if (tokensContain(normalizedImported, normalizedPayee) ||
+                tokensContain(normalizedPayee, normalizedImported)) {
+                val similarity = 0.95 // High but not perfect
+                matches.add(PayeeMatch(payee, similarity, MatchType.SUBSTRING))
+                continue
             }
 
             // Check token-based prefix match (for "ARLINGTON HEIGHTS ANIM 847" vs "ARLINGTON HEIGHTS ANIM ARLI")
@@ -122,12 +124,11 @@ class PayeeMatcher {
                 continue
             }
 
-            // Check substring match - only if first tokens are similar
-            if (normalizedTarget.contains(normalizedCandidate) || normalizedCandidate.contains(normalizedTarget)) {
-                if (firstTokenPassesGate(normalizedTarget, normalizedCandidate, 0.6)) {
-                    similarities.add(candidateName to 0.95)
-                    continue
-                }
+            // Whole-token containment (see findSimilarPayees for the rationale).
+            if (tokensContain(normalizedTarget, normalizedCandidate) ||
+                tokensContain(normalizedCandidate, normalizedTarget)) {
+                similarities.add(candidateName to 0.95)
+                continue
             }
 
             // Check token-based prefix match - only if first token passes gate
@@ -150,6 +151,22 @@ class PayeeMatcher {
 
         // Sort by similarity (highest first)
         return similarities.sortedByDescending { it.second }.map { it.first }
+    }
+
+    /**
+     * True if every token of [needle] appears as a contiguous run of whole tokens within
+     * [haystack]. Unlike a raw character `contains`, this only matches on token boundaries,
+     * so "bp" does not match "subprime" and a shared trailing location does not count as
+     * containment.
+     */
+    private fun tokensContain(haystack: String, needle: String): Boolean {
+        val hay = haystack.split(" ").filter { it.isNotEmpty() }
+        val need = needle.split(" ").filter { it.isNotEmpty() }
+        if (need.isEmpty() || need.size > hay.size) return false
+        for (start in 0..hay.size - need.size) {
+            if ((need.indices).all { hay[start + it] == need[it] }) return true
+        }
+        return false
     }
 
     /**
