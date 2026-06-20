@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.PayeeWithStats
@@ -32,6 +33,10 @@ fun PayeeManagementScreen(
     var showEditDialog by remember { mutableStateOf(false) }
     var showMergeDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    // Hold the search text locally so the cursor stays put. Binding the field directly to the
+    // view model's StateFlow round-trips asynchronously, which resets the caret to index 0 on
+    // each recomposition and reverses typed input (typing "ABT" yielded "TBA").
+    var searchField by remember { mutableStateOf(TextFieldValue("")) }
     val selectedPayee = uiState.payees.find { it.payee.id == selectedPayeeId }
 
     LaunchedEffect(selectedPayeeId) {
@@ -57,8 +62,11 @@ fun PayeeManagementScreen(
         ) {
             // Search bar
             OutlinedTextField(
-                value = uiState.searchQuery,
-                onValueChange = { viewModel.setSearchQuery(it) },
+                value = searchField,
+                onValueChange = {
+                    searchField = it
+                    viewModel.setSearchQuery(it.text)
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
