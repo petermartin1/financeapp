@@ -73,4 +73,39 @@ class PayeeMatcherTest {
         val existing = payees("Costco")
         assertTrue(matchesName("COSTCO", existing, "Costco"))
     }
+
+    // --- Real case: a bank crams store id + location into the FIRST token with no spaces,
+    // then appends a variable trailing suffix. The long shared leading token is the same
+    // store and must match, even though the trailing noise tokens differ. ---
+
+    @Test
+    fun `matches two lines of the same store with a long shared first token and differing suffix`() {
+        val existing = payees("BP#1724100ARLINGTON SIMP AR")
+        assertTrue(
+            matchesName("BP#1724100ARLINGTONQPS ARLI", existing, "BP#1724100ARLINGTON SIMP AR"),
+            "Same BP store (shared 'bp1724100arlington' first token) should match across differing suffixes"
+        )
+    }
+
+    @Test
+    fun `finds the same long-first-token store similar within one file`() {
+        val similar = matcher.findSimilarNames(
+            "BP#1724100ARLINGTONQPS ARLI",
+            listOf("BP#1724100ARLINGTON SIMP AR")
+        )
+        assertTrue(
+            similar.contains("BP#1724100ARLINGTON SIMP AR"),
+            "The two BP store lines in one file should be flagged similar, got $similar"
+        )
+    }
+
+    @Test
+    fun `does not match different long first tokens that merely share a short prefix`() {
+        // "bp9..." vs "bp1..." diverge right after "bp"; must not be treated as the same store.
+        val existing = payees("BP#9988776COLUMBUS OH")
+        assertFalse(
+            matchesName("BP#1724100ARLINGTONQPS ARLI", existing, "BP#9988776COLUMBUS OH"),
+            "Different BP stores (different ids/locations) must not match"
+        )
+    }
 }

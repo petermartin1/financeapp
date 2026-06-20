@@ -71,6 +71,14 @@ class PayeeMatcher {
                 continue
             }
 
+            // Same identity encoded in a long leading token with a variable trailing suffix,
+            // e.g. "BP#1724100ARLINGTONQPS ARLI" vs "BP#1724100ARLINGTON SIMP AR" (same store;
+            // the bank crams id + location into the first token and appends differing noise).
+            if (firstTokenIsSharedPrefix(normalizedImported, normalizedPayee)) {
+                matches.add(PayeeMatch(payee, 0.9, MatchType.FUZZY))
+                continue
+            }
+
             // Check token-based prefix match (for "ARLINGTON HEIGHTS ANIM 847" vs "ARLINGTON HEIGHTS ANIM ARLI")
             // Only if first token passes gate
             if (firstTokenPassesGate(normalizedImported, normalizedPayee, 0.6)) {
@@ -131,6 +139,12 @@ class PayeeMatcher {
                 continue
             }
 
+            // Same identity in a long shared leading token (see findSimilarPayees).
+            if (firstTokenIsSharedPrefix(normalizedTarget, normalizedCandidate)) {
+                similarities.add(candidateName to 0.9)
+                continue
+            }
+
             // Check token-based prefix match - only if first token passes gate
             if (firstTokenPassesGate(normalizedTarget, normalizedCandidate, 0.6)) {
                 val tokenSim = tokenPrefixSimilarity(normalizedTarget, normalizedCandidate)
@@ -167,6 +181,21 @@ class PayeeMatcher {
             if ((need.indices).all { hay[start + it] == need[it] }) return true
         }
         return false
+    }
+
+    /**
+     * True when the two names share the same long leading token: the shorter first token is
+     * an exact prefix of the longer one and is at least [minLen] characters. Banks often pack
+     * a store id and location into the first token ("bp1724100arlington...") and append a
+     * variable suffix; a long exact-prefix match identifies the same store while a short
+     * prefix (e.g. "bp", "dominos") is rejected, so unrelated businesses don't collide.
+     */
+    private fun firstTokenIsSharedPrefix(s1: String, s2: String, minLen: Int = 8): Boolean {
+        val t1 = s1.split(" ").firstOrNull { it.isNotEmpty() } ?: return false
+        val t2 = s2.split(" ").firstOrNull { it.isNotEmpty() } ?: return false
+        val shorter = if (t1.length <= t2.length) t1 else t2
+        val longer = if (t1.length <= t2.length) t2 else t1
+        return shorter.length >= minLen && longer.startsWith(shorter)
     }
 
     /**
