@@ -17,6 +17,7 @@ class VaultViewModel(
     private val keyVault: KeyVault,
     private val migration: LegacyKeyMigration,
     private val appLock: AppLockRepository,
+    private val idleTimeoutMs: Long = 10 * 60_000L,
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() }
 ) {
     private val scope = supervisedViewModelScope()
@@ -30,7 +31,26 @@ class VaultViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    init { refresh() }
+    @Volatile private var lastActivityMs: Long = now()
+
+    fun noteActivity() { lastActivityMs = now() }
+
+    init {
+        refresh()
+    }
+
+    /**
+     * Locks the vault if it has been idle past the timeout. Driven by a composition-scoped
+     * ticker in the UI (see App.kt's UnlockedApp) rather than a coroutine in this view model's
+     * own scope — a never-cancelled `while(true)` ticker here would pin the Main dispatcher and
+     * keep test JVMs alive forever.
+     */
+    fun checkAutoLock() {
+        if (_gate.value == VaultGate.Unlocked &&
+            AutoLockPolicy.shouldLock(lastActivityMs, now(), idleTimeoutMs)) {
+            lock()
+        }
+    }
 
     private fun refresh() {
         scope.launch {
@@ -49,6 +69,7 @@ class VaultViewModel(
         scope.launch {
             val result = keyVault.setUp(password)
             _recoveryToShow.value = result.recoveryKey
+            noteActivity()
             _gate.value = VaultGate.Unlocked
         }
     }
@@ -57,6 +78,7 @@ class VaultViewModel(
         scope.launch {
             val result = migration.migrate(password)
             _recoveryToShow.value = result.recoveryKey
+            noteActivity()
             _gate.value = VaultGate.Unlocked
         }
     }
@@ -73,6 +95,7 @@ class VaultViewModel(
         return if (keyVault.unlock(password) != null) {
             appLock.resetFailedAttempts()
             _error.value = null
+            noteActivity()
             _gate.value = VaultGate.Unlocked
             true
         } else {

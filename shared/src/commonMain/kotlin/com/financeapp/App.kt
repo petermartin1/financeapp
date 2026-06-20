@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.financeapp.ui.AppViewModel
@@ -101,7 +102,16 @@ fun App() {
 @Composable
 private fun UnlockedApp() {
     val appViewModel: AppViewModel = koinInject()   // first DB touch happens here, post-unlock
+    val vaultViewModel: VaultViewModel = koinInject()
     LaunchedEffect(Unit) { appViewModel.startPostUnlock() }
+    // Idle auto-lock monitor, scoped to the unlocked UI so it is cancelled on lock/dispose
+    // (and never runs in unit tests that construct the view model directly).
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(30_000)
+            vaultViewModel.checkAutoLock()
+        }
+    }
     val themeMode by appViewModel.themeMode.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     // Surface background-work failures routed through the shared error bus (N6 / R16 / R28).
@@ -116,7 +126,13 @@ private fun UnlockedApp() {
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) { awaitPointerEvent(); vaultViewModel.noteActivity() }
+                    }
+                }
+            ) {
                 MainContent()
                 SnackbarHost(
                     hostState = snackbarHostState,
