@@ -31,4 +31,31 @@ class DesktopVaultStoreTest {
         s.write(vault)
         assertEquals(vault, s.read())
     }
+
+    @Test
+    fun `written vault file is owner-only on POSIX filesystems`() = runTest {
+        val s = store()
+        s.write(
+            VaultFile(
+                version = 1,
+                kdf = Argon2Params.DEFAULT,
+                kdfSaltB64 = "c2FsdA==",
+                wrappedDek = WrappedDek(SerializableBox("bm9uY2U=", "Y3Q="), recovery = null)
+            )
+        )
+        val path = File(dir, "vault.json").toPath()
+        val view = java.nio.file.Files.getFileAttributeView(
+            path, java.nio.file.attribute.PosixFileAttributeView::class.java
+        )
+        if (view != null) { // only assert on POSIX filesystems
+            val perms = java.nio.file.Files.getPosixFilePermissions(path)
+            assertEquals(
+                setOf(
+                    java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                    java.nio.file.attribute.PosixFilePermission.OWNER_WRITE
+                ),
+                perms
+            )
+        }
+    }
 }
