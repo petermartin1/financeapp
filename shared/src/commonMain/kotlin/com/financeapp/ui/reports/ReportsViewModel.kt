@@ -3,6 +3,7 @@ package com.financeapp.ui.reports
 import com.financeapp.ui.supervisedViewModelScope
 
 import com.financeapp.domain.model.*
+import com.financeapp.domain.reporting.expandSpendingLines
 import com.financeapp.domain.repository.CategoryRepository
 import com.financeapp.domain.repository.TransactionRepository
 import com.financeapp.domain.repository.AccountRepository
@@ -100,23 +101,27 @@ class ReportsViewModel(
         val categoriesById = categories.associateBy { it.id }
         val categoryNames = categories.associate { it.id to it.name }.toMutableMap()
 
+        // Expand split transactions into their per-category lines so a split purchase is reported
+        // under each split's category instead of the parent's.
+        val splitsByTransactionId = transactionRepository.getSplitsByTransactionIds(transactions.map { it.id })
+        val spendingLines = expandSpendingLines(transactions, splitsByTransactionId)
+
         // Spending = negative, non-transfer outflows. Exclude income- and transfer-typed
         // categories (a refund/charge-back tagged with an income category is not spending),
         // consistent with the dashboard's getSpendingByCategory. Uncategorized outflows are
         // still shown as "Uncategorized".
-        val expensesByCategory = transactions
-            .filter { it.transferId == null }
+        val expensesByCategory = spendingLines
             .filter { it.amount < 0 }
-            .filter { txn ->
-                val type = txn.categoryId?.let { categoriesById[it]?.type }
+            .filter { line ->
+                val type = line.categoryId?.let { categoriesById[it]?.type }
                 type == null || type == CategoryType.EXPENSE
             }
             .groupBy { it.categoryId }
 
         val totalSpent = expensesByCategory.values.flatten().sumOf { kotlin.math.abs(it.amount) }
 
-        val categorySpending = expensesByCategory.map { (categoryId, txns) ->
-            val amount = txns.sumOf { kotlin.math.abs(it.amount) }
+        val categorySpending = expensesByCategory.map { (categoryId, lines) ->
+            val amount = lines.sumOf { kotlin.math.abs(it.amount) }
             val categoryName = categoryId?.let { categoryNames[it] } ?: "Uncategorized"
             val percentage = if (totalSpent > 0) (amount.toFloat() / totalSpent) * 100 else 0f
 

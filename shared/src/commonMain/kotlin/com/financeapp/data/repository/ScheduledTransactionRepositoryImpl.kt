@@ -90,6 +90,9 @@ class ScheduledTransactionRepositoryImpl(
                 it[nextDate] = scheduledTransaction.nextDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
                 it[endDate] = scheduledTransaction.endDate?.atStartOfDayIn(TimeZone.UTC)?.toEpochMilliseconds()
                 it[isActive] = scheduledTransaction.isActive
+                // Anchor the day-of-month so MONTHLY/YEARLY schedules don't drift; default it from
+                // the start date when the caller didn't specify one.
+                it[dayOfMonth] = scheduledTransaction.dayOfMonth ?: scheduledTransaction.nextDate.dayOfMonth
             }[ScheduledTransactions.id].value.toLong()
         }
         notifyScheduledTransactionsChanged()
@@ -135,7 +138,8 @@ class ScheduledTransactionRepositoryImpl(
             frequency = TransactionFrequency.valueOf(this[ScheduledTransactions.frequency]),
             nextDate = Instant.fromEpochMilliseconds(nextDateMillis).toLocalDateTime(TimeZone.UTC).date,
             endDate = endDateMillis?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.UTC).date },
-            isActive = this[ScheduledTransactions.isActive]
+            isActive = this[ScheduledTransactions.isActive],
+            dayOfMonth = this[ScheduledTransactions.dayOfMonth]
         )
     }
 

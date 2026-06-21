@@ -3,6 +3,8 @@ package com.financeapp.data.repository
 import com.financeapp.test.*
 import com.financeapp.domain.repository.TransactionRepository
 import com.financeapp.domain.repository.AccountRepository
+import com.financeapp.domain.model.CategoryType
+import com.financeapp.domain.model.SplitItem
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -10,6 +12,9 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlin.time.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.sql.Database
 import kotlin.test.*
 
@@ -49,6 +54,42 @@ class TransactionRepositoryTest {
     @AfterTest
     fun teardown() {
         database.clearAllTables()
+    }
+
+    @Test
+    fun `getSpendingByCategory attributes split amounts to each split category`() = runTest {
+        val categoryRepository = CategoryRepositoryImpl(database, testDispatcher)
+        val tagRepository = TagRepositoryImpl(database, testDispatcher)
+
+        val groceriesId = categoryRepository.insertCategory(
+            TestDataFactory.createTestCategory(name = "Groceries", type = CategoryType.EXPENSE)
+        )
+        val transportId = categoryRepository.insertCategory(
+            TestDataFactory.createTestCategory(name = "Transport", type = CategoryType.EXPENSE)
+        )
+
+        // getSpendingByCategory looks at the current month, so date the purchase today.
+        val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+        val txnId = repository.insertTransaction(
+            TestDataFactory.createTestTransaction(
+                accountId = testAccountId,
+                categoryId = groceriesId,
+                amount = -10000,
+                date = today
+            )
+        )
+        tagRepository.setSplitsForTransaction(
+            txnId,
+            listOf(
+                SplitItem(transactionId = txnId, categoryId = groceriesId, amount = -6000),
+                SplitItem(transactionId = txnId, categoryId = transportId, amount = -4000)
+            )
+        )
+
+        val spending = repository.getSpendingByCategory()
+
+        assertEquals(6000L, spending["Groceries"])
+        assertEquals(4000L, spending["Transport"])
     }
 
     // ========================================

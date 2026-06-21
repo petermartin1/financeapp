@@ -1,5 +1,6 @@
 package com.financeapp.domain.repository
 
+import com.financeapp.domain.model.SplitItem
 import com.financeapp.domain.model.Transaction
 import com.financeapp.domain.model.TransactionWithDetails
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +20,13 @@ interface TransactionRepository {
     suspend fun getRecentTransactions(limit: Int): List<TransactionWithDetails>
     suspend fun getTransactionByImportId(importId: String): Transaction?
     suspend fun getExistingImportIds(accountId: Long, importIds: List<String>): Set<String>
+
+    /**
+     * Returns the split items for the given transaction ids, keyed by transaction id. Transactions
+     * with no splits are omitted from the map. Used to make category spending reflect splits.
+     */
+    suspend fun getSplitsByTransactionIds(transactionIds: List<Long>): Map<Long, List<SplitItem>>
+
     suspend fun getSpendingByCategory(): Map<String, Long>
     suspend fun markTransactionReconciled(id: Long, isReconciled: Boolean)
 

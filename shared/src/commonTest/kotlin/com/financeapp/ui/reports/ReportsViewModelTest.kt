@@ -2,9 +2,11 @@ package com.financeapp.ui.reports
 
 import com.financeapp.data.repository.AccountRepositoryImpl
 import com.financeapp.data.repository.CategoryRepositoryImpl
+import com.financeapp.data.repository.TagRepositoryImpl
 import com.financeapp.data.repository.TransactionRepositoryImpl
 import com.financeapp.domain.model.CategoryType
 import com.financeapp.domain.model.ReportPeriod
+import com.financeapp.domain.model.SplitItem
 import com.financeapp.test.TestDataFactory
 import com.financeapp.test.clearAllTables
 import com.financeapp.test.createTestDatabase
@@ -90,5 +92,51 @@ class ReportsViewModelTest {
         assertTrue(names.contains("Groceries"), "expense category should be counted, got $names")
         assertFalse(names.contains("Salary"), "income-typed category must not be counted as spending, got $names")
         assertEquals(5000L, report.totalSpent)
+    }
+
+    @Test
+    fun `spending report attributes split amounts to each split category`() = runTest(timeout = 10.seconds) {
+        accountId = accountRepository.insertAccount(TestDataFactory.createTestAccount())
+        val tagRepository = TagRepositoryImpl(database, testDispatcher)
+        val groceries = categoryRepository.insertCategory(
+            TestDataFactory.createTestCategory(name = "Groceries", type = CategoryType.EXPENSE)
+        )
+        val transport = categoryRepository.insertCategory(
+            TestDataFactory.createTestCategory(name = "Transport", type = CategoryType.EXPENSE)
+        )
+
+        // A $100 purchase split $60 Groceries / $40 Transport should be reported under both
+        // categories, not entirely under the parent's category.
+        val txnId = transactionRepository.insertTransaction(
+            TestDataFactory.createTestTransaction(accountId = accountId, amount = -10000, categoryId = groceries)
+        )
+        tagRepository.setSplitsForTransaction(
+            txnId,
+            listOf(
+                SplitItem(transactionId = txnId, categoryId = groceries, amount = -6000),
+                SplitItem(transactionId = txnId, categoryId = transport, amount = -4000)
+            )
+        )
+
+        viewModel = ReportsViewModel(transactionRepository, accountRepository, categoryRepository)
+        viewModel.setPeriod(ReportPeriod.ALL_TIME)
+
+        var state: ReportsUiState? = null
+        viewModel.uiState.test(timeout = 10.seconds) {
+            while (true) {
+                val s = awaitItem()
+                if (!s.isLoading && s.spendingReport.categorySpending.isNotEmpty()) {
+                    state = s
+                    break
+                }
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val report = state!!.spendingReport
+        val byName = report.categorySpending.associate { it.categoryName to it.amount }
+        assertEquals(6000L, byName["Groceries"])
+        assertEquals(4000L, byName["Transport"])
+        assertEquals(10000L, report.totalSpent)
     }
 }

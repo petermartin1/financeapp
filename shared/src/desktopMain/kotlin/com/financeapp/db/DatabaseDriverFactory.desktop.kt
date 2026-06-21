@@ -82,6 +82,15 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
                 println("Warning: Migration may have already been applied: ${e.message}")
             }
         }
+        transaction(db) {
+            try {
+                // Migration: Add day_of_month anchor to ScheduledTransaction so MONTHLY/YEARLY
+                // schedules keep their original day-of-month instead of drifting to the 28th.
+                exec("ALTER TABLE ${ScheduledTransactions.tableName} ADD COLUMN IF NOT EXISTS day_of_month INT")
+            } catch (e: Exception) {
+                println("Warning: Migration may have already been applied: ${e.message}")
+            }
+        }
 
         // Create indexes for better performance
         // Note: Exposed automatically creates indexes for foreign key columns

@@ -75,6 +75,71 @@ class ScheduledEntryPlannerTest {
     }
 
     @Test
+    fun `monthly on the 31st keeps landing on month-end instead of drifting to the 28th`() {
+        // Anchor is derived from the start date's day (31). Each occurrence clamps to the month's
+        // length but the schedule must not get stuck on the 28th after February.
+        val plan = computeDueEntries(
+            scheduled = monthly(nextDate = LocalDate(2026, 1, 31)),
+            today = LocalDate(2026, 4, 30),
+            existingImportIds = emptySet()
+        )
+
+        assertEquals(
+            listOf(
+                LocalDate(2026, 1, 31),
+                LocalDate(2026, 2, 28),
+                LocalDate(2026, 3, 31),
+                LocalDate(2026, 4, 30)
+            ),
+            plan.occurrences.map { it.date }
+        )
+        assertEquals(LocalDate(2026, 5, 31).atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds(), plan.newNextDateMillis)
+    }
+
+    @Test
+    fun `persisted day-of-month anchor wins over a drifted next date`() {
+        // Simulates a schedule whose stored nextDate has already clamped to Feb 28 across an
+        // earlier run, but whose original anchor (31) is preserved in dayOfMonth.
+        val scheduled = monthly(nextDate = LocalDate(2026, 2, 28)).copy(dayOfMonth = 31)
+
+        val plan = computeDueEntries(scheduled, today = LocalDate(2026, 4, 30), existingImportIds = emptySet())
+
+        assertEquals(
+            listOf(LocalDate(2026, 2, 28), LocalDate(2026, 3, 31), LocalDate(2026, 4, 30)),
+            plan.occurrences.map { it.date }
+        )
+    }
+
+    @Test
+    fun `yearly on Feb 29 clamps in common years and recovers in the next leap year`() {
+        val scheduled = ScheduledTransaction(
+            id = 7,
+            accountId = 1,
+            payeeId = null,
+            categoryId = null,
+            amount = -5000,
+            memo = "Annual",
+            frequency = TransactionFrequency.YEARLY,
+            nextDate = LocalDate(2024, 2, 29),
+            endDate = null,
+            isActive = true
+        )
+
+        val plan = computeDueEntries(scheduled, today = LocalDate(2028, 3, 1), existingImportIds = emptySet())
+
+        assertEquals(
+            listOf(
+                LocalDate(2024, 2, 29),
+                LocalDate(2025, 2, 28),
+                LocalDate(2026, 2, 28),
+                LocalDate(2027, 2, 28),
+                LocalDate(2028, 2, 29)
+            ),
+            plan.occurrences.map { it.date }
+        )
+    }
+
+    @Test
     fun `nothing due when the next date is in the future`() {
         val plan = computeDueEntries(
             scheduled = monthly(nextDate = LocalDate(2026, 6, 15)),

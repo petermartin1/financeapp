@@ -6,6 +6,7 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
 /** A single occurrence to post when catching up a due scheduled transaction. */
@@ -41,6 +42,11 @@ internal fun computeDueEntries(
 ): DueEntryPlan {
     val occurrences = mutableListOf<DueOccurrence>()
 
+    // The day-of-month the schedule should land on. Use the persisted anchor when present,
+    // otherwise fall back to the current next date's day (legacy rows). This keeps month-end
+    // schedules from drifting to the 28th after they pass a short month.
+    val anchorDay = scheduled.dayOfMonth ?: scheduled.nextDate.dayOfMonth
+
     var currentDate = scheduled.nextDate
     while (currentDate <= today && (scheduled.endDate == null || currentDate <= scheduled.endDate)) {
         val dateMillis = currentDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
@@ -48,7 +54,7 @@ internal fun computeDueEntries(
         if (importId !in existingImportIds) {
             occurrences.add(DueOccurrence(currentDate, importId))
         }
-        currentDate = nextScheduledDate(currentDate, scheduled.frequency)
+        currentDate = nextScheduledDate(currentDate, scheduled.frequency, anchorDay)
     }
 
     val newNextDateMillis = currentDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
@@ -58,11 +64,33 @@ internal fun computeDueEntries(
     return DueEntryPlan(occurrences, newNextDateMillis, deactivate)
 }
 
-internal fun nextScheduledDate(current: LocalDate, frequency: TransactionFrequency): LocalDate =
+/**
+ * Advances [current] by one period. For MONTHLY/YEARLY the result is anchored on [anchorDay]
+ * (the schedule's intended day-of-month), clamped to the target month's length so a "31st"
+ * schedule lands on the 28th/29th/30th in short months without losing its anchor for later
+ * months. [anchorDay] defaults to [current]'s own day, which preserves day/week behaviour for
+ * the other frequencies.
+ */
+internal fun nextScheduledDate(
+    current: LocalDate,
+    frequency: TransactionFrequency,
+    anchorDay: Int = current.dayOfMonth
+): LocalDate =
     when (frequency) {
         TransactionFrequency.DAILY -> current.plus(1, DateTimeUnit.DAY)
         TransactionFrequency.WEEKLY -> current.plus(7, DateTimeUnit.DAY)
         TransactionFrequency.BIWEEKLY -> current.plus(14, DateTimeUnit.DAY)
-        TransactionFrequency.MONTHLY -> current.plus(1, DateTimeUnit.MONTH)
-        TransactionFrequency.YEARLY -> current.plus(1, DateTimeUnit.YEAR)
+        // plus(MONTH/YEAR) gives the right target month/year (clamping the day if needed); we then
+        // re-apply the anchor, clamped to that month, so the day doesn't ratchet down over time.
+        TransactionFrequency.MONTHLY -> current.plus(1, DateTimeUnit.MONTH).withClampedDay(anchorDay)
+        TransactionFrequency.YEARLY -> current.plus(1, DateTimeUnit.YEAR).withClampedDay(anchorDay)
     }
+
+/** Returns this date with its day replaced by [day], clamped to the number of days in its month. */
+private fun LocalDate.withClampedDay(day: Int): LocalDate {
+    val daysInMonth = LocalDate(year, month, 1)
+        .plus(1, DateTimeUnit.MONTH)
+        .minus(1, DateTimeUnit.DAY)
+        .dayOfMonth
+    return LocalDate(year, monthNumber, day.coerceIn(1, daysInMonth))
+}

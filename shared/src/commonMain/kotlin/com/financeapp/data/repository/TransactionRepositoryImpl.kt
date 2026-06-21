@@ -6,8 +6,10 @@ import com.financeapp.db.schema.Payees
 import com.financeapp.db.schema.SplitItems
 import com.financeapp.db.schema.TransactionTags
 import com.financeapp.db.schema.Transactions
+import com.financeapp.domain.model.SplitItem
 import com.financeapp.domain.model.Transaction
 import com.financeapp.domain.model.TransactionWithDetails
+import com.financeapp.domain.reporting.expandSpendingLines
 import com.financeapp.domain.repository.TransactionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -327,6 +329,12 @@ class TransactionRepositoryImpl(
         }
     }
 
+    override suspend fun getSplitsByTransactionIds(transactionIds: List<Long>): Map<Long, List<SplitItem>> =
+        withContext(ioDispatcher) {
+            if (transactionIds.isEmpty()) return@withContext emptyMap()
+            transaction(database) { splitsByTransactionIds(transactionIds) }
+        }
+
     override suspend fun getSpendingByCategory(): Map<String, Long> = withContext(ioDispatcher) {
         transaction(database) {
             // Get current month's date range
@@ -342,30 +350,47 @@ class TransactionRepositoryImpl(
                 .where { Categories.type eq "EXPENSE" }
                 .associate { it[Categories.id].value.toLong() to it[Categories.name] }
 
-            // Get all transactions for current month that are:
-            // - negative amounts (outflows)
-            // - not transfers (transferId is null)
-            // - have an expense category
+            // Load this month's non-transfer transactions, then expand any split transactions into
+            // their per-category lines so spending reflects how the money was actually allocated.
             val transactions = Transactions
                 .selectAll().where {
                     (Transactions.date greaterEq startMillis) and
                     (Transactions.date lessEq endMillis) and
-                    (Transactions.amount less 0) and
-                    (Transactions.transferId.isNull()) and
-                    (Transactions.categoryId.isNotNull())
+                    (Transactions.transferId.isNull())
                 }
                 .map { it.toDomain() }
-                .filter { it.categoryId != null && expenseCategories.containsKey(it.categoryId) }
 
-            // Group by category
-            transactions
+            val splitsByTransactionId = splitsByTransactionIds(transactions.map { it.id })
+
+            // Keep only expense-category outflows (negative). Uncategorized and income/transfer-typed
+            // lines are excluded here, matching the dashboard's long-standing behavior.
+            expandSpendingLines(transactions, splitsByTransactionId)
+                .filter { it.amount < 0 && it.categoryId != null && expenseCategories.containsKey(it.categoryId) }
                 .groupBy { it.categoryId }
-                .mapNotNull { (categoryId, txns) ->
+                .mapNotNull { (categoryId, lines) ->
                     val categoryName = categoryId?.let { expenseCategories[it] } ?: return@mapNotNull null
-                    categoryName to kotlin.math.abs(txns.sumOf { it.amount })
+                    categoryName to kotlin.math.abs(lines.sumOf { it.amount })
                 }
                 .toMap()
         }
+    }
+
+    // Split lookup used inside an existing transaction(database) block (no dispatcher/transaction
+    // wrapping, unlike the public getSplitsByTransactionIds).
+    private fun splitsByTransactionIds(transactionIds: List<Long>): Map<Long, List<SplitItem>> {
+        if (transactionIds.isEmpty()) return emptyMap()
+        return SplitItems
+            .selectAll().where { SplitItems.transactionId inList transactionIds.map { it.toInt() } }
+            .map {
+                SplitItem(
+                    id = it[SplitItems.id].value.toLong(),
+                    transactionId = it[SplitItems.transactionId].value.toLong(),
+                    categoryId = it[SplitItems.categoryId]?.value?.toLong(),
+                    amount = it[SplitItems.amount],
+                    memo = it[SplitItems.memo]
+                )
+            }
+            .groupBy { it.transactionId }
     }
 
     override suspend fun markTransactionReconciled(id: Long, isReconciled: Boolean): Unit = withContext(ioDispatcher) {

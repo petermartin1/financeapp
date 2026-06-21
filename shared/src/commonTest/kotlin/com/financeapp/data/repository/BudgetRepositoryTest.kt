@@ -5,8 +5,10 @@ import com.financeapp.domain.repository.BudgetRepository
 import com.financeapp.domain.repository.CategoryRepository
 import com.financeapp.domain.repository.TransactionRepository
 import com.financeapp.domain.repository.AccountRepository
+import com.financeapp.domain.repository.TagRepository
 import com.financeapp.domain.model.Budget
 import com.financeapp.domain.model.CategoryType
+import com.financeapp.domain.model.SplitItem
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -24,6 +26,7 @@ class BudgetRepositoryTest {
     private lateinit var categoryRepository: CategoryRepository
     private lateinit var transactionRepository: TransactionRepository
     private lateinit var accountRepository: AccountRepository
+    private lateinit var tagRepository: TagRepository
     private var testAccountId: Long = 0
     private var testCategoryId: Long = 0
     private val testDispatcher = UnconfinedTestDispatcher()
@@ -35,6 +38,7 @@ class BudgetRepositoryTest {
         categoryRepository = CategoryRepositoryImpl(database, testDispatcher)
         transactionRepository = TransactionRepositoryImpl(database, testDispatcher)
         accountRepository = AccountRepositoryImpl(database, testDispatcher)
+        tagRepository = TagRepositoryImpl(database, testDispatcher)
 
         testAccountId = runBlocking {
             val account = TestDataFactory.createTestAccount()
@@ -374,6 +378,89 @@ class BudgetRepositoryTest {
             val budgets = awaitItem()
             assertEquals(1, budgets.size)
             assertEquals(10000L, budgets[0].spent) // Only expense amount
+            cancelAndConsumeRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `getBudgetsWithSpendingByMonth should exclude transfers from spending`() = runTest {
+        budgetRepository.insertOrUpdateBudget(Budget(0, testCategoryId, 50000, 2024, 11))
+
+        // A normal expense in the budgeted category (should count)
+        transactionRepository.insertTransaction(
+            TestDataFactory.createTestTransaction(
+                accountId = testAccountId,
+                categoryId = testCategoryId,
+                amount = -10000,
+                date = testDate(2024, 11, 5)
+            )
+        )
+
+        // A transfer leg that happens to carry the budgeted category (should NOT count).
+        // Transfers are money moving between the user's own accounts, not spending, so they
+        // must be excluded just like the dashboard and spending report do.
+        val counterpartId = transactionRepository.insertTransaction(
+            TestDataFactory.createTestTransaction(
+                accountId = testAccountId,
+                amount = 20000,
+                date = testDate(2024, 11, 6)
+            )
+        )
+        transactionRepository.insertTransaction(
+            TestDataFactory.createTestTransaction(
+                accountId = testAccountId,
+                categoryId = testCategoryId,
+                amount = -20000,
+                transferId = counterpartId,
+                date = testDate(2024, 11, 6)
+            )
+        )
+
+        budgetRepository.notifyBudgetsChanged()
+        delay(200)
+
+        budgetRepository.getBudgetsWithSpendingByMonth(2024, 11).test(timeout = 5.seconds) {
+            val budgets = awaitItem()
+            assertEquals(1, budgets.size)
+            assertEquals(10000L, budgets[0].spent) // transfer leg excluded
+            cancelAndConsumeRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `getBudgetsWithSpendingByMonth attributes split amounts to each split category`() = runTest {
+        val transportCategoryId = categoryRepository.insertCategory(
+            TestDataFactory.createTestCategory(name = "Transport", type = CategoryType.EXPENSE)
+        )
+        budgetRepository.insertOrUpdateBudget(Budget(0, testCategoryId, 50000, 2024, 11))
+        budgetRepository.insertOrUpdateBudget(Budget(0, transportCategoryId, 50000, 2024, 11))
+
+        // One $100 purchase split $60 Groceries / $40 Transport. Each split must count against its
+        // own budget, not the whole amount against the parent's category.
+        val txnId = transactionRepository.insertTransaction(
+            TestDataFactory.createTestTransaction(
+                accountId = testAccountId,
+                categoryId = testCategoryId,
+                amount = -10000,
+                date = testDate(2024, 11, 5)
+            )
+        )
+        tagRepository.setSplitsForTransaction(
+            txnId,
+            listOf(
+                SplitItem(transactionId = txnId, categoryId = testCategoryId, amount = -6000, memo = "groceries"),
+                SplitItem(transactionId = txnId, categoryId = transportCategoryId, amount = -4000, memo = "gas")
+            )
+        )
+
+        budgetRepository.notifyBudgetsChanged()
+        delay(200)
+
+        budgetRepository.getBudgetsWithSpendingByMonth(2024, 11).test(timeout = 5.seconds) {
+            val budgets = awaitItem()
+            assertEquals(2, budgets.size)
+            assertEquals(6000L, budgets.first { it.budget.categoryId == testCategoryId }.spent)
+            assertEquals(4000L, budgets.first { it.budget.categoryId == transportCategoryId }.spent)
             cancelAndConsumeRemainingEvents()
         }
     }

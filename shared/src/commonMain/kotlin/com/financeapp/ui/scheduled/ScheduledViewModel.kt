@@ -84,7 +84,8 @@ class ScheduledViewModel(
             val scheduled = scheduledTransactionRepository.getScheduledTransactionById(id)
                 ?: return@launch
 
-            val newDate = nextScheduledDate(scheduled.nextDate, scheduled.frequency)
+            val anchorDay = scheduled.dayOfMonth ?: scheduled.nextDate.dayOfMonth
+            val newDate = nextScheduledDate(scheduled.nextDate, scheduled.frequency, anchorDay)
             val newDateMillis = newDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
 
             // Check if past end date

@@ -146,6 +146,9 @@ object ScheduledTransactions : IntIdTable("ScheduledTransaction") {
     val nextDate = long("next_date")
     val endDate = long("end_date").nullable()
     val isActive = bool("is_active").default(true)
+    // Intended day-of-month anchor (1-31) for MONTHLY/YEARLY schedules, so a "31st" schedule keeps
+    // landing on month-end instead of permanently drifting to the 28th. Nullable for legacy rows.
+    val dayOfMonth = integer("day_of_month").nullable()
 }
 
 // Transaction templates (for quick entry)

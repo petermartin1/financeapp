@@ -12,7 +12,14 @@ data class ScheduledTransaction(
     val frequency: TransactionFrequency,
     val nextDate: LocalDate,
     val endDate: LocalDate?,
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    /**
+     * The intended day-of-month anchor for MONTHLY/YEARLY schedules (1-31). Persisted separately
+     * from [nextDate] so a schedule set for, say, the 31st keeps landing on month-end instead of
+     * permanently drifting to the 28th once it passes a short month. Null for legacy rows and for
+     * frequencies where day-of-month is irrelevant; callers fall back to [nextDate]'s day.
+     */
+    val dayOfMonth: Int? = null
 )
 
 /**

@@ -2,10 +2,14 @@ package com.financeapp.data.repository
 
 import com.financeapp.db.schema.Budgets
 import com.financeapp.db.schema.Categories
+import com.financeapp.db.schema.SplitItems
 import com.financeapp.db.schema.Transactions
 import com.financeapp.domain.model.Budget
 import com.financeapp.domain.model.BudgetWithSpending
 import com.financeapp.domain.model.CategoryType
+import com.financeapp.domain.model.SplitItem
+import com.financeapp.domain.reporting.SimpleSpendingSource
+import com.financeapp.domain.reporting.expandSpendingLines
 import com.financeapp.domain.repository.BudgetRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -65,21 +69,33 @@ class BudgetRepositoryImpl(
                 val startMillis = startDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
                 val endMillis = endDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
 
-                // Get spending by category for the month
-                val spendingByCategory = Transactions
-                    .select(Transactions.categoryId, Transactions.amount.sum())
+                // Load the month's non-transfer transactions and expand any split transactions into
+                // their per-category lines, so a split purchase counts against each split's budget.
+                // Transfers move money between the user's own accounts and are not spending, so they
+                // are excluded (consistent with the dashboard and the spending report).
+                val monthSources = Transactions
+                    .select(Transactions.id, Transactions.categoryId, Transactions.amount)
                     .where {
                         (Transactions.date greaterEq startMillis) and
                         (Transactions.date less endMillis) and
-                        (Transactions.amount less 0) and
-                        Transactions.categoryId.isNotNull()
+                        Transactions.transferId.isNull()
                     }
-                    .groupBy(Transactions.categoryId)
-                    .associate {
-                        val catId = it[Transactions.categoryId]?.value?.toLong()
-                        val spent = it[Transactions.amount.sum()] ?: 0L
-                        catId to kotlin.math.abs(spent)
+                    .map {
+                        SimpleSpendingSource(
+                            id = it[Transactions.id].value.toLong(),
+                            categoryId = it[Transactions.categoryId]?.value?.toLong(),
+                            amount = it[Transactions.amount],
+                            transferId = null
+                        )
                     }
+
+                val splitsByTransactionId = loadSplits(monthSources.map { it.id })
+
+                // Spending per category = sum of outflow (negative) lines in that category.
+                val spendingByCategory = expandSpendingLines(monthSources, splitsByTransactionId)
+                    .filter { it.amount < 0 && it.categoryId != null }
+                    .groupBy { it.categoryId }
+                    .mapValues { (_, lines) -> kotlin.math.abs(lines.sumOf { it.amount }) }
 
                 // Get category names
                 val categoryNames = Categories.selectAll().associate {
@@ -185,6 +201,24 @@ class BudgetRepositoryImpl(
                 .selectAll().where { Categories.type eq CategoryType.EXPENSE.name }
                 .map { it[Categories.id].value.toLong() to it[Categories.name] }
         }
+    }
+
+    // Loads split items for the given transaction ids, keyed by transaction id, within the caller's
+    // existing transaction block. Transactions with no splits are simply absent from the map.
+    private fun loadSplits(transactionIds: List<Long>): Map<Long, List<SplitItem>> {
+        if (transactionIds.isEmpty()) return emptyMap()
+        return SplitItems
+            .selectAll().where { SplitItems.transactionId inList transactionIds.map { it.toInt() } }
+            .map {
+                SplitItem(
+                    id = it[SplitItems.id].value.toLong(),
+                    transactionId = it[SplitItems.transactionId].value.toLong(),
+                    categoryId = it[SplitItems.categoryId]?.value?.toLong(),
+                    amount = it[SplitItems.amount],
+                    memo = it[SplitItems.memo]
+                )
+            }
+            .groupBy { it.transactionId }
     }
 
     private fun ResultRow.toDomain(): Budget {
