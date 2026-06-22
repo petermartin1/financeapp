@@ -140,7 +140,7 @@ class OfxClient {
         }
     }
 
-    private fun buildTransactionRequest(
+    internal fun buildTransactionRequest(
         config: BankConfig,
         credentials: BankCredentials,
         accountId: String,
@@ -164,8 +164,8 @@ class OfxClient {
                     append("<TRNUID>$transactionId</TRNUID>")
                     append("<STMTRQ>")
                     append("<BANKACCTFROM>")
-                    append("<BANKID>${config.routingNumber}</BANKID>")
-                    append("<ACCTID>$accountId</ACCTID>")
+                    append("<BANKID>${escapeXml(config.routingNumber.orEmpty())}</BANKID>")
+                    append("<ACCTID>${escapeXml(accountId)}</ACCTID>")
                     append("<ACCTTYPE>${accountType.ofxValue}</ACCTTYPE>")
                     append("</BANKACCTFROM>")
                     append("<INCTRAN>")
@@ -183,7 +183,7 @@ class OfxClient {
                     append("<TRNUID>$transactionId</TRNUID>")
                     append("<CCSTMTRQ>")
                     append("<CCACCTFROM>")
-                    append("<ACCTID>$accountId</ACCTID>")
+                    append("<ACCTID>${escapeXml(accountId)}</ACCTID>")
                     append("</CCACCTFROM>")
                     append("<INCTRAN>")
                     append("<DTSTART>${formatOfxDate(startDate)}</DTSTART>")
@@ -200,8 +200,8 @@ class OfxClient {
                     append("<TRNUID>$transactionId</TRNUID>")
                     append("<INVSTMTRQ>")
                     append("<INVACCTFROM>")
-                    append("<BROKERID>${config.brokerId ?: ""}</BROKERID>")
-                    append("<ACCTID>$accountId</ACCTID>")
+                    append("<BROKERID>${escapeXml(config.brokerId.orEmpty())}</BROKERID>")
+                    append("<ACCTID>${escapeXml(accountId)}</ACCTID>")
                     append("</INVACCTFROM>")
                     append("<INCTRAN>")
                     append("<DTSTART>${formatOfxDate(startDate)}</DTSTART>")
@@ -274,8 +274,8 @@ NEWFILEUID:NONE
             append("<USERPASS>${escapeXml(credentials.password)}</USERPASS>")
             append("<LANGUAGE>ENG</LANGUAGE>")
             append("<FI>")
-            append("<ORG>${config.fiOrg}</ORG>")
-            append("<FID>${config.fiId}</FID>")
+            append("<ORG>${escapeXml(config.fiOrg)}</ORG>")
+            append("<FID>${escapeXml(config.fiId)}</FID>")
             append("</FI>")
             append("<APPID>QWIN</APPID>")
             append("<APPVER>2700</APPVER>")

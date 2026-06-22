@@ -17,7 +17,7 @@ class YahooFinanceClient(
     private val httpClient: HttpClient
 ) {
     companion object {
-        private const val BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
+        internal const val BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
         private const val REQUEST_TIMEOUT_MS = 10000L
         private const val MAX_SYMBOLS_PER_REQUEST = 10
     }
@@ -27,7 +27,7 @@ class YahooFinanceClient(
      */
     suspend fun getQuote(symbol: String): Result<StockQuote> {
         return try {
-            val response = httpClient.get("$BASE_URL/$symbol") {
+            val response = httpClient.get(yahooChartUrl(symbol)) {
                 parameter("interval", "1d")
                 parameter("range", "1d")
             }
@@ -76,7 +76,7 @@ class YahooFinanceClient(
      */
     suspend fun getPriceHistory(symbol: String, days: Int): Result<List<HistoricalPrice>> {
         return try {
-            val response = httpClient.get("$BASE_URL/$symbol") {
+            val response = httpClient.get(yahooChartUrl(symbol)) {
                 parameter("interval", "1d")
                 parameter("range", "${days}d")
             }
@@ -109,6 +109,14 @@ class YahooFinanceClient(
         }
     }
 }
+
+/**
+ * Builds the Yahoo chart URL for a symbol, percent-encoding the symbol as a single path segment
+ * so a malformed/hostile ticker (containing '/', '?', '#', spaces, etc.) cannot alter the request
+ * path or append query parameters.
+ */
+internal fun yahooChartUrl(symbol: String): String =
+    "${YahooFinanceClient.BASE_URL}/${symbol.encodeURLPathPart()}"
 
 /**
  * Current stock quote data
