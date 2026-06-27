@@ -30,6 +30,11 @@ compose.desktop {
             packageName = "Finance App"
             packageVersion = "1.0.0"
 
+            // JDK modules the trimmed jlink runtime must include. Without java.sql,
+            // H2/Exposed fail at runtime with "java.sql.Driver". List from
+            // `./gradlew :desktopApp:suggestRuntimeModules`.
+            modules("java.instrument", "java.management", "java.naming", "java.sql", "jdk.unsupported")
+
             macOS {
                 bundleID = "com.financeapp.desktop"
             }

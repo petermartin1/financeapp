@@ -11,3 +11,6 @@ xcuserdata
 *.xcworkspace
 Pods/
 /.kotlin/sessions/*
+
+# Windows build artifacts pulled from CI (large, never commit)
+dist-windows/
