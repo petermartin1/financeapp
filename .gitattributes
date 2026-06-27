@@ -1,0 +1,6 @@
+# Keep binaries from being mangled by autocrlf on Windows checkouts (CI runners)
+*.jar binary
+
+# Gradle wrapper scripts: stable line endings per platform
+gradlew      text eol=lf
+gradlew.bat  text eol=crlf
