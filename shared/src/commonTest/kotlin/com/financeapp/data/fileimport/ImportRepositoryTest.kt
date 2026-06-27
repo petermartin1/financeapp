@@ -68,6 +68,21 @@ class ImportRepositoryTest {
         type = TransactionType.DEBIT
     )
 
+    private fun importedCheck(
+        fitId: String,
+        checkNumber: String? = "1234",
+        name: String = "CHECK",
+        type: TransactionType = TransactionType.CHECK
+    ) = ImportedTransaction(
+        fitId = fitId,
+        date = testDate(),
+        amount = -5000,
+        name = name,
+        memo = null,
+        checkNumber = checkNumber,
+        type = type
+    )
+
     @Test
     fun `importWithMappings creates payee, transaction, alias and tags`() = runTest {
         val accountId = insertAccount()
@@ -95,6 +110,70 @@ class ImportRepositoryTest {
         val saved = transactionRepository.getTransactionByImportId("F1")
         requireNotNull(saved) { "imported transaction should exist" }
         assertTrue(tagRepository.getTagsForTransaction(saved.id).any { it.id == tagId })
+    }
+
+    @Test
+    fun `analyzeImportPayees excludes checks from payee resolution`() = runTest {
+        insertAccount()
+
+        val transactions = listOf(
+            importedTxn("F1", "WHOLE FOODS"),
+            importedCheck("F2", checkNumber = "1234", name = "CHECK 1234"),
+            // A check identified only by TRNTYPE, with no check number, must also be excluded.
+            importedCheck("F3", checkNumber = null, name = "CHECK", type = TransactionType.CHECK)
+        )
+
+        val result = importRepository.analyzeImportPayees(transactions).getOrThrow()
+
+        val consideredNames = result.autoResolved.keys + result.needsReview.map { it.importedName }
+        assertTrue("WHOLE FOODS" in consideredNames, "real payee should be considered")
+        assertTrue(consideredNames.none { it.startsWith("CHECK") }, "checks must not be offered as payees")
+    }
+
+    @Test
+    fun `importWithMappings imports a check with no payee but keeps the check number`() = runTest {
+        val accountId = insertAccount()
+
+        // Checks are excluded from analysis, so the user supplies no mapping for them.
+        val result = importRepository.importWithMappings(
+            listOf(importedCheck("C1", checkNumber = "1234", name = "CHECK 1234")),
+            accountId,
+            emptyMap()
+        )
+
+        assertTrue(result.isSuccess, "check import should succeed")
+        assertEquals(1, result.getOrThrow().imported)
+        assertTrue(payeeRepository.getAllPayees().first().isEmpty(), "no payee should be created for a check")
+
+        val saved = transactionRepository.getTransactionByImportId("C1")
+        requireNotNull(saved) { "imported check should exist" }
+        assertNull(saved.payeeId, "check must have no payee assigned")
+        assertEquals("1234", saved.checkNumber, "check number must be preserved for later payee assignment")
+    }
+
+    @Test
+    fun `direct import does not create a payee for checks`() = runTest {
+        val accountId = insertAccount()
+
+        val result = importRepository.importPreviewedTransactions(
+            listOf(
+                importedTxn("D1", "WHOLE FOODS"),
+                importedCheck("D2", checkNumber = "5678", name = "CHECK")
+            ),
+            accountId
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(2, result.getOrThrow().imported)
+
+        val payeeNames = payeeRepository.getAllPayees().first().map { it.name }
+        assertTrue(payeeNames.any { it.equals("WHOLE FOODS", ignoreCase = true) }, "real payee created")
+        assertTrue(payeeNames.none { it.equals("CHECK", ignoreCase = true) }, "no payee created for the check")
+
+        val check = transactionRepository.getTransactionByImportId("D2")
+        requireNotNull(check)
+        assertNull(check.payeeId, "check must have no payee assigned")
+        assertEquals("5678", check.checkNumber)
     }
 
     @Test

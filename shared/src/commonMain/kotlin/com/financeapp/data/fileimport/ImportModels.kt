@@ -11,7 +11,15 @@ data class ImportedTransaction(
     val checkNumber: String?,
     val type: TransactionType,
     val sic: String? = null  // Standard Industrial Classification code
-)
+) {
+    /**
+     * A check has no meaningful payee in its imported name (banks send "CHECK", "CHECK 1234",
+     * or just the number). Imports therefore must not invent a payee from that name — the
+     * transaction is saved with its check number and no payee, for the user to assign later.
+     */
+    val isCheck: Boolean
+        get() = type == TransactionType.CHECK || !checkNumber.isNullOrBlank()
+}
 
 enum class TransactionType {
     CREDIT, DEBIT, CHECK, ATM, TRANSFER, OTHER

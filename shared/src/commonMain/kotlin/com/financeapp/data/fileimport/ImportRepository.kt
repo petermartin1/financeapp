@@ -121,8 +121,8 @@ class ImportRepository(
     ): Result<PayeeResolutionResult> = withContext(Dispatchers.IO) {
         try {
 
-            // Extract unique payee names
-            val payeeNames = transactions.map { it.name }.distinct()
+            // Extract unique payee names, skipping checks (their name is not a payee).
+            val payeeNames = transactions.filterNot { it.isCheck }.map { it.name }.distinct()
 
             // Get all existing payees
             val payeeList = payeeRepository.getAllPayees().first()
@@ -248,7 +248,9 @@ class ImportRepository(
                         it[Transactions.accountId] = accountId.toInt()
                         it[Transactions.date] = dateMillis
                         it[Transactions.amount] = importedTxn.amount
-                        it[Transactions.payeeId] = payeeMap[importedTxn.name.lowercase()]?.toInt()
+                        // Checks never carry a payee — leave it unassigned for the user to fill in.
+                        it[Transactions.payeeId] = if (importedTxn.isCheck) null
+                            else payeeMap[importedTxn.name.lowercase()]?.toInt()
                         it[Transactions.categoryId] = (if (mapping?.applyCategory == true) mapping.categoryId else null)?.toInt()
                         it[Transactions.memo] = importedTxn.memo
                         it[Transactions.checkNumber] = importedTxn.checkNumber
@@ -312,8 +314,8 @@ class ImportRepository(
                 ))
             }
 
-            // Step 2: Get all unique payee names
-            val payeeNames = newTransactions.map { it.name }.distinct()
+            // Step 2: Get all unique payee names, skipping checks (their name is not a payee).
+            val payeeNames = newTransactions.filterNot { it.isCheck }.map { it.name }.distinct()
 
             // Step 3: Get existing payees in a single query
             val existingPayees = payeeRepository.getPayeesByNames(payeeNames)
@@ -337,7 +339,8 @@ class ImportRepository(
                     accountId = accountId,
                     date = importedTxn.date,
                     amount = importedTxn.amount,
-                    payeeId = payeeMap[importedTxn.name.lowercase()],
+                    // Checks never carry a payee — leave it unassigned for the user to fill in.
+                    payeeId = if (importedTxn.isCheck) null else payeeMap[importedTxn.name.lowercase()],
                     categoryId = null,
                     memo = importedTxn.memo,
                     checkNumber = importedTxn.checkNumber,
