@@ -1,6 +1,6 @@
 [versions]
-kotlin = "2.3.0"
-compose-multiplatform = "1.10.0"
+kotlin = "2.4.0"
+compose-multiplatform = "1.11.1"
 exposed = "0.47.0"
 h2 = "2.2.224"
 ktor = "3.0.3"
