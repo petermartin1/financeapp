@@ -173,7 +173,7 @@ private fun formatKeyName(key: Key): String {
         Key.Delete -> "Del"
         Key.PageUp -> "PgUp"
         Key.PageDown -> "PgDn"
-        Key.Home -> "Home"
+        Key.MoveHome -> "Home"
         Key.MoveEnd -> "End"
         Key.F1 -> "F1"
         Key.F2 -> "F2"

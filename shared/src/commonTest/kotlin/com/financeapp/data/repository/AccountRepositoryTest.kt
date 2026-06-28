@@ -17,11 +17,11 @@ import com.financeapp.db.schema.Holdings
 import com.financeapp.db.schema.HoldingSnapshots
 import com.financeapp.db.schema.DividendEvents
 import com.financeapp.db.schema.PortfolioSnapshots
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
 import kotlin.time.Duration.Companion.seconds
 

@@ -17,7 +17,7 @@ import com.financeapp.domain.repository.BudgetRepository
 import com.financeapp.db.DatabaseDriverFactory
 import com.financeapp.domain.repository.AccountRepository
 import com.financeapp.domain.repository.PayeeMatchingRepository
-import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.v1.jdbc.Database
 import com.financeapp.domain.repository.AppLockRepository
 import com.financeapp.domain.repository.CategoryRepository
 import com.financeapp.domain.repository.PayeeRepository

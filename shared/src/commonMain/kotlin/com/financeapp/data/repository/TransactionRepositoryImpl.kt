@@ -26,9 +26,9 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 class TransactionRepositoryImpl(
     private val database: Database,
@@ -219,7 +219,7 @@ class TransactionRepositoryImpl(
         val now = Clock.System.now().toEpochMilliseconds()
         val dateMillis = transaction.date.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
 
-        org.jetbrains.exposed.sql.transactions.transaction(database) {
+        org.jetbrains.exposed.v1.jdbc.transactions.transaction(database) {
             // R21: the edit dialog may hold a category that was deleted elsewhere while it was
             // open. Drop a categoryId that no longer references a live category so the rest of
             // the user's edit still saves instead of failing with an FK violation.
@@ -248,7 +248,7 @@ class TransactionRepositoryImpl(
     }
 
     override suspend fun deleteTransaction(id: Long): Unit = withContext(ioDispatcher) {
-        org.jetbrains.exposed.sql.transactions.transaction(database) {
+        org.jetbrains.exposed.v1.jdbc.transactions.transaction(database) {
             val txn = Transactions.selectAll()
                 .where { Transactions.id eq id.toInt() }
                 .singleOrNull()
