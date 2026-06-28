@@ -2,7 +2,7 @@
 kotlin = "2.4.0"
 compose-multiplatform = "1.11.1"
 exposed = "0.47.0"
-h2 = "2.2.224"
+h2 = "2.4.240"
 ktor = "3.0.3"
 koin = "4.2.2"
 bouncycastle = "1.84"
