@@ -1,7 +1,7 @@
 package com.financeapp.db.schema
 
-import org.jetbrains.exposed.dao.id.IntIdTable
-import org.jetbrains.exposed.sql.ReferenceOption
+import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
+import org.jetbrains.exposed.v1.core.ReferenceOption
 
 // Accounts (bank accounts, credit cards, investment accounts)
 object Accounts : IntIdTable("Account") {
@@ -79,7 +79,7 @@ object Tags : IntIdTable("Tag") {
 }
 
 // Transaction-Tag relationship (many-to-many)
-object TransactionTags : org.jetbrains.exposed.sql.Table("TransactionTag") {
+object TransactionTags : org.jetbrains.exposed.v1.core.Table("TransactionTag") {
     val transactionId = reference("transaction_id", Transactions)
     val tagId = reference("tag_id", Tags)
     override val primaryKey = PrimaryKey(transactionId, tagId)

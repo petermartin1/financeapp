@@ -19,9 +19,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlin.time.Clock
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 class InvestmentRepositoryImpl(
     private val database: Database,
@@ -92,7 +92,7 @@ class InvestmentRepositoryImpl(
                 transaction(database) {
                     ensureLotsExist(holdingId.toInt())
                     HoldingLots
-                        .select { HoldingLots.holdingId eq holdingId.toInt() }
+                        .selectAll().where { HoldingLots.holdingId eq holdingId.toInt() }
                         .orderBy(HoldingLots.acquiredDate to SortOrder.ASC, HoldingLots.id to SortOrder.ASC)
                         .map { it.toLotDomain() }
                 }
@@ -188,7 +188,7 @@ class InvestmentRepositoryImpl(
     override suspend fun deleteHoldingLot(id: Long): Unit = withContext(ioDispatcher) {
         transaction(database) {
             val holdingId = HoldingLots
-                .select { HoldingLots.id eq id.toInt() }
+                .selectAll().where { HoldingLots.id eq id.toInt() }
                 .singleOrNull()
                 ?.get(HoldingLots.holdingId)
                 ?.value
@@ -280,14 +280,14 @@ class InvestmentRepositoryImpl(
 
     private fun Transaction.ensureLotsExist(holdingId: Int) {
         val hasLots = HoldingLots
-            .select { HoldingLots.holdingId eq holdingId }
+            .selectAll().where { HoldingLots.holdingId eq holdingId }
             .limit(1)
             .any()
 
         if (hasLots) return
 
         val holdingRow = Holdings
-            .select { Holdings.id eq holdingId }
+            .selectAll().where { Holdings.id eq holdingId }
             .singleOrNull() ?: return
 
         val sharesValue = holdingRow[Holdings.shares]
@@ -313,8 +313,8 @@ class InvestmentRepositoryImpl(
         val costSum = HoldingLots.costBasis.sum()
 
         val totals = HoldingLots
-            .slice(shareSum, costSum)
-            .select { HoldingLots.holdingId eq holdingId }
+            .select(shareSum, costSum)
+            .where { HoldingLots.holdingId eq holdingId }
             .singleOrNull()
 
         val totalShares = totals?.get(shareSum) ?: 0.0

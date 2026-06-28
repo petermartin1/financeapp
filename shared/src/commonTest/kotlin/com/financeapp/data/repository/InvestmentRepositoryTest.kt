@@ -11,8 +11,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.time.Clock
-import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -23,7 +23,7 @@ import kotlin.test.assertNotNull
 class InvestmentRepositoryTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var repository: InvestmentRepositoryImpl
-    private lateinit var database: org.jetbrains.exposed.sql.Database
+    private lateinit var database: org.jetbrains.exposed.v1.jdbc.Database
 
     @BeforeTest
     fun setup() {

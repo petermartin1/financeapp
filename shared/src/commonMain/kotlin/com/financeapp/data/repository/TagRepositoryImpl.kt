@@ -16,9 +16,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlin.time.Clock
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 class TagRepositoryImpl(
     private val database: Database,
@@ -138,8 +138,8 @@ class TagRepositoryImpl(
 
         transaction(database) {
             SplitItems
-                .slice(SplitItems.transactionId)
-                .select { SplitItems.transactionId inList transactionIds.map { it.toInt() } }
+                .select(SplitItems.transactionId)
+                .where { SplitItems.transactionId inList transactionIds.map { it.toInt() } }
                 .map { it[SplitItems.transactionId].value.toLong() }
                 .toSet()
         }

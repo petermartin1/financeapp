@@ -13,7 +13,7 @@ import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
-import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.v1.jdbc.Database
 import kotlin.test.*
 import kotlin.time.Duration.Companion.seconds
 
