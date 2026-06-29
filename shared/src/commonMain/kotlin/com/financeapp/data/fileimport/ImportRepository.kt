@@ -253,7 +253,7 @@ class ImportRepository(
                             else payeeMap[importedTxn.name.lowercase()]?.toInt()
                         it[Transactions.categoryId] = (if (mapping?.applyCategory == true) mapping.categoryId else null)?.toInt()
                         it[Transactions.memo] = importedTxn.memo
-                        it[Transactions.checkNumber] = importedTxn.checkNumber
+                        it[Transactions.checkNumber] = importedTxn.effectiveCheckNumber
                         it[Transactions.isCleared] = false
                         it[Transactions.importId] = importedTxn.fitId
                         it[Transactions.transactionType] = importedTxn.type.name
@@ -343,7 +343,7 @@ class ImportRepository(
                     payeeId = if (importedTxn.isCheck) null else payeeMap[importedTxn.name.lowercase()],
                     categoryId = null,
                     memo = importedTxn.memo,
-                    checkNumber = importedTxn.checkNumber,
+                    checkNumber = importedTxn.effectiveCheckNumber,
                     isCleared = false,
                     importId = importedTxn.fitId,
                     transactionType = importedTxn.type.name,

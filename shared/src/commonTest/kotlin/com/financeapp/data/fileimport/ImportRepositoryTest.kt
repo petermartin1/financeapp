@@ -177,6 +177,47 @@ class ImportRepositoryTest {
     }
 
     @Test
+    fun `direct import does not create a payee for a name-only check (untagged)`() = runTest {
+        val accountId = insertAccount()
+
+        // The bank sent the check as a plain DEBIT with no CHECKNUM — only "CHECK 1234" in the name.
+        // This is the case the earlier fix missed: isCheck must catch it by name.
+        val result = importRepository.importPreviewedTransactions(
+            listOf(
+                importedTxn("D1", "WHOLE FOODS"),
+                importedTxn("D2", "CHECK 1234")
+            ),
+            accountId
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(2, result.getOrThrow().imported)
+
+        val payeeNames = payeeRepository.getAllPayees().first().map { it.name }
+        assertTrue(payeeNames.any { it.equals("WHOLE FOODS", ignoreCase = true) }, "real payee created")
+        assertTrue(payeeNames.none { it.contains("CHECK", ignoreCase = true) }, "no payee created for the untagged check")
+
+        val check = transactionRepository.getTransactionByImportId("D2")
+        requireNotNull(check)
+        assertNull(check.payeeId, "untagged check must have no payee assigned")
+        assertEquals("1234", check.checkNumber, "check number must be recovered from the name and preserved")
+    }
+
+    @Test
+    fun `direct import still creates a payee for a merchant whose name contains check`() = runTest {
+        val accountId = insertAccount()
+
+        val result = importRepository.importPreviewedTransactions(
+            listOf(importedTxn("M1", "CHECKERS")),
+            accountId
+        )
+
+        assertTrue(result.isSuccess)
+        val payeeNames = payeeRepository.getAllPayees().first().map { it.name }
+        assertTrue(payeeNames.any { it.equals("CHECKERS", ignoreCase = true) }, "Checkers is a real merchant, not a check")
+    }
+
+    @Test
     fun `importWithMappings rolls back everything when a step fails (atomicity)`() = runTest {
         val accountId = insertAccount()
 
