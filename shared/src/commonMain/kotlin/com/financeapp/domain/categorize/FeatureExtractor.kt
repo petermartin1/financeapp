@@ -57,6 +57,7 @@ class FeatureExtractor {
         const val TRIGRAM_PREFIX = "c:"
         const val SIC_PREFIX = "sic:"
         const val NUMBER_TOKEN = "w:#num"
+        const val SIGN_PREFIX = "sign:"
         const val SIGN_DEBIT = "sign:debit"
         const val SIGN_CREDIT = "sign:credit"
     }
