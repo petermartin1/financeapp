@@ -42,7 +42,11 @@ class ImportedTransactionTest {
             "E-CHECK 1234",
             "ECHECK 1234",
             "1234",
-            "#1234"
+            "#1234",
+            // Banks that prefix the check number then append descriptive boilerplate.
+            "Check 4313 Processed Check -",
+            "CHECK 1234 PROCESSED CHECK",
+            "Check #4313 Withdrawal"
         )
         for (name in checkNames) {
             assertTrue(txn(name).isCheck, "\"$name\" should be treated as a check")
@@ -77,6 +81,7 @@ class ImportedTransactionTest {
         assertEquals("1234", txn("CHECK 1234").effectiveCheckNumber)
         assertEquals("1234", txn("CHECK #1234").effectiveCheckNumber)
         assertEquals("1234", txn("1234").effectiveCheckNumber)
+        assertEquals("4313", txn("Check 4313 Processed Check -").effectiveCheckNumber)
         assertEquals(null, txn("CHECK").effectiveCheckNumber, "a check with no number recovers nothing")
     }
 

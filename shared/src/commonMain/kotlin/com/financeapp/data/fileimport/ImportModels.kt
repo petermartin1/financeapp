@@ -49,13 +49,22 @@ object CheckHeuristics {
         "^(?:e-?)?(?:check|cheque|chk|chq)(?:\\s*(?:no\\.?|number|#))?\\s*#?\\s*\\d*$",
         RegexOption.IGNORE_CASE
     )
+    // A check word immediately followed by a number, then any trailing boilerplate the bank
+    // appends, e.g. "Check 4313 Processed Check -". Requiring digits right after the check word
+    // keeps real merchants out: "CHECK INTO CASH" / "CHECK CITY" have a word (not a number) there,
+    // and "CHECKERS" / "CHECKCARD 1234 ..." don't start with the check word as a separate token.
+    private val checkPrefix = Regex(
+        "^(?:e-?)?(?:check|cheque|chk|chq)(?:\\s*(?:no\\.?|number|#))?\\s*#?\\s*\\d+\\b",
+        RegexOption.IGNORE_CASE
+    )
     // A bare check number such as "1234" or "#1234" (kept short so it can't match account refs).
     private val bareNumber = Regex("^#?\\d{1,7}$")
     private val digits = Regex("\\d+")
 
     fun isCheckName(name: String): Boolean {
         val n = name.trim()
-        return n.isNotEmpty() && (checkName.matches(n) || bareNumber.matches(n))
+        return n.isNotEmpty() &&
+            (checkName.matches(n) || checkPrefix.containsMatchIn(n) || bareNumber.matches(n))
     }
 
     /** Digits from a check-like name (e.g. "CHECK 1234" -> "1234"); null if the name isn't a check. */
