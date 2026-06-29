@@ -29,6 +29,7 @@ fun PayeeMappingDialog(
     allCategories: List<Category>,
     allTags: List<Tag>,
     similarRecentlyCreated: List<Payee>,
+    categorySuggestions: Map<String, CategorySuggestion> = emptyMap(),
     onMapToExisting: (Long, Long?, List<Long>, Boolean) -> Unit,
     onCreateNew: (String, Long?, List<Long>, Boolean) -> Unit,
     onNext: () -> Unit,
@@ -59,7 +60,11 @@ fun PayeeMappingDialog(
         )
     }
     var newPayeeName by remember(currentIndex) { mutableStateOf(currentPayee?.importedName ?: "") }
-    var selectedCategory by remember(currentIndex) { mutableStateOf<Category?>(null) }
+    // Pre-select a predicted category (if any) so the suggestion is visible and one tap to accept.
+    val categorySuggestion = currentPayee?.let { categorySuggestions[it.importedName] }
+    var selectedCategory by remember(currentIndex) {
+        mutableStateOf(categorySuggestion?.let { sug -> allCategories.find { it.id == sug.categoryId } })
+    }
     var selectedTagIds by remember(currentIndex) { mutableStateOf(emptyList<Long>()) }
     var rememberMapping by remember(currentIndex) { mutableStateOf(true) }
 
@@ -228,6 +233,28 @@ fun PayeeMappingDialog(
                             label = "Default Category",
                             showNone = true
                         )
+                    }
+
+                    if (categorySuggestion != null) {
+                        item {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    "Suggested: ${categorySuggestion.reason}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        }
                     }
 
                     item {

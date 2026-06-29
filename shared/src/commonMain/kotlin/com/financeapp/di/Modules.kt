@@ -13,6 +13,9 @@ import com.financeapp.data.repository.PreferencesStore
 import com.financeapp.data.repository.TransactionRepositoryImpl
 import com.financeapp.data.repository.BudgetRepositoryImpl
 import com.financeapp.domain.matching.PayeeMatcher
+import com.financeapp.domain.categorize.CategoryModelStore
+import com.financeapp.domain.categorize.CategoryPredictionService
+import com.financeapp.domain.categorize.TrainingSample
 import com.financeapp.domain.repository.BudgetRepository
 import com.financeapp.db.DatabaseDriverFactory
 import com.financeapp.domain.repository.AccountRepository
@@ -64,6 +67,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.flow.first
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -87,6 +91,24 @@ val sharedModule = module {
     single<ScheduledTransactionRepository> { ScheduledTransactionRepositoryImpl(get()) }
     single { PayeeMatcher() }
     single<PayeeMatchingRepository> { PayeeMatchingRepositoryImpl(get(), get()) }
+    // Category prediction: in-memory model trained from the user's categorized transactions,
+    // plus bundled cold-start knowledge. No table, no migration.
+    single {
+        val transactionRepository = get<TransactionRepository>()
+        CategoryModelStore(trainingData = {
+            transactionRepository.getAllTransactionsWithDetails().first()
+                .filter { it.transaction.categoryId != null }
+                .map { details ->
+                    TrainingSample(
+                        merchantName = details.payeeName ?: "",
+                        sic = details.transaction.sic,
+                        amountCents = details.transaction.amount,
+                        categoryId = details.transaction.categoryId!!
+                    )
+                }
+        })
+    }
+    single { CategoryPredictionService(get()) }
     single {
         HttpClient {
             install(ContentNegotiation) {
@@ -114,7 +136,7 @@ val sharedModule = module {
     single { AccountsViewModel(get()) }
     single { TransactionsViewModel(get(), get(), get(), get(), get()) }
     single { CategoriesViewModel(get()) }
-    single { ImportViewModel(get(), get(), get(), get(), get(), get()) }
+    single { ImportViewModel(get(), get(), get(), get(), get(), get(), get()) }
     single { ConnectionsViewModel(get()) }
     factory { ReconcileViewModel(get<TransactionRepository>(), get<AccountRepository>()) }
     single { ScheduledViewModel(get<ScheduledTransactionRepository>(), get<TransactionRepository>(), get<AccountRepository>()) }
