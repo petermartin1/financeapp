@@ -15,6 +15,9 @@ import com.financeapp.domain.model.PayeeMapping
 import com.financeapp.domain.model.Tag
 import com.financeapp.domain.model.UnresolvedPayee
 import com.financeapp.domain.matching.PayeeMatcher
+import com.financeapp.domain.categorize.CategoryPredictionService
+import com.financeapp.domain.categorize.PredictionInput
+import com.financeapp.domain.categorize.PredictionSource
 import com.financeapp.domain.repository.AccountRepository
 import com.financeapp.domain.repository.CategoryRepository
 import com.financeapp.domain.repository.PayeeRepository
@@ -32,7 +35,8 @@ class ImportViewModel(
     private val payeeRepository: PayeeRepository,
     private val categoryRepository: CategoryRepository,
     private val tagRepository: TagRepository,
-    private val payeeMatcher: PayeeMatcher
+    private val payeeMatcher: PayeeMatcher,
+    private val categoryPredictionService: CategoryPredictionService
 ) {
     private val scope = supervisedViewModelScope()
 
@@ -152,49 +156,79 @@ class ImportViewModel(
             if (result.isSuccess) {
                 val resolutionResult = result.getOrThrow()
 
+                // Build the prediction cascade for this batch (per-user model + cold start) and a
+                // representative transaction per imported name to predict from. Any failure here
+                // must never break the import, so the whole step is guarded.
+                val predictor = runCatching {
+                    categoryPredictionService.newBatch(_uiState.value.allCategories)
+                }.getOrNull()
+                val repByName = transactions
+                    .filterNot { it.isCheck } // checks have no meaningful payee/category
+                    .associateBy { it.name }
+
+                // Layer 1 (alias/payee) category, falling back to the predictor only when null.
+                val payeesById = _uiState.value.allPayees.associateBy { it.id }
+                fun autoMappingFor(name: String, resolved: com.financeapp.domain.model.ResolvedAlias): PayeeMapping {
+                    val payee = payeesById[resolved.payeeId]
+                    var categoryId = resolved.preferredCategoryId ?: payee?.defaultCategoryId
+                    var applyCategory = categoryId != null
+                    if (categoryId == null && predictor != null) {
+                        // Auto-resolved names never reach the review dialog, so only a confident
+                        // (auto-apply) prediction may be applied; weaker guesses are dropped.
+                        val rep = repByName[name]
+                        if (rep != null) {
+                            val prediction = runCatching {
+                                predictor.predict(PredictionInput(rep.name, rep.sic, rep.amount))
+                            }.getOrNull()
+                            val fill = categoryPredictionService.fillFor(prediction, allowSuggestions = false)
+                            categoryId = fill.categoryId
+                            applyCategory = fill.applyCategory
+                        }
+                    }
+                    return PayeeMapping(
+                        importedName = name,
+                        resolvedPayeeId = resolved.payeeId,
+                        createNew = false,
+                        categoryId = categoryId,
+                        applyCategory = applyCategory,
+                        rememberMapping = false
+                    )
+                }
+
                 if (resolutionResult.needsReview.isEmpty()) {
                     // No payees need review - import directly with auto-resolved mappings
-                    // Use alias's preferred category if available, otherwise payee's default
-                    val payeesById = _uiState.value.allPayees.associateBy { it.id }
-                    val autoMappings = resolutionResult.autoResolved.map { (name, resolved) ->
-                        val payee = payeesById[resolved.payeeId]
-                        // Prefer alias's saved category preference, fall back to payee default
-                        val categoryId = resolved.preferredCategoryId ?: payee?.defaultCategoryId
-                        name to PayeeMapping(
-                            importedName = name,
-                            resolvedPayeeId = resolved.payeeId,
-                            createNew = false,
-                            categoryId = categoryId,
-                            applyCategory = categoryId != null,
-                            rememberMapping = false
-                        )
-                    }.toMap()
+                    val autoMappings = resolutionResult.autoResolved
+                        .mapValues { (name, resolved) -> autoMappingFor(name, resolved) }
 
                     importWithMappings(autoMappings)
                 } else {
-                    // Has payees needing review - show mapping dialog
-                    // Already sorted alphabetically in repository
-                    // Use alias's preferred category if available, otherwise payee's default
-                    val payeesById = _uiState.value.allPayees.associateBy { it.id }
+                    // Has payees needing review - show mapping dialog (sorted in repository).
+                    // Surface a pre-fillable category suggestion per reviewed payee (excluding the
+                    // weak amount-sign default, which should never become a sticky pre-selection).
+                    val suggestions = if (predictor == null) emptyMap() else
+                        resolutionResult.needsReview.mapNotNull { unresolved ->
+                            val rep = repByName[unresolved.importedName] ?: return@mapNotNull null
+                            val prediction = runCatching {
+                                predictor.predict(PredictionInput(rep.name, rep.sic, rep.amount))
+                            }.getOrNull() ?: return@mapNotNull null
+                            if (prediction.source == PredictionSource.AMOUNT_SIGN) return@mapNotNull null
+                            unresolved.importedName to CategorySuggestion(
+                                categoryId = prediction.categoryId,
+                                autoApply = prediction.autoApply,
+                                reason = prediction.reason
+                            )
+                        }.toMap()
+
                     // Reset temp ID counter for new import session
                     nextTempPayeeId = -1L
                     _uiState.value = _uiState.value.copy(
                         payeeMappingStep = PayeeMappingStep.Reviewing,
                         unresolvedPayees = resolutionResult.needsReview,
                         currentPayeeIndex = 0,
-                        payeeMappings = resolutionResult.autoResolved.map { (name, resolved) ->
-                            val payee = payeesById[resolved.payeeId]
-                            // Prefer alias's saved category preference, fall back to payee default
-                            val categoryId = resolved.preferredCategoryId ?: payee?.defaultCategoryId
-                            name to PayeeMapping(
-                                importedName = name,
-                                resolvedPayeeId = resolved.payeeId,
-                                createNew = false,
-                                categoryId = categoryId,
-                                applyCategory = categoryId != null,
-                                rememberMapping = false
-                            )
-                        }.toMap().toMutableMap(),
+                        payeeMappings = resolutionResult.autoResolved
+                            .mapValues { (name, resolved) -> autoMappingFor(name, resolved) }
+                            .toMutableMap(),
+                        categorySuggestions = suggestions,
                         recentlyCreatedPayees = emptyList(), // Reset for new import session
                         similarRecentlyCreated = emptyList() // Will be empty for first payee
                     )
@@ -399,6 +433,9 @@ class ImportViewModel(
 
             if (result.isSuccess) {
                 nextTempPayeeId = -1L
+                // Transactions (and their categories) just changed — drop the cached model so the
+                // next import retrains and the learned model keeps improving.
+                categoryPredictionService.invalidate()
                 _uiState.value = _uiState.value.copy(
                     payeeMappingStep = PayeeMappingStep.None,
                     isImporting = false,
@@ -408,6 +445,7 @@ class ImportViewModel(
                     unresolvedPayees = emptyList(),
                     currentPayeeIndex = 0,
                     payeeMappings = emptyMap(),
+                    categorySuggestions = emptyMap(),
                     recentlyCreatedPayees = emptyList()
                 )
             } else {
@@ -430,6 +468,7 @@ class ImportViewModel(
             unresolvedPayees = emptyList(),
             currentPayeeIndex = 0,
             payeeMappings = emptyMap(),
+            categorySuggestions = emptyMap(),
             recentlyCreatedPayees = emptyList()
         )
     }
@@ -503,11 +542,25 @@ data class ImportUiState(
     val unresolvedPayees: List<UnresolvedPayee> = emptyList(),
     val currentPayeeIndex: Int = 0,
     val payeeMappings: Map<String, PayeeMapping> = emptyMap(),
+    // Predicted category suggestions for payees under review, keyed by imported name. The dialog
+    // pre-selects these and shows the reason; the user confirms or changes them.
+    val categorySuggestions: Map<String, CategorySuggestion> = emptyMap(),
     val allPayees: List<Payee> = emptyList(),
     val allCategories: List<Category> = emptyList(),
     val allTags: List<Tag> = emptyList(),
     val recentlyCreatedPayees: List<Payee> = emptyList(), // Track payees created during this import session
     val similarRecentlyCreated: List<Payee> = emptyList() // Similar recently created payees for current UnresolvedPayee
+)
+
+/**
+ * A predicted category for an imported payee, surfaced in the review dialog. [autoApply] marks a
+ * prediction confident enough to have been applied without review; [reason] is the human-readable
+ * explanation shown to the user.
+ */
+data class CategorySuggestion(
+    val categoryId: Long,
+    val autoApply: Boolean,
+    val reason: String
 )
 
 enum class ImportFormat(val displayName: String) {

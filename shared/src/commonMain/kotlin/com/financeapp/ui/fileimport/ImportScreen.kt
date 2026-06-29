@@ -325,6 +325,7 @@ fun ImportScreen(
                     allCategories = uiState.allCategories,
                     allTags = uiState.allTags,
                     similarRecentlyCreated = uiState.similarRecentlyCreated,
+                    categorySuggestions = uiState.categorySuggestions,
                     onMapToExisting = { payeeId, categoryId, tagIds, remember ->
                         viewModel.mapToExistingPayee(payeeId, categoryId, tagIds, remember)
                     },
