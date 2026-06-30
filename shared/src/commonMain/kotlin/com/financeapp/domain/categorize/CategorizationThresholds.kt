@@ -21,11 +21,13 @@ object CategorizationThresholds {
     const val AMOUNT_SIGN = 0.30
 
     /**
-     * Softmax temperature for turning the model's WCNB logits into a confidence. Weight-normalized
-     * complement scores sit on a compressed scale (~0.1–0.3 gaps for a strong match), so a
-     * sub-1 temperature is needed to sharpen them into usable probabilities: a clean learned match
-     * (~0.25 logit gap) lands around 0.85+, while a marginal match stays near the 0.60 floor.
-     * Lower = more decisive. Tuned empirically; revisit if feature extraction changes.
+     * Softmax temperature applied to the model's *standardized* WCNB logits (see
+     * `TransactionCategoryModel.softmax`). Because the logits are z-scored per prediction, a clean
+     * learned match consistently puts the top class ~3.3 standard deviations above the field
+     * regardless of merchant-name length, so the temperature can be a stable constant: at this value
+     * such a match lands above the 0.85 auto-apply floor, while a split/ambiguous match (top class
+     * only ~1 sd out) stays near or below the 0.60 leaf floor and defers. Lower = more decisive.
+     * Tuned empirically; revisit if feature extraction changes.
      */
-    const val CONFIDENCE_TEMPERATURE = 0.12
+    const val CONFIDENCE_TEMPERATURE = 0.8
 }

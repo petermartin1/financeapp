@@ -66,11 +66,12 @@ class CategoryModelTrainerTest {
     }
 
     @Test
-    fun `an unknown merchant still yields a valid distribution`() {
+    fun `an unknown merchant makes the model abstain so the cascade can defer`() {
+        // A merchant the model has never seen shares no (or at most one coincidental) feature with it,
+        // so it must abstain rather than manufacture a confident guess from the amount-sign alone.
         val model = trainer.train(listOf(sample("Starbucks", coffee), sample("Shell", gas)))
         val scores = model.scores(FeatureExtractor().extract("Zzqq Unrelated", sic = null, amountCents = -100))
-        assertEquals(setOf(coffee, gas), scores.keys)
-        assertTrue(kotlin.math.abs(scores.values.sum() - 1.0) < 1e-6)
+        assertTrue(scores.isEmpty(), "an unrecognized merchant should abstain, but scored $scores")
     }
 
     @Test

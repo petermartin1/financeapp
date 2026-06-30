@@ -19,12 +19,30 @@ class TransactionCategoryModel internal constructor(
     val isEmpty: Boolean get() = weights.size < 2
 
     /**
-     * Pseudo-probabilities per category for the given feature tokens. Empty when the model abstains.
-     * Complement NB picks the class with the *smallest* weighted sum, so we negate before softmax
-     * to get a larger-is-better distribution.
+     * The merchant-identifying part of the vocabulary: every known feature except the amount-sign and
+     * the "had a digit" placeholder, which are present in almost every transaction and so carry no
+     * merchant signal. A prediction is only trustworthy if the input overlaps this set — otherwise the
+     * model has genuinely never seen anything like the merchant and must defer (see [scores]).
+     */
+    private val discriminativeVocab: Set<String> =
+        weights.values.firstOrNull()
+            ?.keys
+            ?.filterTo(HashSet()) { it != FeatureExtractor.NUMBER_TOKEN && !it.startsWith(FeatureExtractor.SIGN_PREFIX) }
+            ?: emptySet()
+
+    /**
+     * Pseudo-probabilities per category for the given feature tokens. Empty when the model abstains:
+     * either it has nothing to discriminate ([isEmpty]) or the input shares too little
+     * merchant-identifying evidence with anything the user has categorized. A genuine word match
+     * always contributes the word token *plus* its character trigrams, so it overlaps in several
+     * features; a lone shared trigram (a coincidental spelling collision) overlaps in just one and
+     * must not be trusted — on the standardized confidence scale a single stray feature can otherwise
+     * look decisive. Below the evidence floor we defer to the cold-start signals instead.
      */
     fun scores(features: List<String>): Map<Long, Double> {
         if (isEmpty) return emptyMap()
+        val overlap = features.toHashSet().count { it in discriminativeVocab }
+        if (overlap < MIN_DISCRIMINATIVE_OVERLAP) return emptyMap()
         return softmax(logits(features))
     }
 
@@ -51,8 +69,22 @@ class TransactionCategoryModel internal constructor(
         return out
     }
 
+    /**
+     * Softmax over *standardized* logits. The raw WCNB logits are L1-normalized per class, so their
+     * absolute magnitude (and the gap between classes) shrinks with the vocabulary and grows with the
+     * input's feature count — a short merchant name and a long one produce wildly different scales for
+     * an equally-clean match. Dividing by the per-prediction standard deviation removes that scale, so
+     * confidence reflects how many standard deviations the top class sits above the field, stable
+     * across name lengths and category counts. When every class scores identically (std == 0, e.g. an
+     * input with no known features) we fall back to a uniform distribution.
+     */
     private fun softmax(values: Map<Long, Double>): Map<Long, Double> {
-        val scaled = values.mapValues { it.value / temperature }
+        val mean = values.values.average()
+        val variance = values.values.sumOf { (it - mean) * (it - mean) } / values.size
+        val std = kotlin.math.sqrt(variance)
+        if (std == 0.0) return values.mapValues { 1.0 / values.size }
+
+        val scaled = values.mapValues { (it.value - mean) / std / temperature }
         val max = scaled.values.max()
         val exps = scaled.mapValues { exp(it.value - max) }
         val total = exps.values.sum()
@@ -61,6 +93,14 @@ class TransactionCategoryModel internal constructor(
 
     companion object {
         val EMPTY = TransactionCategoryModel(emptyMap())
+
+        /**
+         * Minimum number of distinct merchant-identifying features (word tokens / character trigrams /
+         * SIC) the input must share with the model before its prediction is trusted. A real word match
+         * always clears this (word token + at least one trigram); a single coincidental trigram does
+         * not, so it can't masquerade as a confident match. See [scores].
+         */
+        private const val MIN_DISCRIMINATIVE_OVERLAP = 2
     }
 }
 
