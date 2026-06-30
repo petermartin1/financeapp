@@ -1,6 +1,7 @@
 package com.financeapp.ui.transactions
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
@@ -659,14 +660,54 @@ private fun TransactionCard(
                     .weight(1f)
                     .padding(horizontal = 8.dp)
             ) {
-                Text(
-                    text = transaction.payeeName
-                        ?: transaction.transaction.memo
-                        ?: "Unknown",
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                val title = transactionDisplayTitle(
+                    transaction.payeeName,
+                    transaction.transaction.importedName,
+                    transaction.transaction.memo
                 )
+                val tooltip = importedNameTooltip(title, transaction.transaction.importedName)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val titleText: @Composable () -> Unit = {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
+                    if (tooltip != null) {
+                        TooltipArea(tooltip = {
+                            Surface(
+                                color = MaterialTheme.colorScheme.inverseSurface,
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text(
+                                    text = tooltip,
+                                    modifier = Modifier.padding(8.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.inverseOnSurface
+                                )
+                            }
+                        }) { titleText() }
+                    } else {
+                        titleText()
+                    }
+                    transaction.transaction.checkNumber?.let { num ->
+                        Spacer(Modifier.width(6.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = MaterialTheme.shapes.small
+                        ) {
+                            Text(
+                                text = "#$num",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
                 transaction.categoryName?.let {
                     Text(
                         text = it,
