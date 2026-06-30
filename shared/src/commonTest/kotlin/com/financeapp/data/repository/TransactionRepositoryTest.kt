@@ -710,4 +710,33 @@ class TransactionRepositoryTest {
         assertEquals("edited", saved.memo, "the rest of the edit must be saved")
         assertNull(saved.categoryId, "the deleted category must be dropped, not cause an FK failure")
     }
+
+    // ========================================
+    // importedName round-trip (Task 1)
+    // ========================================
+
+    @Test
+    fun importedName_roundtrips_through_insert_and_read() = runTest(testDispatcher) {
+        val id = repository.insertTransaction(
+            TestDataFactory.createTestTransaction(
+                accountId = testAccountId,
+                importedName = "CHECK 1234 PROCESSED CHECK"
+            )
+        )
+        val loaded = repository.getTransactionById(id)
+        assertEquals("CHECK 1234 PROCESSED CHECK", loaded?.importedName)
+    }
+
+    @Test
+    fun importedName_is_preserved_by_update() = runTest(testDispatcher) {
+        val id = repository.insertTransaction(
+            TestDataFactory.createTestTransaction(
+                accountId = testAccountId,
+                importedName = "ORIGINAL BANK TEXT"
+            )
+        )
+        val loaded = repository.getTransactionById(id)!!
+        repository.updateTransaction(loaded.copy(memo = "edited"))
+        assertEquals("ORIGINAL BANK TEXT", repository.getTransactionById(id)?.importedName)
+    }
 }

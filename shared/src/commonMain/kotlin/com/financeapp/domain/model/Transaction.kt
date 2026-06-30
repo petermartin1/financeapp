@@ -24,6 +24,7 @@ data class Transaction(
     override val categoryId: Long? = null,
     val memo: String? = null,
     val checkNumber: String? = null,
+    val importedName: String? = null,
     val isCleared: Boolean = false,
     val isReconciled: Boolean = false,
     override val transferId: Long? = null,

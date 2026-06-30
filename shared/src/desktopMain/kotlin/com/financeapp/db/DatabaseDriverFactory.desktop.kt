@@ -91,6 +91,16 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
                 println("Warning: Migration may have already been applied: ${e.message}")
             }
         }
+        transaction(db) {
+            try {
+                // Migration: Add imported_name to TransactionRecord so the original bank-supplied
+                // name is preserved (checks have no payee; lets the ledger show raw text and lets a
+                // mis-associated payee be recovered).
+                exec("ALTER TABLE ${Transactions.tableName} ADD COLUMN IF NOT EXISTS imported_name VARCHAR(1024)")
+            } catch (e: Exception) {
+                println("Warning: Migration may have already been applied: ${e.message}")
+            }
+        }
 
         // Create indexes for better performance
         // Note: Exposed automatically creates indexes for foreign key columns

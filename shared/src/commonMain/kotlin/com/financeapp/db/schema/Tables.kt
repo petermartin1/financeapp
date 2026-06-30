@@ -54,6 +54,7 @@ object Transactions : IntIdTable("TransactionRecord") {
     val categoryId = reference("category_id", Categories).nullable()
     val memo = text("memo").nullable()
     val checkNumber = varchar("check_number", 50).nullable()
+    val importedName = varchar("imported_name", 1024).nullable()
     val isCleared = bool("is_cleared").default(false)
     val isReconciled = bool("is_reconciled").default(false)
     val transferId = reference("transfer_id", Transactions).nullable()
