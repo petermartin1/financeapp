@@ -40,6 +40,18 @@ compose.desktop {
             macOS {
                 bundleID = "com.financeapp.desktop"
             }
+
+            windows {
+                // Stable MSI UpgradeCode. jpackage otherwise randomizes it per build, which
+                // makes Windows treat every installer as a separate product (side-by-side
+                // installs instead of upgrades). Pinning it lets a higher packageVersion
+                // perform an in-place major upgrade of an existing install. NEVER change this
+                // value once released, or upgrades from older versions break.
+                upgradeUuid = "58B46FF8-9665-4EC6-A3BA-46BF697E2BD3"
+                // Create Start-menu and desktop shortcuts so upgrades replace them cleanly.
+                menuGroup = "Finance App"
+                shortcut = true
+            }
         }
     }
 }
