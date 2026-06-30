@@ -4,8 +4,8 @@ name: Release binaries
 # Release. Runs when you push a version tag (e.g. `v1.2.0`), or on demand via the
 # Actions tab. Never runs on ordinary pushes, so it doesn't burn Actions minutes.
 #
-# A manual run can target one platform (or all). A tag push always builds all
-# four and publishes a Release.
+# A manual run can target one platform (or all). A tag push always builds every
+# platform and publishes a Release.
 #
 # The artifacts are UNSIGNED (no paid Apple/Windows certificates). First-launch
 # notes for users live in the release body and the README:
@@ -30,7 +30,6 @@ on:
           - linux
           - windows
           - macos-arm
-          - macos-intel
   push:
     tags:
       - "v*"
@@ -90,8 +89,7 @@ jobs:
           all='[
             {"id":"linux","name":"Linux (.deb)","os":"ubuntu-latest","task":"packageDeb","glob":"desktopApp/build/compose/binaries/main/deb/*.deb","suffix":"linux-amd64"},
             {"id":"windows","name":"Windows (.msi)","os":"windows-latest","task":"packageMsi","glob":"desktopApp/build/compose/binaries/main/msi/*.msi","suffix":"windows-x64"},
-            {"id":"macos-arm","name":"macOS Apple Silicon (.dmg)","os":"macos-14","task":"packageDmg","glob":"desktopApp/build/compose/binaries/main/dmg/*.dmg","suffix":"macos-arm64"},
-            {"id":"macos-intel","name":"macOS Intel (.dmg)","os":"macos-13","task":"packageDmg","glob":"desktopApp/build/compose/binaries/main/dmg/*.dmg","suffix":"macos-x64"}
+            {"id":"macos-arm","name":"macOS Apple Silicon (.dmg)","os":"macos-14","task":"packageDmg","glob":"desktopApp/build/compose/binaries/main/dmg/*.dmg","suffix":"macos-arm64"}
           ]'
           p="${PLATFORM:-all}"
           if [ "$p" = "all" ]; then
