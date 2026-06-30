@@ -220,10 +220,10 @@ class ImportRepositoryTest {
     @Test
     fun import_stores_original_name_for_check_and_non_check() = runTest(dispatcher) {
         val accountId = insertAccount()
-        val check = importedTxn("fit-chk", "CHECK 1234").copy(checkNumber = "1234")
+        val checkImport = importedTxn("fit-chk", "CHECK 1234").copy(checkNumber = "1234")
         val store = importedTxn("fit-store", "SAFEWAY #123")
 
-        importRepository.importPreviewedTransactions(listOf(check, store), accountId).getOrThrow()
+        importRepository.importPreviewedTransactions(listOf(checkImport, store), accountId).getOrThrow()
 
         val txns = transactionRepository.getTransactionsByAccount(accountId).first()
         val checkTxn = txns.first { it.importId == "fit-chk" }

@@ -667,31 +667,34 @@ private fun TransactionCard(
                 )
                 val tooltip = importedNameTooltip(title, transaction.transaction.importedName)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val titleText: @Composable () -> Unit = {
+                    val titleText: @Composable (Modifier) -> Unit = { mod ->
                         Text(
                             text = title,
                             style = MaterialTheme.typography.bodyLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
+                            modifier = mod
                         )
                     }
                     if (tooltip != null) {
-                        TooltipArea(tooltip = {
-                            Surface(
-                                color = MaterialTheme.colorScheme.inverseSurface,
-                                shape = MaterialTheme.shapes.small
-                            ) {
-                                Text(
-                                    text = tooltip,
-                                    modifier = Modifier.padding(8.dp),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.inverseOnSurface
-                                )
-                            }
-                        }) { titleText() }
+                        TooltipArea(
+                            tooltip = {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.inverseSurface,
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text(
+                                        text = tooltip,
+                                        modifier = Modifier.padding(8.dp),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.inverseOnSurface
+                                    )
+                                }
+                            },
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) { titleText(Modifier) }
                     } else {
-                        titleText()
+                        titleText(Modifier.weight(1f, fill = false))
                     }
                     transaction.transaction.checkNumber?.let { num ->
                         Spacer(Modifier.width(6.dp))

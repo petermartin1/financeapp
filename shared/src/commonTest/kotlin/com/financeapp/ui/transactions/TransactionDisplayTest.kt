@@ -10,6 +10,7 @@ class TransactionDisplayTest {
         assertEquals("SAFEWAY #123", transactionDisplayTitle(null, "SAFEWAY #123", "groceries"))
         assertEquals("groceries", transactionDisplayTitle(null, null, "groceries"))
         assertEquals("Unknown", transactionDisplayTitle(null, null, null))
+        assertEquals("SAFEWAY #123", transactionDisplayTitle("   ", "SAFEWAY #123", "groceries"))
     }
 
     @Test fun tooltip_only_when_imported_name_differs_from_title() {
