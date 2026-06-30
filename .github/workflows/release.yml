@@ -15,9 +15,20 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version for the installers (no leading v), e.g. 1.2.0"
+        description: "Version for the installers (no leading v), major >= 1, e.g. 1.2.0"
         required: false
-        default: "0.0.0"
+        default: "1.0.0"
+      platform:
+        description: "Which platform(s) to build"
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - linux
+          - windows
+          - macos-arm
+          - macos-intel
   push:
     tags:
       - "v*"
@@ -34,26 +45,37 @@ jobs:
   build:
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    # On a tag push, build everything. On a manual run, build only the chosen
+    # platform (or all). Jobs that don't match are skipped before a runner is
+    # even allocated, so a single-OS run doesn't tie up the others.
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == matrix.id
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Linux (.deb)
+          - id: linux
+            name: Linux (.deb)
             os: ubuntu-latest
             task: packageDeb
             glob: desktopApp/build/compose/binaries/main/deb/*.deb
             suffix: linux-amd64
-          - name: Windows (.msi)
+          - id: windows
+            name: Windows (.msi)
             os: windows-latest
             task: packageMsi
             glob: desktopApp/build/compose/binaries/main/msi/*.msi
             suffix: windows-x64
-          - name: macOS Apple Silicon (.dmg)
+          - id: macos-arm
+            name: macOS Apple Silicon (.dmg)
             os: macos-14
             task: packageDmg
             glob: desktopApp/build/compose/binaries/main/dmg/*.dmg
             suffix: macos-arm64
-          - name: macOS Intel (.dmg)
+          - id: macos-intel
+            name: macOS Intel (.dmg)
             os: macos-13
             task: packageDmg
             glob: desktopApp/build/compose/binaries/main/dmg/*.dmg
@@ -88,6 +110,12 @@ jobs:
           # Keep only an installer-safe numeric version (jpackage rejects junk).
           if ! printf '%s' "$v" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$'; then
             echo "::error::Invalid version '$v' (expected N or N.N or N.N.N)"
+            exit 1
+          fi
+          # jpackage maps the version to macOS CFBundleVersion, whose first
+          # component Apple requires to be >= 1 — so 0.x can never build a .dmg.
+          if [ "${v%%.*}" -lt 1 ]; then
+            echo "::error::Version '$v' has major 0; macOS (jpackage/CFBundleVersion) requires major >= 1. Start at 1.0.0."
             exit 1
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
