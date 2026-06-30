@@ -164,6 +164,7 @@ class TransactionRepositoryImpl(
                 it[categoryId] = transaction.categoryId?.toInt()
                 it[memo] = transaction.memo
                 it[checkNumber] = transaction.checkNumber
+                it[importedName] = transaction.importedName
                 it[isCleared] = transaction.isCleared
                 it[isReconciled] = transaction.isReconciled
                 it[transferId] = transaction.transferId?.toInt()
@@ -196,6 +197,7 @@ class TransactionRepositoryImpl(
                         it[categoryId] = transaction.categoryId?.toInt()
                         it[memo] = transaction.memo
                         it[checkNumber] = transaction.checkNumber
+                        it[importedName] = transaction.importedName
                         it[isCleared] = transaction.isCleared
                         it[isReconciled] = transaction.isReconciled
                         it[transferId] = transaction.transferId?.toInt()
@@ -235,6 +237,7 @@ class TransactionRepositoryImpl(
                 it[categoryId] = safeCategoryId?.toInt()
                 it[memo] = transaction.memo
                 it[checkNumber] = transaction.checkNumber
+                it[importedName] = transaction.importedName
                 it[isCleared] = transaction.isCleared
                 it[isReconciled] = transaction.isReconciled
                 it[transferId] = transaction.transferId?.toInt()
@@ -431,6 +434,7 @@ class TransactionRepositoryImpl(
                 it[categoryId] = null
                 it[Transactions.memo] = "$transferMemo to $toAccountName"
                 it[checkNumber] = null
+                it[importedName] = null
                 it[isCleared] = false
                 it[isReconciled] = false
                 it[transferId] = null  // Will update after creating incoming
@@ -450,6 +454,7 @@ class TransactionRepositoryImpl(
                 it[categoryId] = null
                 it[Transactions.memo] = "$transferMemo from $fromAccountName"
                 it[checkNumber] = null
+                it[importedName] = null
                 it[isCleared] = false
                 it[isReconciled] = false
                 it[transferId] = outId.toInt()
@@ -486,6 +491,7 @@ class TransactionRepositoryImpl(
             categoryId = this[Transactions.categoryId]?.value?.toLong(),
             memo = this[Transactions.memo],
             checkNumber = this[Transactions.checkNumber],
+            importedName = this[Transactions.importedName],
             isCleared = this[Transactions.isCleared],
             isReconciled = this[Transactions.isReconciled],
             transferId = this[Transactions.transferId]?.value?.toLong(),

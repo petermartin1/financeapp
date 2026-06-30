@@ -218,6 +218,42 @@ class ImportRepositoryTest {
     }
 
     @Test
+    fun import_stores_original_name_for_check_and_non_check() = runTest(dispatcher) {
+        val accountId = insertAccount()
+        val checkImport = importedTxn("fit-chk", "CHECK 1234").copy(checkNumber = "1234")
+        val store = importedTxn("fit-store", "SAFEWAY #123")
+
+        importRepository.importPreviewedTransactions(listOf(checkImport, store), accountId).getOrThrow()
+
+        val txns = transactionRepository.getTransactionsByAccount(accountId).first()
+        val checkTxn = txns.first { it.importId == "fit-chk" }
+        val storeTxn = txns.first { it.importId == "fit-store" }
+        assertEquals("CHECK 1234", checkTxn.importedName)
+        assertNull(checkTxn.payeeId)           // checks still get no payee
+        assertEquals("SAFEWAY #123", storeTxn.importedName)
+    }
+
+    @Test
+    fun importWithMappings_stores_original_name() = runTest(dispatcher) {
+        val accountId = insertAccount()
+        val store = importedTxn("fit-map", "SAFEWAY #123")
+        val mappings = mapOf(
+            "SAFEWAY #123" to PayeeMapping(
+                importedName = "SAFEWAY #123",
+                resolvedPayeeId = null,
+                createNew = true,
+                newPayeeName = "Safeway"
+            )
+        )
+
+        importRepository.importWithMappings(listOf(store), accountId, mappings).getOrThrow()
+
+        val txn = transactionRepository.getTransactionsByAccount(accountId).first()
+            .first { it.importId == "fit-map" }
+        assertEquals("SAFEWAY #123", txn.importedName)
+    }
+
+    @Test
     fun `importWithMappings rolls back everything when a step fails (atomicity)`() = runTest {
         val accountId = insertAccount()
 

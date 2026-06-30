@@ -461,7 +461,7 @@ fun EditTransactionDialog(
             ) {
                 // Display payee and amount (read-only)
                 Text(
-                    text = transaction.payeeName ?: txn.memo ?: "Unknown",
+                    text = transactionDisplayTitle(transaction.payeeName, txn.importedName, txn.memo),
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
@@ -469,6 +469,13 @@ fun EditTransactionDialog(
                     style = MaterialTheme.typography.bodyLarge,
                     color = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                 )
+                txn.importedName?.takeIf { it.isNotBlank() }?.let { imported ->
+                    Text(
+                        text = "Imported as: $imported",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 // Category dropdown
                 if (availableCategories.isNotEmpty()) {
