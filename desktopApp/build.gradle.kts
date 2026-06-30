@@ -28,7 +28,9 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Finance App"
-            packageVersion = "1.0.0"
+            // Overridable from CI (`-PappVersion=1.2.3`, derived from the git tag) so a
+            // release's installers carry the tag's version; defaults for local builds.
+            packageVersion = (findProperty("appVersion") as String?)?.takeIf { it.isNotBlank() } ?: "1.0.0"
 
             // JDK modules the trimmed jlink runtime must include. Without java.sql,
             // H2/Exposed fail at runtime with "java.sql.Driver". List from

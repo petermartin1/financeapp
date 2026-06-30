@@ -73,6 +73,22 @@ Full design, threat model, and limitations: [`SECURITY.md`](SECURITY.md).
 
 ## Getting started
 
+### Download a prebuilt installer
+
+Grab the latest installer for your platform from the [**Releases**](../../releases) page
+(`.dmg` for macOS, `.msi` for Windows, `.deb` for Linux). The builds are **unsigned** — no
+paid code-signing certificates — so the first launch needs one extra step:
+
+- **macOS** — right-click the app and choose **Open**, then confirm (Gatekeeper blocks a plain
+  double-click on unsigned apps).
+- **Windows** — on the SmartScreen prompt, click **More info → Run anyway**.
+- **Linux** — `sudo dpkg -i FinanceApp-*-linux-amd64.deb`.
+
+Prefer not to trust a binary with your financial data? Run from source instead — it's the most
+transparent option, and your audience-of-one already has the toolchain.
+
+### Run from source
+
 Requires a JDK (17+).
 
 ```bash
