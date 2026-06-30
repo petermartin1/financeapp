@@ -1,15 +1,17 @@
 name: Release binaries
 
-# Builds installers for every desktop platform and attaches them to a GitHub
+# Builds installers for the desktop platforms and attaches them to a GitHub
 # Release. Runs when you push a version tag (e.g. `v1.2.0`), or on demand via the
 # Actions tab. Never runs on ordinary pushes, so it doesn't burn Actions minutes.
+#
+# A manual run can target one platform (or all). A tag push always builds all
+# four and publishes a Release.
 #
 # The artifacts are UNSIGNED (no paid Apple/Windows certificates). First-launch
 # notes for users live in the release body and the README:
 #   - macOS:   right-click the app → Open the first time (Gatekeeper).
 #   - Windows: "More info" → "Run anyway" (SmartScreen).
-# Dropping in signing certs later is a config-only change (see commented hooks
-# in desktopApp/build.gradle.kts / the macOS notarization block).
+# Dropping in signing certs later is a config-only change.
 
 on:
   workflow_dispatch:
@@ -33,7 +35,7 @@ on:
     tags:
       - "v*"
 
-# Cancel an in-progress run for the same tag if a new one starts.
+# Cancel an in-progress run for the same ref if a new one starts.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: true
@@ -42,58 +44,15 @@ permissions:
   contents: write  # needed to create the Release and upload assets
 
 jobs:
-  build:
-    name: Build ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    # On a tag push, build everything. On a manual run, build only the chosen
-    # platform (or all). Jobs that don't match are skipped before a runner is
-    # even allocated, so a single-OS run doesn't tie up the others.
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      github.event.inputs.platform == 'all' ||
-      github.event.inputs.platform == matrix.id
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - id: linux
-            name: Linux (.deb)
-            os: ubuntu-latest
-            task: packageDeb
-            glob: desktopApp/build/compose/binaries/main/deb/*.deb
-            suffix: linux-amd64
-          - id: windows
-            name: Windows (.msi)
-            os: windows-latest
-            task: packageMsi
-            glob: desktopApp/build/compose/binaries/main/msi/*.msi
-            suffix: windows-x64
-          - id: macos-arm
-            name: macOS Apple Silicon (.dmg)
-            os: macos-14
-            task: packageDmg
-            glob: desktopApp/build/compose/binaries/main/dmg/*.dmg
-            suffix: macos-arm64
-          - id: macos-intel
-            name: macOS Intel (.dmg)
-            os: macos-13
-            task: packageDmg
-            glob: desktopApp/build/compose/binaries/main/dmg/*.dmg
-            suffix: macos-x64
+  # Resolve the version and the (possibly filtered) build matrix once, cheaply,
+  # before any heavy runner is allocated. A bad version fails here instantly.
+  setup:
+    name: Resolve version & matrix
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      matrix: ${{ steps.select.outputs.matrix }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      # Tag push -> strip the leading "v"; manual run -> use the input.
       - name: Resolve version
         id: ver
         shell: bash
@@ -105,7 +64,7 @@ jobs:
           if [ "$REF_TYPE" = "tag" ]; then
             v="${REF_NAME#v}"
           else
-            v="$INPUT_VERSION"
+            v="${INPUT_VERSION:-1.0.0}"
           fi
           # Keep only an installer-safe numeric version (jpackage rejects junk).
           if ! printf '%s' "$v" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$'; then
@@ -121,21 +80,68 @@ jobs:
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "Building version $v"
 
+      - name: Select platforms
+        id: select
+        shell: bash
+        env:
+          # Empty on tag pushes -> treated as "all" below.
+          PLATFORM: ${{ github.event.inputs.platform }}
+        run: |
+          all='[
+            {"id":"linux","name":"Linux (.deb)","os":"ubuntu-latest","task":"packageDeb","glob":"desktopApp/build/compose/binaries/main/deb/*.deb","suffix":"linux-amd64"},
+            {"id":"windows","name":"Windows (.msi)","os":"windows-latest","task":"packageMsi","glob":"desktopApp/build/compose/binaries/main/msi/*.msi","suffix":"windows-x64"},
+            {"id":"macos-arm","name":"macOS Apple Silicon (.dmg)","os":"macos-14","task":"packageDmg","glob":"desktopApp/build/compose/binaries/main/dmg/*.dmg","suffix":"macos-arm64"},
+            {"id":"macos-intel","name":"macOS Intel (.dmg)","os":"macos-13","task":"packageDmg","glob":"desktopApp/build/compose/binaries/main/dmg/*.dmg","suffix":"macos-x64"}
+          ]'
+          p="${PLATFORM:-all}"
+          if [ "$p" = "all" ]; then
+            m=$(printf '%s' "$all" | jq -c '{include: .}')
+          else
+            m=$(printf '%s' "$all" | jq -c --arg p "$p" '{include: [.[] | select(.id == $p)]}')
+          fi
+          echo "matrix=$m" >> "$GITHUB_OUTPUT"
+          echo "Selected matrix: $m"
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: setup
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
       # package* (not packageRelease*): no ProGuard/minification, so Koin DI and
       # kotlinx.serialization reflection keep working. Bundles a trimmed JRE.
       - name: Build installer
         shell: bash
-        run: ./gradlew :desktopApp:${{ matrix.task }} -PappVersion=${{ steps.ver.outputs.version }} --no-daemon --stacktrace
+        env:
+          APP_VERSION: ${{ needs.setup.outputs.version }}
+        run: ./gradlew :desktopApp:${{ matrix.task }} -PappVersion="$APP_VERSION" --no-daemon --stacktrace
 
-      # Give each file a platform-tagged name so the four installers never collide
-      # as release assets (jpackage names the two .dmg files identically otherwise).
+      # Give each file a platform-tagged name so the installers never collide as
+      # release assets (jpackage names the two .dmg files identically otherwise).
       - name: Stage artifact
         shell: bash
+        env:
+          APP_VERSION: ${{ needs.setup.outputs.version }}
+          SUFFIX: ${{ matrix.suffix }}
         run: |
           mkdir -p dist
           for f in ${{ matrix.glob }}; do
             ext="${f##*.}"
-            cp "$f" "dist/FinanceApp-${{ steps.ver.outputs.version }}-${{ matrix.suffix }}.${ext}"
+            cp "$f" "dist/FinanceApp-${APP_VERSION}-${SUFFIX}.${ext}"
           done
           ls -la dist
 
