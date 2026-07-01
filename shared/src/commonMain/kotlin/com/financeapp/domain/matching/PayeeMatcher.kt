@@ -26,6 +26,34 @@ class PayeeMatcher {
     }
 
     /**
+     * Generic "Bank Action Prefix" tokens that banks prepend to ACH/EFT lines ahead of the real
+     * Nacha Company Name (e.g. "WITHDRAWAL ACH ACME", "ACH DEBIT ACME", "DIRECT DEPOSIT EMPLOYER").
+     * Kept to the transaction-type vocabulary only — never words that appear in real company names
+     * (e.g. "payment", "online", "transfer" live in the trailing Entry Description, not here).
+     */
+    private val leadingQualifiers = setOf(
+        "ach", "withdrawal", "withdrawals", "deposit", "deposits", "direct",
+        "debit", "credit", "eft", "electronic", "external", "pos", "preauthorized"
+    )
+
+    /**
+     * Strip a leading run of [leadingQualifiers] so the Company Name that follows drives matching
+     * rather than the constant qualifier prefix. Order-independent ("Withdrawal ACH" and
+     * "ACH Withdrawal" both fully strip) and never strips a name down to empty (a name that is
+     * only qualifiers is left intact).
+     */
+    private fun stripLeadingQualifiers(normalized: String): String {
+        val tokens = normalized.split(" ").filter { it.isNotEmpty() }
+        var i = 0
+        while (i < tokens.size && tokens[i] in leadingQualifiers) i++
+        return if (i == 0 || i >= tokens.size) normalized
+        else tokens.subList(i, tokens.size).joinToString(" ")
+    }
+
+    /** Normalized, qualifier-stripped form used for all similarity comparisons. */
+    private fun comparableName(raw: String): String = stripLeadingQualifiers(normalize(raw))
+
+    /**
      * Find similar payees for an imported name
      *
      * Matching pipeline:
@@ -47,11 +75,11 @@ class PayeeMatcher {
         existingPayees: List<Payee>,
         threshold: Double = 0.75
     ): List<PayeeMatch> {
-        val normalizedImported = normalize(importedName)
+        val normalizedImported = comparableName(importedName)
         val matches = mutableListOf<PayeeMatch>()
 
         for (payee in existingPayees) {
-            val normalizedPayee = normalize(payee.name)
+            val normalizedPayee = comparableName(payee.name)
 
             // Check exact match
             if (normalizedImported == normalizedPayee) {
@@ -120,11 +148,11 @@ class PayeeMatcher {
         candidateNames: List<String>,
         threshold: Double = 0.75
     ): List<String> {
-        val normalizedTarget = normalize(targetName)
+        val normalizedTarget = comparableName(targetName)
         val similarities = mutableListOf<Pair<String, Double>>()
 
         for (candidateName in candidateNames) {
-            val normalizedCandidate = normalize(candidateName)
+            val normalizedCandidate = comparableName(candidateName)
 
             // Check exact match
             if (normalizedTarget == normalizedCandidate) {

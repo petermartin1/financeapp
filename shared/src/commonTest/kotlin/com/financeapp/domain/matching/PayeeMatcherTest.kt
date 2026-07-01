@@ -108,4 +108,74 @@ class PayeeMatcherTest {
             "Different BP stores (different ids/locations) must not match"
         )
     }
+
+    // --- ACH regression: banks prepend a generic "Bank Action Prefix" (WITHDRAWAL ACH,
+    // ACH DEBIT, DIRECT DEPOSIT, ...) before the Nacha Company Name that is the real identity.
+    // The qualifier must not be treated as the business name, or every unrelated ACH payee
+    // collapses into one. A real leading business name (e.g. "Amazon Prime") must still match. ---
+
+    @Test
+    fun `does not group different businesses behind the same ACH qualifier prefix`() {
+        assertFalse(
+            matcher.findSimilarNames("Withdrawal ACH Acme Corp", listOf("Withdrawal ACH Zenith LLC"))
+                .contains("Withdrawal ACH Zenith LLC"),
+            "Different businesses that merely share the 'Withdrawal ACH' qualifier must not be grouped"
+        )
+    }
+
+    @Test
+    fun `does not suggest a different-business existing payee behind the same ACH qualifier`() {
+        val existing = payees("Withdrawal ACH Zenith LLC")
+        assertFalse(
+            matchesName("Withdrawal ACH Acme Corp", existing, "Withdrawal ACH Zenith LLC"),
+            "The shared 'Withdrawal ACH' qualifier must not make Acme match Zenith"
+        )
+    }
+
+    @Test
+    fun `groups the same business across deposit and withdrawal ACH qualifiers`() {
+        assertTrue(
+            matcher.findSimilarNames("Deposit ACH Acme Corp", listOf("Withdrawal ACH Acme Corp"))
+                .contains("Withdrawal ACH Acme Corp"),
+            "Same business (Acme Corp) should group whether the ACH line is a deposit or a withdrawal"
+        )
+    }
+
+    @Test
+    fun `matches an ACH-qualified name to the clean existing payee`() {
+        val existing = payees("Acme Corp")
+        assertTrue(
+            matchesName("Withdrawal ACH Acme Corp", existing, "Acme Corp"),
+            "'Withdrawal ACH Acme Corp' should suggest the existing 'Acme Corp' payee"
+        )
+    }
+
+    // The multi-word "DIRECT DEPOSIT" prefix: "deposit" is a qualifier but "direct" leads, so a
+    // leading-run stripper must know "direct" too, or different employers collapse together.
+    @Test
+    fun `does not group different employers behind a DIRECT DEPOSIT prefix`() {
+        assertFalse(
+            matcher.findSimilarNames("Direct Deposit Acme Payroll", listOf("Direct Deposit Zenith Payroll"))
+                .contains("Direct Deposit Zenith Payroll"),
+            "Different employers sharing only the 'Direct Deposit' qualifier must not be grouped"
+        )
+    }
+
+    @Test
+    fun `groups the same employer across DIRECT DEPOSIT lines with differing trailing ids`() {
+        assertTrue(
+            matcher.findSimilarNames("Direct Deposit Acme Payroll 111", listOf("Direct Deposit Acme Payroll 222"))
+                .contains("Direct Deposit Acme Payroll 222"),
+            "The same employer's direct-deposit lines should still group across differing trace ids"
+        )
+    }
+
+    @Test
+    fun `still groups a real business-name prefix like Amazon Prime across differing suffixes`() {
+        assertTrue(
+            matcher.findSimilarNames("Amazon Prime AB12", listOf("Amazon Prime CD34"))
+                .contains("Amazon Prime CD34"),
+            "'Amazon Prime' is a real Company Name, not a qualifier — its lines must still group"
+        )
+    }
 }
