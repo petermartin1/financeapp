@@ -30,6 +30,7 @@ fun PayeeMappingDialog(
     allCategories: List<Category>,
     allTags: List<Tag>,
     similarRecentlyCreated: List<Payee>,
+    recentlyCreatedPayees: List<Payee> = emptyList(),
     categorySuggestions: Map<String, CategorySuggestion> = emptyMap(),
     onMapToExisting: (Long, Long?, List<Long>, Boolean) -> Unit,
     onCreateNew: (String, Long?, List<Long>, Boolean) -> Unit,
@@ -69,10 +70,8 @@ fun PayeeMappingDialog(
     var selectedTagIds by remember(currentIndex) { mutableStateOf(emptyList<Long>()) }
     var rememberMapping by remember(currentIndex) { mutableStateOf(true) }
 
-    // Every payee the manual picker can choose from: existing DB payees plus any created earlier in
-    // this same import, deduped by id, so a manual lookup always resolves to a selectable payee.
-    val selectablePayees = remember(allPayees, similarRecentlyCreated) {
-        (allPayees + similarRecentlyCreated).distinctBy { it.id }.sortedBy { it.name }
+    val selectablePayees = remember(allPayees, recentlyCreatedPayees) {
+        buildSelectablePayees(allPayees, recentlyCreatedPayees)
     }
     val pickerSelectedPayee = selectablePayees.find { it.id == selectedPayeeId }
 
@@ -909,3 +908,18 @@ private enum class MappingMode {
     MAP_TO_EXISTING,
     CREATE_NEW
 }
+
+/**
+ * The full set of payees the manual "Map to existing payee" picker can choose from during an
+ * import: every existing DB payee ([allPayees]) plus EVERY payee created earlier in the same import
+ * session ([recentlyCreatedPayees]). The latter are held with temporary negative ids and are
+ * therefore absent from [allPayees]; they must be included in full — not just the subset the fuzzy
+ * matcher flagged as "similar" — or a payee the user just created can't be found in the picker.
+ * Deduped by id (DB ids are positive, in-import temp ids negative, so they never collide) and
+ * sorted by name. Pure so the "a just-created payee stays selectable" invariant can be tested.
+ */
+internal fun buildSelectablePayees(
+    allPayees: List<Payee>,
+    recentlyCreatedPayees: List<Payee>
+): List<Payee> =
+    (allPayees + recentlyCreatedPayees).distinctBy { it.id }.sortedBy { it.name }
