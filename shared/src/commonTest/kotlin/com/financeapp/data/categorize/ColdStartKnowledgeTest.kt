@@ -1,5 +1,6 @@
 package com.financeapp.data.categorize
 
+import com.financeapp.data.seed.DefaultCategories
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -80,5 +81,55 @@ class ColdStartKnowledgeTest {
         val bundled = ColdStartKnowledge.bundled()
         assertEquals("Coffee Shops", bundled.categoryForName("STARBUCKS #12345"))
         assertTrue(bundled.categoryForSic("5814") != null, "the restaurant SIC code should be bundled")
+    }
+
+    @Test
+    fun `the bundled MCC table covers the common credit-card categories`() {
+        val b = ColdStartKnowledge.bundled()
+        // A spread of merchant-category codes a typical card statement carries.
+        assertEquals("Groceries", b.categoryForSic("5411"))
+        assertEquals("Hotels", b.categoryForSic("7011"))
+        assertEquals("Airfare", b.categoryForSic("4511"))
+        assertEquals("Clothing", b.categoryForSic("5651"))
+        assertEquals("Electronics", b.categoryForSic("5732"))
+        assertEquals("Auto Repairs", b.categoryForSic("7538"))
+        assertEquals("Sports", b.categoryForSic("5941"))
+        assertEquals("Hobbies", b.categoryForSic("5945"))
+        assertEquals("Vacation Activities", b.categoryForSic("7996"))
+        assertEquals("Childcare", b.categoryForSic("8351"))
+        assertEquals("Donations & Charity", b.categoryForSic("8398"))
+        assertEquals("ATM Fees", b.categoryForSic("6011"))
+        assertEquals("Utilities", b.categoryForSic("4900"))
+        assertEquals("Internet", b.categoryForSic("4816"))
+    }
+
+    @Test
+    fun `the bundled MCC table is substantially larger than the original seed`() {
+        val codes = ColdStartData.SIC_CSV.lineSequence().drop(1)
+            .filter { it.isNotBlank() }.count()
+        assertTrue(codes >= 100, "expected a broad MCC table, only had $codes codes")
+    }
+
+    @Test
+    fun `every bundled cold-start category name is a real default category`() {
+        val valid: Set<String> = DefaultCategories.allCategories
+            .flatMap { listOf(it.name) + it.subcategories.map { s -> s.name } }
+            .map { it.trim().lowercase() }
+            .toSet()
+
+        fun categoryNames(csv: String): List<String> =
+            csv.lineSequence().drop(1)
+                .mapNotNull { line ->
+                    if (line.isBlank()) return@mapNotNull null
+                    val parts = line.split(',')
+                    if (parts.size != 2) null else parts[1].trim()
+                }
+                .toList()
+
+        val offenders = (categoryNames(ColdStartData.SIC_CSV) + categoryNames(ColdStartData.MERCHANT_KEYWORDS_CSV))
+            .filter { it.lowercase() !in valid }
+            .distinct()
+
+        assertTrue(offenders.isEmpty(), "cold-start data references categories that don't exist: $offenders")
     }
 }

@@ -28,8 +28,8 @@ class FeatureExtractor {
             }
         }
 
-        for (word in cleaned.split(' ')) {
-            if (word.isEmpty()) continue
+        val words = cleaned.split(' ').filter { it.isNotEmpty() }
+        for (word in stripLeadingProcessorTokens(words)) {
             features.add("$WORD_PREFIX$word")
             features.addAll(trigrams(word))
         }
@@ -41,6 +41,18 @@ class FeatureExtractor {
         features.add(if (amountCents < 0) SIGN_DEBIT else SIGN_CREDIT)
 
         return features
+    }
+
+    /**
+     * Payment-processor / aggregator prefixes that card networks prepend to the real merchant
+     * ("SQ *BLUE BOTTLE", "TST* CHIPOTLE", "PAYPAL *STEAM"). They carry no merchant signal and
+     * appear across every category, so they are dropped from the leading position (never all of
+     * them, so a name that is only a processor token survives).
+     */
+    private fun stripLeadingProcessorTokens(words: List<String>): List<String> {
+        var i = 0
+        while (i < words.size && words[i] in PROCESSOR_PREFIXES) i++
+        return if (i == 0 || i >= words.size) words else words.subList(i, words.size)
     }
 
     private fun trigrams(word: String): List<String> {
@@ -60,5 +72,7 @@ class FeatureExtractor {
         const val SIGN_PREFIX = "sign:"
         const val SIGN_DEBIT = "sign:debit"
         const val SIGN_CREDIT = "sign:credit"
+
+        private val PROCESSOR_PREFIXES = setOf("sq", "tst", "paypal", "py", "pp", "pyp")
     }
 }

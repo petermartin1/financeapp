@@ -75,4 +75,38 @@ class FeatureExtractorTest {
         assertFalse(tokens.any { it.startsWith("c:") })
         assertTrue("sign:debit" in tokens)
     }
+
+    // Card descriptors bury the merchant behind a payment-processor prefix ("SQ *", "TST*",
+    // "PAYPAL *"). Those constant tokens appear across every merchant/category, so dropping them
+    // lets the real merchant words drive the learned model.
+    @Test
+    fun `strips a leading Square processor prefix so the merchant drives features`() {
+        val tokens = extractor.extract("SQ *BLUE BOTTLE", sic = null, amountCents = -500)
+        assertTrue("w:blue" in tokens)
+        assertTrue("w:bottle" in tokens)
+        assertFalse("w:sq" in tokens, "the Square processor prefix must not become a merchant feature")
+    }
+
+    @Test
+    fun `strips a leading Toast processor prefix ahead of the merchant`() {
+        val tokens = extractor.extract("TST* CHIPOTLE 0421", sic = null, amountCents = -1200)
+        assertTrue("w:chipotle" in tokens)
+        assertFalse("w:tst" in tokens)
+    }
+
+    @Test
+    fun `does not strip a processor token when it is the only word`() {
+        // Never strip a name down to nothing.
+        val tokens = extractor.extract("SQ", sic = null, amountCents = -500)
+        assertTrue("w:sq" in tokens)
+    }
+
+    @Test
+    fun `a processor-prefixed name yields the same merchant features as the bare name`() {
+        val prefixed = extractor.extract("PAYPAL *STEAMGAMES", sic = null, amountCents = -2000)
+            .filter { it.startsWith("w:") }.toSet()
+        val bare = extractor.extract("STEAMGAMES", sic = null, amountCents = -2000)
+            .filter { it.startsWith("w:") }.toSet()
+        assertEquals(bare, prefixed, "the processor prefix should not change the merchant features")
+    }
 }
