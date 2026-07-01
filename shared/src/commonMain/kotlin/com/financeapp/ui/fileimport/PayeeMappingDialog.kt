@@ -19,6 +19,7 @@ import com.financeapp.domain.model.PayeeMatch
 import com.financeapp.domain.model.Tag
 import com.financeapp.domain.model.UnresolvedPayee
 import com.financeapp.ui.components.forms.CategoryPicker
+import com.financeapp.ui.components.forms.PayeePicker
 import kotlin.math.roundToInt
 
 @Composable
@@ -67,6 +68,13 @@ fun PayeeMappingDialog(
     }
     var selectedTagIds by remember(currentIndex) { mutableStateOf(emptyList<Long>()) }
     var rememberMapping by remember(currentIndex) { mutableStateOf(true) }
+
+    // Every payee the manual picker can choose from: existing DB payees plus any created earlier in
+    // this same import, deduped by id, so a manual lookup always resolves to a selectable payee.
+    val selectablePayees = remember(allPayees, similarRecentlyCreated) {
+        (allPayees + similarRecentlyCreated).distinctBy { it.id }.sortedBy { it.name }
+    }
+    val pickerSelectedPayee = selectablePayees.find { it.id == selectedPayeeId }
 
     if (currentPayee == null) {
         // No more payees to resolve - shouldn't happen
@@ -146,7 +154,9 @@ fun PayeeMappingDialog(
                                 MappingModeSelector(
                                     selectedMode = mappingMode,
                                     onModeSelected = { mappingMode = it },
-                                    showMapToExisting = hasAnySuggestions,
+                                    // Mapping to an existing payee is ALWAYS available now — even when the
+                                    // fuzzy matcher surfaced nothing — via the searchable picker below.
+                                    showMapToExisting = true,
                                     hasAnySuggestions = hasAnySuggestions,
                                     suggestionCount = (currentPayee.suggestedMatches.size + similarRecentlyCreated.size)
                                 )
@@ -156,8 +166,7 @@ fun PayeeMappingDialog(
 
                     // Content based on mode
                     when {
-                        // Only show MAP_TO_EXISTING content if there are suggested matches
-                        mappingMode == MappingMode.MAP_TO_EXISTING && hasAnySuggestions -> {
+                        mappingMode == MappingMode.MAP_TO_EXISTING -> {
                             // Show database matches if any
                             if (currentPayee.suggestedMatches.isNotEmpty()) {
                                 item {
@@ -199,9 +208,30 @@ fun PayeeMappingDialog(
                                     )
                                 }
                             }
+
+                            // Always offer a searchable picker over every existing payee, so a match
+                            // the fuzzy matcher missed can still be chosen manually. This is the fix
+                            // for "a new payee resembles a prior one but no option to match it".
+                            item {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    if (hasAnySuggestions) "Or choose any existing payee:" else "Choose an existing payee:",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            item {
+                                PayeePicker(
+                                    selectedPayee = pickerSelectedPayee,
+                                    payees = selectablePayees,
+                                    onPayeeSelected = { picked -> selectedPayeeId = picked?.id ?: 0L },
+                                    label = "Search all payees",
+                                    allowNewPayee = false
+                                )
+                            }
                         }
 
-                        // CREATE_NEW mode or when no existing payees to map to
+                        // CREATE_NEW mode
                         else -> {
                             item {
                                 OutlinedTextField(
