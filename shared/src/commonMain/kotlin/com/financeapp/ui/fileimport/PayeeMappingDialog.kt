@@ -107,7 +107,8 @@ fun PayeeMappingDialog(
                 PayeeInfoSection(
                     importedName = currentPayee.importedName,
                     transactionCount = currentPayee.transactionCount,
-                    variantNames = currentPayee.variantNames
+                    variantNames = currentPayee.variantNames,
+                    sic = currentPayee.sic
                 )
 
                 HorizontalDivider()
@@ -422,6 +423,7 @@ private fun PayeeInfoSection(
     importedName: String,
     transactionCount: Int,
     variantNames: List<String> = listOf(importedName),
+    sic: String? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -467,6 +469,25 @@ private fun PayeeInfoSection(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
+
+            // Merchant-type code straight from the OFX file, when the bank supplied one — helps
+            // identify what kind of payee this is (e.g. SIC 5812 = eating places).
+            if (!sic.isNullOrBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Category,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        "OFX type code (SIC): $sic",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
         }
     }
 }

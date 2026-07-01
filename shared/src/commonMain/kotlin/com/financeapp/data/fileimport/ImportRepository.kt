@@ -122,7 +122,18 @@ class ImportRepository(
         try {
 
             // Extract unique payee names, skipping checks (their name is not a payee).
-            val payeeNames = transactions.filterNot { it.isCheck }.map { it.name }.distinct()
+            val payeeTransactions = transactions.filterNot { it.isCheck }
+            val payeeNames = payeeTransactions.map { it.name }.distinct()
+
+            // Representative SIC (merchant-type code) per payee name: the most common non-blank
+            // code across that name's transactions, so the review screen can show the payee's type.
+            val payeeSics = payeeTransactions
+                .groupBy { it.name }
+                .mapValues { (_, txns) ->
+                    txns.mapNotNull { it.sic?.takeIf { s -> s.isNotBlank() } }
+                        .groupingBy { it }.eachCount()
+                        .maxByOrNull { it.value }?.key
+                }
 
             // Get all existing payees
             val payeeList = payeeRepository.getAllPayees().first()
@@ -131,7 +142,8 @@ class ImportRepository(
             val result = payeeMatchingRepository.resolvePayeeNames(
                 importedNames = payeeNames,
                 existingPayees = payeeList,
-                threshold = 0.75
+                threshold = 0.75,
+                payeeSics = payeeSics
             )
 
             Result.success(result)

@@ -94,7 +94,8 @@ class PayeeMatchingRepositoryImpl(
     override suspend fun resolvePayeeNames(
         importedNames: List<String>,
         existingPayees: List<Payee>,
-        threshold: Double
+        threshold: Double,
+        payeeSics: Map<String, String?>
     ): PayeeResolutionResult = withContext(ioDispatcher) {
         val autoResolved = mutableMapOf<String, ResolvedAlias>()
         val needsReview = mutableListOf<UnresolvedPayee>()
@@ -144,7 +145,8 @@ class PayeeMatchingRepositoryImpl(
                 transactionCount = count,
                 suggestedMatches = matches,
                 variantNames = listOf(importedName), // Only this name
-                similarInImport = similarInImport  // Names from this import that are similar
+                similarInImport = similarInImport,  // Names from this import that are similar
+                sic = payeeSics[importedName]  // OFX merchant-type code, when supplied
             )
 
             needsReview.add(unresolvedPayee)

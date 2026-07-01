@@ -43,11 +43,14 @@ interface PayeeMatchingRepository {
      * @param importedNames List of payee names from import
      * @param existingPayees List of all existing payees
      * @param threshold Similarity threshold for fuzzy matching (default 0.75)
+     * @param payeeSics Optional imported-name -> SIC merchant-type code (from the OFX file), shown
+     *   on the review screen to help identify the payee. Names without a SIC may be omitted.
      * @return PayeeResolutionResult with auto-resolved and unresolved names
      */
     suspend fun resolvePayeeNames(
         importedNames: List<String>,
         existingPayees: List<Payee>,
-        threshold: Double = 0.75
+        threshold: Double = 0.75,
+        payeeSics: Map<String, String?> = emptyMap()
     ): PayeeResolutionResult
 }

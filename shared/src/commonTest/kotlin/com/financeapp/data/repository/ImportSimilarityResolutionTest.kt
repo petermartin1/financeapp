@@ -77,4 +77,16 @@ class ImportSimilarityResolutionTest {
                 "but similarInImport was ${second.similarInImport}"
         )
     }
+
+    @Test
+    fun `carries the OFX SIC code through to the review entry`() = runTest {
+        val imported = listOf("SQ *BLUE BOTTLE COFFEE", "SOME UNKNOWN VENDOR")
+        val sics = mapOf("SQ *BLUE BOTTLE COFFEE" to "5812") // eating places; other name has none
+
+        val result = matchingRepo.resolvePayeeNames(imported, existingPayees = emptyList(), threshold = 0.75, payeeSics = sics)
+
+        val byName = result.needsReview.associateBy { it.importedName }
+        assertEquals("5812", byName.getValue("SQ *BLUE BOTTLE COFFEE").sic, "SIC should be surfaced on the review entry")
+        assertEquals(null, byName.getValue("SOME UNKNOWN VENDOR").sic, "names without a SIC should stay null")
+    }
 }

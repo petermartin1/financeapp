@@ -31,7 +31,8 @@ data class UnresolvedPayee(
     val transactionCount: Int,
     val suggestedMatches: List<PayeeMatch>,
     val variantNames: List<String> = listOf(importedName), // For grouped similar names
-    val similarInImport: List<String> = emptyList()  // Similar payee names found earlier in this import batch
+    val similarInImport: List<String> = emptyList(),  // Similar payee names found earlier in this import batch
+    val sic: String? = null  // SIC merchant-type code from the OFX file, when the bank supplied one
 )
 
 /**
