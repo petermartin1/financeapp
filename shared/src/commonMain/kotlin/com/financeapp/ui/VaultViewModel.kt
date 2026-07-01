@@ -1,6 +1,7 @@
 package com.financeapp.ui
 
 import com.financeapp.domain.repository.AppLockRepository
+import com.financeapp.security.SecurityAuditLogger
 import com.financeapp.security.vault.KeyVault
 import com.financeapp.security.vault.LegacyKeyMigration
 import com.financeapp.security.vault.PasswordStrength
@@ -33,7 +34,25 @@ class VaultViewModel(
 
     @Volatile private var lastActivityMs: Long = now()
 
+    // Number of in-progress foreground operations (e.g. an import's interactive payee review).
+    // While > 0 the idle auto-lock is suspended: such flows run in their own dialog windows and
+    // generate no main-window pointer activity, so the idle timer would otherwise fire and lock
+    // the vault out from under the user mid-task (bouncing them to the unlock screen).
+    private var activeOperations = 0
+
     fun noteActivity() { lastActivityMs = now() }
+
+    /** Marks the start of a foreground operation that must not be interrupted by idle auto-lock. */
+    fun beginBusy() {
+        activeOperations++
+        noteActivity()
+    }
+
+    /** Marks the end of a [beginBusy] operation, restarting the idle countdown from now. */
+    fun endBusy() {
+        if (activeOperations > 0) activeOperations--
+        noteActivity()
+    }
 
     init {
         refresh()
@@ -46,8 +65,11 @@ class VaultViewModel(
      * keep test JVMs alive forever.
      */
     fun checkAutoLock() {
+        if (activeOperations > 0) return
+        val nowMs = now()
         if (_gate.value == VaultGate.Unlocked &&
-            AutoLockPolicy.shouldLock(lastActivityMs, now(), idleTimeoutMs)) {
+            AutoLockPolicy.shouldLock(lastActivityMs, nowMs, idleTimeoutMs)) {
+            SecurityAuditLogger.logSessionAutoLocked(nowMs - lastActivityMs)
             lock()
         }
     }

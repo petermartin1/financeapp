@@ -165,6 +165,20 @@ object SecurityAuditLogger {
     }
 
     /**
+     * Log that the vault auto-locked after an idle timeout. Records how long the session had been
+     * idle so this is diagnosable after the fact (e.g. a user surprised to land on the unlock
+     * screen). Contains no sensitive data.
+     */
+    fun logSessionAutoLocked(idleMs: Long) {
+        log(SecurityEvent(
+            type = EventType.SESSION_AUTO_LOCKED,
+            category = EventCategory.AUTHENTICATION,
+            severity = Severity.INFO,
+            message = "Vault auto-locked after ${idleMs / 1000}s idle"
+        ))
+    }
+
+    /**
      * Log certificate validation failure.
      */
     fun logCertificateValidationFailure(hostname: String, reason: String) {
@@ -284,7 +298,8 @@ enum class EventType {
     CREDENTIAL_RETRIEVED,
     CREDENTIAL_DELETED,
     CERT_VALIDATION_FAILURE,
-    RATE_LIMIT_EXCEEDED
+    RATE_LIMIT_EXCEEDED,
+    SESSION_AUTO_LOCKED
 }
 
 /**

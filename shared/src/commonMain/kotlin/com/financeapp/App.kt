@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -17,6 +18,7 @@ import com.financeapp.ui.connections.ConnectionsScreen
 import com.financeapp.ui.connections.ConnectionsViewModel
 import com.financeapp.ui.fileimport.ImportScreen
 import com.financeapp.ui.fileimport.ImportViewModel
+import com.financeapp.ui.fileimport.PayeeMappingStep
 import com.financeapp.ui.reconcile.ReconcileScreen
 import com.financeapp.ui.reconcile.ReconcileStartDialog
 import com.financeapp.ui.reconcile.ReconcileViewModel
@@ -127,11 +129,15 @@ private fun UnlockedApp() {
             color = MaterialTheme.colorScheme.background
         ) {
             Box(
-                modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) { awaitPointerEvent(); vaultViewModel.noteActivity() }
+                modifier = Modifier.fillMaxSize()
+                    // Both pointer and keyboard interaction count as activity for the idle timer;
+                    // keyboard-only work (e.g. typing a long note) must not be mistaken for idle.
+                    .onPreviewKeyEvent { vaultViewModel.noteActivity(); false }
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) { awaitPointerEvent(); vaultViewModel.noteActivity() }
+                        }
                     }
-                }
             ) {
                 MainContent()
                 SnackbarHost(
@@ -175,9 +181,21 @@ private fun MainContent() {
     var showDashboardCustomize by remember { mutableStateOf(false) }
     var showGlobalSearch by remember { mutableStateOf(false) }
 
+    val vaultViewModel: VaultViewModel = koinInject()
     val accountsState by accountsViewModel.uiState.collectAsState()
     val categoriesState by categoriesViewModel.uiState.collectAsState()
     val themeMode by appViewModel.themeMode.collectAsState()
+    val importState by importViewModel.uiState.collectAsState()
+
+    // While an import is in flight — especially its interactive payee-review dialog, which runs in
+    // a separate window and produces no main-window pointer activity — suspend the idle auto-lock
+    // so the vault isn't pulled out from under the user mid-import (bouncing them to the unlock
+    // screen and losing their in-progress mappings).
+    val importActive = importState.payeeMappingStep != PayeeMappingStep.None || importState.isImporting
+    DisposableEffect(importActive) {
+        if (importActive) vaultViewModel.beginBusy()
+        onDispose { if (importActive) vaultViewModel.endBusy() }
+    }
 
     // Navigation functions
     val navigateTo = { screen: Screen ->
