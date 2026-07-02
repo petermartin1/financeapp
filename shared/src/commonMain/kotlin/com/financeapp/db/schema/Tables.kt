@@ -228,3 +228,27 @@ object DividendEvents : IntIdTable("DividendEvent") {
     val shares = double("shares") // number of shares at time of dividend
     val isReinvested = bool("is_reinvested").default(false)
 }
+
+// Detected subscriptions (recurring charges surfaced for awareness). See
+// docs/superpowers/specs/2026-07-01-subscription-detection-design.md.
+object DetectedSubscriptions : IntIdTable("DetectedSubscription") {
+    val payeeId = reference("payee_id", Payees).nullable()
+    val matchKey = varchar("match_key", 512).uniqueIndex()
+    val cadence = varchar("cadence", 50)              // WEEKLY, BIWEEKLY, MONTHLY, YEARLY
+    val status = varchar("status", 20).default("CANDIDATE") // CANDIDATE, CONFIRMED, DISMISSED
+    val medianAmount = long("median_amount")          // absolute cents
+    val minAmount = long("min_amount")
+    val maxAmount = long("max_amount")
+    val isVariable = bool("is_variable").default(false)
+    val occurrenceCount = integer("occurrence_count")
+    val firstSeen = long("first_seen")                // epoch millis
+    val lastSeen = long("last_seen")
+    val nextExpectedDate = long("next_expected_date")
+    val confidence = integer("confidence")            // 0-100
+    val isActive = bool("is_active").default(true)
+    val origin = varchar("origin", 20).default("DETECTED")   // DETECTED, MANUAL
+    val scheduledTransactionId =                        // set by the action bridge; null otherwise
+        reference("scheduled_transaction_id", ScheduledTransactions).nullable()
+    val createdAt = long("created_at")
+    val updatedAt = long("updated_at")
+}

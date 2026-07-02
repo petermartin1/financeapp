@@ -39,7 +39,8 @@ fun createTestDatabase(): Database {
             ReconciliationSessions,
             PortfolioSnapshots,
             HoldingSnapshots,
-            DividendEvents
+            DividendEvents,
+            DetectedSubscriptions
         )
     }
 
@@ -56,6 +57,7 @@ fun Database.clearAllTables() {
     transaction(this) {
         // Drop tables in reverse order to handle foreign key constraints
         SchemaUtils.drop(
+            DetectedSubscriptions,
             DividendEvents,
             HoldingSnapshots,
             PortfolioSnapshots,
@@ -99,7 +101,8 @@ fun Database.clearAllTables() {
             ReconciliationSessions,
             PortfolioSnapshots,
             HoldingSnapshots,
-            DividendEvents
+            DividendEvents,
+            DetectedSubscriptions
         )
     }
 }

@@ -61,7 +61,8 @@ actual class DatabaseDriverFactory actual constructor(private val encryptionKey:
                 ReconciliationSessions,
                 PortfolioSnapshots,
                 HoldingSnapshots,
-                DividendEvents
+                DividendEvents,
+                DetectedSubscriptions
             )
         }
 
