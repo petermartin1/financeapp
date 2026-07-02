@@ -5,4 +5,6 @@ interface PreferencesRepository {
     suspend fun setThemeMode(mode: String)
     suspend fun getDashboardConfig(): String?
     suspend fun setDashboardConfig(config: String)
+    suspend fun isSubscriptionInitialScanDone(): Boolean
+    suspend fun markSubscriptionInitialScanDone()
 }

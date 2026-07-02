@@ -25,8 +25,17 @@ class PreferencesRepositoryImpl(
         preferencesStore.putString(KEY_DASHBOARD_CONFIG, config)
     }
 
+    override suspend fun isSubscriptionInitialScanDone(): Boolean = withContext(Dispatchers.IO) {
+        preferencesStore.getString(KEY_SUBSCRIPTION_INITIAL_SCAN_DONE) == "true"
+    }
+
+    override suspend fun markSubscriptionInitialScanDone() = withContext(Dispatchers.IO) {
+        preferencesStore.putString(KEY_SUBSCRIPTION_INITIAL_SCAN_DONE, "true")
+    }
+
     companion object {
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_DASHBOARD_CONFIG = "dashboard_config"
+        private const val KEY_SUBSCRIPTION_INITIAL_SCAN_DONE = "subscriptions_initial_scan_done"
     }
 }
