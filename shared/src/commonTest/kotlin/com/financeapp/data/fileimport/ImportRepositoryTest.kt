@@ -10,6 +10,7 @@ import com.financeapp.data.repository.SubscriptionRepositoryImpl
 import com.financeapp.data.repository.TagRepositoryImpl
 import com.financeapp.data.repository.TransactionRepositoryImpl
 import com.financeapp.domain.matching.PayeeMatcher
+import com.financeapp.domain.model.TransactionFrequency
 import com.financeapp.domain.service.SubscriptionScanService
 import com.financeapp.domain.subscriptions.SubscriptionDetector
 import com.financeapp.domain.model.PayeeMapping
@@ -38,6 +39,7 @@ class ImportRepositoryTest {
     private lateinit var transactionRepository: TransactionRepositoryImpl
     private lateinit var payeeRepository: PayeeRepositoryImpl
     private lateinit var tagRepository: TagRepositoryImpl
+    private lateinit var subscriptionRepository: SubscriptionRepositoryImpl
     private lateinit var importRepository: ImportRepository
 
     @BeforeTest
@@ -46,6 +48,13 @@ class ImportRepositoryTest {
         transactionRepository = TransactionRepositoryImpl(database, dispatcher)
         payeeRepository = PayeeRepositoryImpl(database, dispatcher)
         tagRepository = TagRepositoryImpl(database, dispatcher)
+        subscriptionRepository = SubscriptionRepositoryImpl(
+            database,
+            transactionRepository,
+            ScheduledTransactionRepositoryImpl(database, dispatcher),
+            SubscriptionDetector(),
+            dispatcher
+        )
         importRepository = ImportRepository(
             transactionRepository = transactionRepository,
             payeeRepository = payeeRepository,
@@ -54,13 +63,7 @@ class ImportRepositoryTest {
             tagRepository = tagRepository,
             database = database,
             subscriptionScanService = SubscriptionScanService(
-                SubscriptionRepositoryImpl(
-                    database,
-                    transactionRepository,
-                    ScheduledTransactionRepositoryImpl(database, dispatcher),
-                    SubscriptionDetector(),
-                    dispatcher
-                ),
+                subscriptionRepository,
                 PreferencesRepositoryImpl(InMemoryPrefs())
             )
         )
@@ -133,6 +136,31 @@ class ImportRepositoryTest {
         val saved = transactionRepository.getTransactionByImportId("F1")
         requireNotNull(saved) { "imported transaction should exist" }
         assertTrue(tagRepository.getTagsForTransaction(saved.id).any { it.id == tagId })
+    }
+
+    @Test
+    fun `import triggers subscription scan and surfaces recurring charges`() = runTest {
+        val accountId = insertAccount()
+        val monthlyCharges = (1..4).map { m ->
+            ImportedTransaction(
+                fitId = "SUB$m",
+                date = testDate(2026, m, 15),
+                amount = -1599,
+                name = "NETFLIX",
+                memo = null,
+                checkNumber = null,
+                type = TransactionType.DEBIT
+            )
+        }
+
+        val result = importRepository.importPreviewedTransactions(monthlyCharges, accountId)
+        assertTrue(result.isSuccess, "import should succeed")
+
+        // The import must have triggered scanAfterImport, which detects the recurring charge.
+        val subs = subscriptionRepository.getSubscriptions().first()
+        assertEquals(1, subs.size, "import completion should trigger a scan that detects one subscription")
+        assertEquals(TransactionFrequency.MONTHLY, subs.single().cadence)
+        assertEquals(1599, subs.single().medianAmountCents)
     }
 
     @Test
