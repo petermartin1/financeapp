@@ -119,6 +119,10 @@ class ScheduledTransactionRepositoryImpl(
 
     override suspend fun deleteScheduledTransaction(id: Long): Unit = withContext(Dispatchers.IO) {
         transaction(database) {
+            // Null the subscription bridge link so a detected subscription survives its schedule being deleted
+            DetectedSubscriptions.update({ DetectedSubscriptions.scheduledTransactionId eq id.toInt() }) {
+                it[scheduledTransactionId] = null
+            }
             ScheduledTransactions.deleteWhere { ScheduledTransactions.id eq id.toInt() }
         }
         notifyScheduledTransactionsChanged()
