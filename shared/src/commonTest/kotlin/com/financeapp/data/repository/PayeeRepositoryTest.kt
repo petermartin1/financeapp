@@ -12,6 +12,9 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
 import kotlin.time.Duration.Companion.seconds
 
@@ -96,6 +99,29 @@ class PayeeRepositoryTest {
 
         val retrieved = payeeRepository.getPayeeById(id)
         assertNull(retrieved)
+    }
+
+    @Test
+    fun `deletePayee nulls detected subscription payee reference`() = runBlocking {
+        val payeeId = payeeRepository.insertPayee(Payee(id = 0, name = "Netflix", defaultCategoryId = null))
+        transaction(database) {
+            com.financeapp.db.schema.DetectedSubscriptions.insert {
+                it[com.financeapp.db.schema.DetectedSubscriptions.payeeId] = payeeId.toInt()
+                it[matchKey] = "payee:$payeeId"
+                it[cadence] = "MONTHLY"; it[status] = "CANDIDATE"
+                it[medianAmount] = 1599; it[minAmount] = 1599; it[maxAmount] = 1599
+                it[isVariable] = false; it[occurrenceCount] = 3
+                it[firstSeen] = 1L; it[lastSeen] = 2L; it[nextExpectedDate] = 3L
+                it[confidence] = 80; it[isActive] = true; it[createdAt] = 1L; it[updatedAt] = 1L
+            }
+        }
+
+        payeeRepository.deletePayee(payeeId) // must not throw despite FK
+
+        transaction(database) {
+            val row = com.financeapp.db.schema.DetectedSubscriptions.selectAll().single()
+            assertNull(row[com.financeapp.db.schema.DetectedSubscriptions.payeeId])
+        }
     }
 
     // ============================================

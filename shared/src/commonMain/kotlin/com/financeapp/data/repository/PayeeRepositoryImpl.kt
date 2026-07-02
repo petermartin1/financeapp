@@ -1,5 +1,6 @@
 package com.financeapp.data.repository
 
+import com.financeapp.db.schema.DetectedSubscriptions
 import com.financeapp.db.schema.PayeeAliases
 import com.financeapp.db.schema.Payees
 import com.financeapp.db.schema.ScheduledTransactions
@@ -150,6 +151,10 @@ class PayeeRepositoryImpl(
             }
             // Delete payee aliases
             PayeeAliases.deleteWhere { PayeeAliases.canonicalPayeeId eq id.toInt() }
+            // Nullify payee references in detected subscriptions (name-keyed rows survive independently)
+            DetectedSubscriptions.update({ DetectedSubscriptions.payeeId eq id.toInt() }) {
+                it[payeeId] = null
+            }
             // Delete the payee
             Payees.deleteWhere { Payees.id eq id.toInt() }
         }
