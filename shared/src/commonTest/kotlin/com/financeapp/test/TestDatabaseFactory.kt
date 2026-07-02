@@ -108,6 +108,17 @@ fun Database.clearAllTables() {
 }
 
 /**
+ * Delete all rows from a single table by its SQL name (e.g. "TransactionRecord"), with
+ * referential integrity temporarily disabled so FK-referenced rows can be wiped in one shot.
+ */
+fun Database.clearTable(tableName: String) = transaction(this) {
+    // Unquoted so H2 (PostgreSQL mode) resolves the folded, unquoted identifier the schema created.
+    exec("SET REFERENTIAL_INTEGRITY FALSE")
+    exec("DELETE FROM $tableName")
+    exec("SET REFERENTIAL_INTEGRITY TRUE")
+}
+
+/**
  * Execute a block within a database transaction
  *
  * This is useful for test setup that needs to insert data directly.
