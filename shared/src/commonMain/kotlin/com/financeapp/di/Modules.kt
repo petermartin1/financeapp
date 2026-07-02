@@ -53,6 +53,10 @@ import com.financeapp.data.repository.TemplateRepositoryImpl
 import com.financeapp.ui.templates.TemplatesViewModel
 import com.financeapp.domain.repository.ScheduledTransactionRepository
 import com.financeapp.data.repository.ScheduledTransactionRepositoryImpl
+import com.financeapp.domain.subscriptions.SubscriptionDetector
+import com.financeapp.domain.repository.SubscriptionRepository
+import com.financeapp.data.repository.SubscriptionRepositoryImpl
+import com.financeapp.domain.service.SubscriptionScanService
 import com.financeapp.security.SecureCredentialStore
 import com.financeapp.ui.search.SearchViewModel
 import com.financeapp.ui.investments.PerformanceTabViewModel
@@ -122,7 +126,11 @@ val sharedModule = module {
     single { YahooFinanceClient(get()) }
     single<QuoteRepository> { QuoteRepositoryImpl(get(), get(), get()) }
     single<PerformanceRepository> { PerformanceRepositoryImpl(get(), get(), get()) }
-    single { ImportRepository(get(), get(), get(), get(), get(), get()) }
+    single { SubscriptionDetector() }
+    // args: database, transactionRepository, scheduledTransactionRepository, detector
+    single<SubscriptionRepository> { SubscriptionRepositoryImpl(get(), get(), get(), get()) }
+    single { SubscriptionScanService(get(), get()) }
+    single { ImportRepository(get(), get(), get(), get(), get(), get(), get()) }
     single { OfxClient() }
     single { SecureCredentialStore() }
     single { OfxRepository(get(), get(), get(), get()) }

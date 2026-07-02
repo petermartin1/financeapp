@@ -3,9 +3,15 @@ package com.financeapp.data.fileimport
 import com.financeapp.data.repository.AccountRepositoryImpl
 import com.financeapp.data.repository.PayeeMatchingRepositoryImpl
 import com.financeapp.data.repository.PayeeRepositoryImpl
+import com.financeapp.data.repository.PreferencesRepositoryImpl
+import com.financeapp.data.repository.PreferencesStore
+import com.financeapp.data.repository.ScheduledTransactionRepositoryImpl
+import com.financeapp.data.repository.SubscriptionRepositoryImpl
 import com.financeapp.data.repository.TagRepositoryImpl
 import com.financeapp.data.repository.TransactionRepositoryImpl
 import com.financeapp.domain.matching.PayeeMatcher
+import com.financeapp.domain.service.SubscriptionScanService
+import com.financeapp.domain.subscriptions.SubscriptionDetector
 import com.financeapp.domain.model.PayeeMapping
 import com.financeapp.domain.model.Tag
 import com.financeapp.test.TestDataFactory
@@ -46,8 +52,25 @@ class ImportRepositoryTest {
             accountRepository = AccountRepositoryImpl(database, dispatcher),
             payeeMatchingRepository = PayeeMatchingRepositoryImpl(database, PayeeMatcher(), dispatcher),
             tagRepository = tagRepository,
-            database = database
+            database = database,
+            subscriptionScanService = SubscriptionScanService(
+                SubscriptionRepositoryImpl(
+                    database,
+                    transactionRepository,
+                    ScheduledTransactionRepositoryImpl(database, dispatcher),
+                    SubscriptionDetector(),
+                    dispatcher
+                ),
+                PreferencesRepositoryImpl(InMemoryPrefs())
+            )
         )
+    }
+
+    private class InMemoryPrefs : PreferencesStore {
+        private val map = mutableMapOf<String, String>()
+        override suspend fun getString(key: String): String? = map[key]
+        override suspend fun putString(key: String, value: String) { map[key] = value }
+        override suspend fun remove(key: String) { map.remove(key) }
     }
 
     @AfterTest

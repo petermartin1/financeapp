@@ -16,6 +16,7 @@ import com.financeapp.domain.repository.PayeeMatchingRepository
 import com.financeapp.domain.repository.PayeeRepository
 import com.financeapp.domain.repository.TagRepository
 import com.financeapp.domain.repository.TransactionRepository
+import com.financeapp.domain.service.SubscriptionScanService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.first
@@ -36,6 +37,7 @@ class ImportRepository(
     private val payeeMatchingRepository: PayeeMatchingRepository,
     private val tagRepository: TagRepository,
     private val database: Database,
+    private val subscriptionScanService: SubscriptionScanService,
     private val payeeMatcher: PayeeMatcher = PayeeMatcher(),
     private val ofxParser: OfxParser = OfxParser(),
     private val csvParser: CsvParser = CsvParser(),
@@ -287,6 +289,7 @@ class ImportRepository(
             accountRepository.notifyBalancesChanged()
             payeeRepository.notifyPayeesChanged()
             transactionRepository.notifyTransactionsChanged()
+            subscriptionScanService.scanAfterImport()
 
             return@withContext Result.success(ImportSummary(
                 totalInFile = transactions.size,
@@ -372,6 +375,7 @@ class ImportRepository(
 
             // Step 8: Notify that balances have changed so UI can update
             accountRepository.notifyBalancesChanged()
+            subscriptionScanService.scanAfterImport()
 
             return Result.success(ImportSummary(
                 totalInFile = transactions.size,
