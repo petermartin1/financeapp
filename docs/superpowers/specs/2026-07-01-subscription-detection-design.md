@@ -1,7 +1,7 @@
 # Subscription Detection — Design
 
-**Date:** 2026-07-01
-**Status:** Approved (design), pending implementation plan
+**Date:** 2026-07-01 (revised 2026-07-02: added the action bridge and manual escape hatch)
+**Status:** Approved (design); implementation plan updated
 
 ## Goal
 
@@ -9,6 +9,12 @@ Give the user awareness of recurring charges ("what am I paying for") by automat
 detecting subscription-like transactions from their existing history and surfacing them on a
 dedicated screen with cadence, amount, and next-expected date. This is an awareness feature,
 not an alerting or cancellation tool.
+
+**One action bridge in v1.** Awareness has a short half-life if the list is purely passive, so
+confirming a subscription optionally creates a linked `ScheduledTransaction`. That single seam
+turns this into the on-ramp for cash-flow forecasting (a separate roadmap item) rather than a list
+the user reads once — it now buys down two roadmap items, not one. Fully automatic scheduling and
+price-change alerting remain out of scope.
 
 ## Scope decisions
 
@@ -23,11 +29,20 @@ Settled during brainstorming:
   history on first launch after the feature ships.
 - **Surfacing:** a dedicated **Subscriptions** screen (no dashboard card in v1).
 - **Detection algorithm:** interval-clustering per payee (Approach A).
+- **Awareness→action bridge:** confirming a candidate offers to create a linked
+  `ScheduledTransaction` (user-initiated, never automatic). Available when the subscription maps to
+  a payee.
+- **False-negative escape hatch:** a manual **"Mark a payee as a subscription"** action, so a
+  recurring charge the detector misses is still recoverable by hand.
 
 ### Explicitly out of scope (future extensions)
 
 - Dashboard summary card.
-- Auto-creating `ScheduledTransactions` from confirmed subscriptions (feeds cash-flow forecasting).
+- Auto-creating `ScheduledTransactions` *automatically* on confirm — v1 offers it as an explicit
+  user choice (the action bridge above), but never creates one silently.
+- A low-confidence **"Possible"** tier for near-miss groups (exactly two occurrences, or cadence
+  spread just outside ±25%). Deferred to keep v1 scope bounded; the manual escape hatch covers
+  missed charges in the meantime.
 - Known-merchant / MCC-SIC list as a confidence booster (the code categorization infra exists;
   deferred to keep one clear detection path in v1).
 - Price-increase / new-subscription alerts.
@@ -47,6 +62,11 @@ Three layers keep the pure detection logic isolated from persistence and UI:
      and provides CRUD for confirm/dismiss.
    - Exposed `transaction {}` blocks; exposes a `Flow<List<DetectedSubscription>>` for the screen,
      consistent with the other repositories.
+   - `markPayeeAsSubscription(payeeId)` — the manual escape hatch: builds/updates a `CONFIRMED`,
+     `MANUAL`-origin row from a payee's history even if it doesn't meet the auto-detection bar.
+   - `createScheduledFromSubscription(id)` — the action bridge: creates a linked
+     `ScheduledTransaction` through the existing `ScheduledTransactionRepository` and records its id
+     on the row (so it shows as "tracked" and is never double-created).
 
 3. **`SubscriptionScanService`** (domain — single orchestration entry point)
    - `scanAfterImport()` — invoked when an import completes, hooked into the existing import
@@ -79,6 +99,8 @@ Columns:
 | `nextExpectedDate` | LocalDate | `lastSeen + cadence` via calendar math |
 | `confidence` | Int (0–100) | From cadence regularity + occurrence count |
 | `isActive` | Boolean | False when a previously-detected group no longer qualifies (looks cancelled); kept, not deleted |
+| `origin` | enum (`DETECTED` / `MANUAL`) | `MANUAL` for user-added ("Mark as subscription"); never auto-deactivated or auto-reverted |
+| `scheduledTransactionId` | FK → `ScheduledTransactions`, nullable | Set when the user creates a scheduled transaction from this subscription (the action bridge); null otherwise |
 | `createdAt` / `updatedAt` | Instant | |
 
 ### Reconciliation rule (sticky status)
@@ -90,6 +112,9 @@ A re-scan matches candidates to existing rows by `matchKey`:
 - New groups appear as `CANDIDATE`.
 - A previously-detected group that no longer qualifies is marked `isActive = false` (kept visible
   with a "looks cancelled" badge — serves the awareness goal) rather than deleted.
+- **`MANUAL`-origin rows are never auto-deactivated or reverted:** a re-scan updates their stats if
+  the detector finds a matching group, but leaves `isActive = true` and status untouched even when
+  the group no longer meets the auto-detection bar (the user asserted it is a subscription).
 - Reconciliation runs in a single Exposed transaction so it is atomic.
 
 ## Detection algorithm (interval-clustering per payee)
@@ -118,6 +143,36 @@ A re-scan matches candidates to existing rows by `matchKey`:
   in v1.
 - Duplicate same-day charges ⇒ collapsed before gap analysis.
 
+## Awareness → action bridge
+
+Confirming a candidate is where awareness converts to action. After the user confirms, the screen
+offers (does not force) "Track this as a scheduled transaction":
+
+- Builds a `ScheduledTransaction` from the subscription: payee, `medianAmount` as an outflow,
+  `cadence` → frequency, `nextExpectedDate` → next due date, and the account/category of the most
+  recent matching transaction. Created through the existing `ScheduledTransactionRepository` so it
+  behaves exactly like a hand-created schedule.
+- The new schedule's id is stored on the subscription (`scheduledTransactionId`); the row then
+  shows a "Tracked" badge and the offer is not repeated.
+- Offered only when the subscription maps to a payee (`payeeId != null`). Name-keyed subscriptions
+  must be mapped to a payee first (the existing payee-mapping flow); this keeps v1 scope bounded.
+- This is the seam that lets a later cash-flow-forecasting feature project confirmed subscriptions
+  forward with no rework — subscriptions becomes its on-ramp rather than a competing feature.
+
+## Manual subscriptions (false-negative escape hatch)
+
+The detector will miss real subscriptions that fall just outside its thresholds (only two charges
+so far, slightly irregular cadence). Rather than loosen thresholds — which would add false
+positives — v1 gives the user a manual override that directly answers "why didn't it catch X?":
+
+- **"Mark a payee as a subscription"** on the Subscriptions screen opens the existing payee picker.
+- The repository builds a row from that payee's outflow history — median/min/max amount, first/last
+  seen, occurrence count, and a best-guess cadence (defaulting to `MONTHLY` when it cannot infer
+  one) — and inserts it as `status = CONFIRMED`, `origin = MANUAL`, `matchKey = payee:<id>`.
+- If a row already exists for that payee, it is simply promoted to `CONFIRMED` (idempotent).
+- Manual rows are sticky and never auto-deactivated (see reconciliation), so they survive re-scans
+  regardless of whether the detector would independently find them.
+
 ## One-time initial scan tracking
 
 Tracked with an explicit persisted flag, **not** an emptiness check on the table (empty is
@@ -143,6 +198,10 @@ New nav destination under `ui/subscriptions/` (existing screen + ViewModel patte
 - **Status actions:** `CANDIDATE` rows show **Confirm** / **Dismiss**; `CONFIRMED` shown normally;
   `DISMISSED` hidden by default behind a "Show dismissed" toggle. Inactive ("looks cancelled") rows
   get a subtle badge but remain listed.
+- **Confirm → bridge:** confirming a candidate that maps to a payee prompts "Track as a scheduled
+  transaction?" with **Add** / **Skip**. Rows already bridged show a **Tracked** badge instead.
+- **Manual add:** a **"Mark a payee as a subscription"** action opens the payee picker and calls
+  `markPayeeAsSubscription`.
 - **Header summary:** count + estimated monthly total (annual cadences normalized to a monthly
   figure).
 - **Empty state** via the existing `EmptyState` component.
@@ -157,7 +216,11 @@ New nav destination under `ui/subscriptions/` (existing screen + ViewModel patte
   next launch.
 - Next-expected uses the `ScheduledPlanner` calendar/month-anchor pattern to avoid month-end drift.
 - FK invariant (persistence rule): deleting a payee must null / hand-clean
-  `DetectedSubscriptions.payeeId`; name-keyed rows survive independently.
+  `DetectedSubscriptions.payeeId`; name-keyed rows survive independently. Deleting a
+  `ScheduledTransaction` must null `DetectedSubscriptions.scheduledTransactionId` (the bridge link)
+  so the subscription survives its schedule being removed.
+- The action bridge and manual add are user-initiated writes; a failed schedule creation surfaces
+  an error and leaves the subscription unchanged (no partial link).
 - Reconciliation runs in a single Exposed transaction (atomic); startup and import scans cannot
   meaningfully corrupt each other.
 
@@ -186,6 +249,11 @@ table. Existing transactions are read-only inputs.
 - Stats update on new occurrences.
 - Cancelled group → `isActive = false`, not deleted.
 - Payee-delete cleanup of `payeeId`.
+- `MANUAL`-origin row stays active and `CONFIRMED` across a re-scan even when it no longer qualifies.
+- `markPayeeAsSubscription` creates a `CONFIRMED`/`MANUAL` row and is idempotent on a second call.
+- `createScheduledFromSubscription` inserts exactly one `ScheduledTransaction`, records its id, and
+  does not double-create on a second call.
+- ScheduledTransaction-delete cleanup of `scheduledTransactionId`.
 
 **Service tests:**
 - `runInitialScanIfNeeded` runs once and sets the flag only after commit.

@@ -4,7 +4,7 @@
 
 **Goal:** Automatically detect recurring "subscription" charges (fixed and variable amount) from transaction history and surface them on a dedicated Subscriptions screen with cadence, amount, and next-expected date.
 
-**Architecture:** A pure `SubscriptionDetector` (interval-clustering per payee) produces candidate value objects. A `SubscriptionRepository` persists them in a new `DetectedSubscriptions` table and reconciles re-scans by a stable `matchKey` with sticky confirm/dismiss status. A `SubscriptionScanService` orchestrates scans — after each import and once over existing history on first launch (tracked by a preferences flag, set only after a committed scan for crash-safety). A new Compose screen lists results.
+**Architecture:** A pure `SubscriptionDetector` (interval-clustering per payee) produces candidate value objects. A `SubscriptionRepository` persists them in a new `DetectedSubscriptions` table and reconciles re-scans by a stable `matchKey` with sticky confirm/dismiss status. It also provides two user-initiated affordances: a **manual escape hatch** (`markPayeeAsSubscription` — for subscriptions the detector misses) and an **action bridge** (`createScheduledFromSubscription` — creates a linked `ScheduledTransaction` so confirmed subscriptions can feed cash-flow forecasting). A `SubscriptionScanService` orchestrates scans — after each import and once over existing history on first launch (tracked by a preferences flag, set only after a committed scan for crash-safety). A new Compose screen lists results, offers the bridge on confirm, and hosts the manual-add entry.
 
 **Tech Stack:** Kotlin/Compose Multiplatform (desktop/JVM), Exposed ORM over H2, Koin DI, kotlinx-datetime, kotlinx-coroutines Flow. Tests: kotlin.test + coroutines-test + Turbine, in-memory H2.
 
@@ -42,6 +42,7 @@
 - `shared/src/commonMain/kotlin/com/financeapp/data/fileimport/ImportRepository.kt` — trigger `scanAfterImport()`.
 - `shared/src/commonMain/kotlin/com/financeapp/ui/AppViewModel.kt` — trigger `runInitialScanIfNeeded()` in `startPostUnlock()`.
 - `shared/src/commonMain/kotlin/com/financeapp/data/repository/PayeeRepositoryImpl.kt` — null `DetectedSubscriptions.payeeId` on payee delete.
+- `shared/src/commonMain/kotlin/com/financeapp/data/repository/ScheduledTransactionRepositoryImpl.kt` — null `DetectedSubscriptions.scheduledTransactionId` on scheduled-transaction delete (bridge-link cleanup).
 - `shared/src/commonMain/kotlin/com/financeapp/di/Modules.kt` — register repository, service, view model; add ctor args.
 - `shared/src/commonMain/kotlin/com/financeapp/App.kt` + `ui/navigation/AppNavigationRail.kt` — new nav destination + render branch.
 
@@ -466,7 +467,8 @@ Add the persistent table and the `DetectedSubscription` domain model.
 - Produces:
   - Table object `DetectedSubscriptions : IntIdTable("DetectedSubscription")` with columns listed below.
   - `enum class SubscriptionStatus { CANDIDATE, CONFIRMED, DISMISSED }`
-  - `data class DetectedSubscription(id, payeeId, displayName, matchKey, cadence, status, medianAmountCents, minAmountCents, maxAmountCents, isVariable, occurrenceCount, firstSeen, lastSeen, nextExpectedDate, confidence, isActive)`
+  - `enum class SubscriptionOrigin { DETECTED, MANUAL }`
+  - `data class DetectedSubscription(id, payeeId, displayName, matchKey, cadence, status, medianAmountCents, minAmountCents, maxAmountCents, isVariable, occurrenceCount, firstSeen, lastSeen, nextExpectedDate, confidence, isActive, origin, scheduledTransactionId)`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -536,6 +538,9 @@ object DetectedSubscriptions : IntIdTable("DetectedSubscription") {
     val nextExpectedDate = long("next_expected_date")
     val confidence = integer("confidence")            // 0-100
     val isActive = bool("is_active").default(true)
+    val origin = varchar("origin", 20).default("DETECTED")   // DETECTED, MANUAL
+    val scheduledTransactionId =                        // set by the action bridge; null otherwise
+        reference("scheduled_transaction_id", ScheduledTransactions).nullable()
     val createdAt = long("created_at")
     val updatedAt = long("updated_at")
 }
@@ -543,9 +548,9 @@ object DetectedSubscriptions : IntIdTable("DetectedSubscription") {
 
 - [ ] **Step 4: Register the table in schema creation (prod + test)**
 
-In `DatabaseDriverFactory.desktop.kt`, add `DetectedSubscriptions,` to the `SchemaUtils.create(...)` argument list (after `DividendEvents`). No `ALTER TABLE` block is needed — this is a new table.
+In `DatabaseDriverFactory.desktop.kt`, add `DetectedSubscriptions,` to the `SchemaUtils.create(...)` argument list (after `DividendEvents`). No `ALTER TABLE` block is needed — this is a new table. **Ordering:** `DetectedSubscriptions` references both `Payees` and `ScheduledTransactions`, so it must appear *after* both in the create list (FK targets must exist first). `SchemaUtils.create` in Exposed generally resolves this, but keep it after those two to be safe.
 
-In `TestDatabaseFactory.kt`, add `DetectedSubscriptions,` to **each** `SchemaUtils.create(...)` list (there are three occurrences).
+In `TestDatabaseFactory.kt`, add `DetectedSubscriptions,` to **each** `SchemaUtils.create(...)` list (there are three occurrences), likewise after `Payees`/`ScheduledTransactions`.
 
 - [ ] **Step 5: Add the domain model**
 
@@ -557,6 +562,8 @@ package com.financeapp.domain.model
 import kotlinx.datetime.LocalDate
 
 enum class SubscriptionStatus { CANDIDATE, CONFIRMED, DISMISSED }
+
+enum class SubscriptionOrigin { DETECTED, MANUAL }
 
 data class DetectedSubscription(
     val id: Long = 0,
@@ -574,7 +581,9 @@ data class DetectedSubscription(
     val lastSeen: LocalDate,
     val nextExpectedDate: LocalDate,
     val confidence: Int,
-    val isActive: Boolean
+    val isActive: Boolean,
+    val origin: SubscriptionOrigin = SubscriptionOrigin.DETECTED,
+    val scheduledTransactionId: Long? = null
 )
 ```
 
@@ -606,7 +615,7 @@ Loads transactions, runs the detector, reconciles results into the table with st
 - Test: `shared/src/commonTest/kotlin/com/financeapp/data/repository/SubscriptionRepositoryTest.kt`
 
 **Interfaces:**
-- Consumes: `SubscriptionDetector` (Task 2), `DetectedSubscriptions` table + `DetectedSubscription`/`SubscriptionStatus` (Task 3), `TransactionRepository` for seeding transactions in tests.
+- Consumes: `SubscriptionDetector` (Task 2), `DetectedSubscriptions` table + `DetectedSubscription`/`SubscriptionStatus`/`SubscriptionOrigin` (Task 3), `TransactionRepository` (loads history for scans, manual add, and bridge account/category lookup), `ScheduledTransactionRepository` (creates the bridged schedule).
 - Produces:
   ```kotlin
   interface SubscriptionRepository {
@@ -614,6 +623,10 @@ Loads transactions, runs the detector, reconciles results into the table with st
       suspend fun rescan()
       suspend fun confirm(id: Long)
       suspend fun dismiss(id: Long)
+      /** Manual escape hatch: force a CONFIRMED/MANUAL row from a payee's history. */
+      suspend fun markPayeeAsSubscription(payeeId: Long)
+      /** Action bridge: create a linked ScheduledTransaction and record its id (idempotent). */
+      suspend fun createScheduledFromSubscription(id: Long)
       fun notifySubscriptionsChanged()
   }
   ```
@@ -627,6 +640,8 @@ import com.financeapp.domain.model.*
 import com.financeapp.domain.repository.SubscriptionRepository
 import com.financeapp.domain.repository.TransactionRepository
 import com.financeapp.domain.repository.AccountRepository
+import com.financeapp.domain.repository.PayeeRepository
+import com.financeapp.domain.repository.ScheduledTransactionRepository
 import com.financeapp.domain.subscriptions.SubscriptionDetector
 import com.financeapp.test.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -644,6 +659,8 @@ class SubscriptionRepositoryTest {
     private lateinit var subscriptions: SubscriptionRepository
     private lateinit var transactions: TransactionRepository
     private lateinit var accounts: AccountRepository
+    private lateinit var payees: PayeeRepository
+    private lateinit var scheduled: ScheduledTransactionRepository
     private var accountId: Long = 0
     private val dispatcher = UnconfinedTestDispatcher()
 
@@ -652,7 +669,9 @@ class SubscriptionRepositoryTest {
         database = createTestDatabase()
         transactions = TransactionRepositoryImpl(database, dispatcher)
         accounts = AccountRepositoryImpl(database, dispatcher)
-        subscriptions = SubscriptionRepositoryImpl(database, transactions, SubscriptionDetector(), dispatcher)
+        payees = PayeeRepositoryImpl(database, dispatcher)
+        scheduled = ScheduledTransactionRepositoryImpl(database, dispatcher)
+        subscriptions = SubscriptionRepositoryImpl(database, transactions, scheduled, SubscriptionDetector(), dispatcher)
         accountId = runBlocking { accounts.insertAccount(TestDataFactory.createTestAccount()) }
     }
 
@@ -721,10 +740,51 @@ class SubscriptionRepositoryTest {
         val row = subscriptions.getSubscriptions().first().single()
         assertFalse(row.isActive, "cancelled subscription should remain, marked inactive")
     }
+
+    @Test
+    fun `markPayeeAsSubscription creates a confirmed manual row that survives rescan`() = runTest {
+        val payeeId = runBlocking { payees.insertPayee(Payee(id = 0, name = "Gym", defaultCategoryId = null)) }
+        insertMonthly(payeeId, "Gym", -3000, listOf(1, 2))   // only two charges: below the auto bar
+        subscriptions.markPayeeAsSubscription(payeeId)
+
+        val row = subscriptions.getSubscriptions().first().single()
+        assertEquals(SubscriptionStatus.CONFIRMED, row.status)
+        assertEquals(SubscriptionOrigin.MANUAL, row.origin)
+
+        subscriptions.rescan()   // would not detect a 2-charge group; must not revert/deactivate it
+        val after = subscriptions.getSubscriptions().first().single()
+        assertEquals(SubscriptionStatus.CONFIRMED, after.status, "manual add must be sticky")
+        assertTrue(after.isActive, "manual row must not be auto-deactivated")
+    }
+
+    @Test
+    fun `markPayeeAsSubscription is idempotent`() = runTest {
+        val payeeId = runBlocking { payees.insertPayee(Payee(id = 0, name = "Gym", defaultCategoryId = null)) }
+        insertMonthly(payeeId, "Gym", -3000, listOf(1, 2))
+        subscriptions.markPayeeAsSubscription(payeeId)
+        subscriptions.markPayeeAsSubscription(payeeId)
+        assertEquals(1, subscriptions.getSubscriptions().first().size)
+    }
+
+    @Test
+    fun `createScheduledFromSubscription links one schedule and does not double-create`() = runTest {
+        val payeeId = runBlocking { payees.insertPayee(Payee(id = 0, name = "Netflix", defaultCategoryId = null)) }
+        insertMonthly(payeeId, "Netflix", -1599, listOf(1, 2, 3))
+        subscriptions.rescan()
+        val id = subscriptions.getSubscriptions().first().single().id
+
+        subscriptions.createScheduledFromSubscription(id)
+        subscriptions.createScheduledFromSubscription(id)   // second call must no-op
+
+        assertEquals(1, runBlocking { scheduled.getAllScheduledTransactions().first().size })
+        assertNotNull(subscriptions.getSubscriptions().first().single().scheduledTransactionId)
+    }
 }
 ```
 
 > Note: this test uses `TestDataFactory.createTestTransaction(... date: LocalDate, importedName: String?)` and `database.clearTable(name)`. If those overloads don't already exist, add them in this task's Step 3 (they are small helpers in the existing test package). `createTestTransaction` must set `amount` and `date` (converted to the repo's stored format) and `importedName`.
+>
+> It also constructs `PayeeRepositoryImpl(database, dispatcher)` and `ScheduledTransactionRepositoryImpl(database, dispatcher)` and calls `payees.insertPayee(...)`, `scheduled.getAllScheduledTransactions()`. Verify those constructor signatures and method names against the real repositories and adjust (mirror how `TransactionRepositoryImpl`/`AccountRepositoryImpl` are built above).
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -758,6 +818,17 @@ interface SubscriptionRepository {
     suspend fun rescan()
     suspend fun confirm(id: Long)
     suspend fun dismiss(id: Long)
+    /**
+     * Manual escape hatch for a subscription the detector missed. Builds a row from [payeeId]'s
+     * outflow history (best-guess cadence, MONTHLY fallback) and upserts it as CONFIRMED/MANUAL,
+     * keyed on `payee:<id>`. Idempotent: a second call just re-promotes the same row.
+     */
+    suspend fun markPayeeAsSubscription(payeeId: Long)
+    /**
+     * Action bridge. Creates a [ScheduledTransaction] from the subscription [id] and stores its id
+     * on the row. No-op if the subscription already has a linked schedule or has no payee.
+     */
+    suspend fun createScheduledFromSubscription(id: Long)
     fun notifySubscriptionsChanged()
 }
 ```
@@ -770,13 +841,20 @@ package com.financeapp.data.repository
 import com.financeapp.db.schema.DetectedSubscriptions
 import com.financeapp.db.schema.Payees
 import com.financeapp.domain.model.DetectedSubscription
+import com.financeapp.domain.model.ScheduledTransaction
+import com.financeapp.domain.model.SubscriptionOrigin
 import com.financeapp.domain.model.SubscriptionStatus
 import com.financeapp.domain.model.TransactionFrequency
+import com.financeapp.domain.recurrence.nextRecurrenceDate
+import com.financeapp.domain.repository.ScheduledTransactionRepository
 import com.financeapp.domain.repository.SubscriptionRepository
 import com.financeapp.domain.repository.TransactionRepository
 import com.financeapp.domain.subscriptions.SubscriptionCandidate
 import com.financeapp.domain.subscriptions.SubscriptionDetector
 import com.financeapp.domain.subscriptions.SubscriptionSource
+import kotlinx.datetime.Clock
+import kotlinx.datetime.todayIn
+import kotlin.math.abs
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -797,6 +875,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 class SubscriptionRepositoryImpl(
     private val database: Database,
     private val transactionRepository: TransactionRepository,
+    private val scheduledTransactionRepository: ScheduledTransactionRepository,
     private val detector: SubscriptionDetector,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : SubscriptionRepository {
@@ -857,12 +936,15 @@ class SubscriptionRepositoryImpl(
                 }
             }
             // Anything previously detected but no longer qualifying -> inactive (kept, not deleted).
-            existing.keys.filter { it !in seenKeys }.forEach { key ->
-                DetectedSubscriptions.update({ DetectedSubscriptions.matchKey eq key }) {
-                    it[isActive] = false
-                    it[updatedAt] = now
+            // MANUAL rows are user-asserted, so they are never auto-deactivated.
+            existing.filterKeys { it !in seenKeys }
+                .filterValues { it[DetectedSubscriptions.origin] != SubscriptionOrigin.MANUAL.name }
+                .keys.forEach { key ->
+                    DetectedSubscriptions.update({ DetectedSubscriptions.matchKey eq key }) {
+                        it[isActive] = false
+                        it[updatedAt] = now
+                    }
                 }
-            }
         }
         notifySubscriptionsChanged()
     }
@@ -878,6 +960,97 @@ class SubscriptionRepositoryImpl(
             }
         }
         notifySubscriptionsChanged()
+    }
+
+    override suspend fun markPayeeAsSubscription(payeeId: Long) = withContext(ioDispatcher) {
+        val sources = transactionRepository.getAllTransactionsWithDetails().first()
+            .filter { it.transaction.payeeId == payeeId }
+            .map {
+                Src(it.transaction.payeeId, it.payeeName ?: it.transaction.importedName,
+                    it.transaction.amount, it.transaction.date, it.transaction.transferId)
+            }
+        // Prefer real detector stats if the payee qualifies; otherwise a MONTHLY best-guess.
+        val stats = detector.detect(sources).firstOrNull { it.matchKey == "payee:$payeeId" }
+            ?: manualStats("payee:$payeeId", payeeId, sources)
+        val now = System.currentTimeMillis()
+        transaction(database) {
+            val exists = DetectedSubscriptions
+                .selectAll().where { DetectedSubscriptions.matchKey eq "payee:$payeeId" }
+                .any()
+            if (!exists) {
+                DetectedSubscriptions.insert {
+                    it.applyStats(stats, now, isNew = true)
+                    it[status] = SubscriptionStatus.CONFIRMED.name   // overrides the CANDIDATE default
+                    it[origin] = SubscriptionOrigin.MANUAL.name
+                }
+            } else {
+                DetectedSubscriptions.update({ DetectedSubscriptions.matchKey eq "payee:$payeeId" }) {
+                    it.applyStats(stats, now, isNew = false)
+                    it[status] = SubscriptionStatus.CONFIRMED.name
+                    it[origin] = SubscriptionOrigin.MANUAL.name
+                }
+            }
+        }
+        notifySubscriptionsChanged()
+    }
+
+    override suspend fun createScheduledFromSubscription(id: Long) = withContext(ioDispatcher) {
+        val row = transaction(database) {
+            DetectedSubscriptions.selectAll().where { DetectedSubscriptions.id eq id.toInt() }.firstOrNull()
+        } ?: return@withContext
+        val payeeId = row[DetectedSubscriptions.payeeId]?.value?.toLong()
+            ?: return@withContext                                   // bridge requires a payee
+        if (row[DetectedSubscriptions.scheduledTransactionId] != null) return@withContext  // already bridged
+
+        // Most recent matching transaction supplies account + category.
+        val recent = transactionRepository.getAllTransactionsWithDetails().first()
+            .filter { it.transaction.payeeId == payeeId }
+            .maxByOrNull { it.transaction.date.toEpochDays() } ?: return@withContext
+
+        val newId = scheduledTransactionRepository.insertScheduledTransaction(
+            ScheduledTransaction(
+                id = 0,
+                accountId = recent.transaction.accountId,
+                payeeId = payeeId,
+                categoryId = recent.transaction.categoryId,
+                amount = -row[DetectedSubscriptions.medianAmount],   // outflow
+                frequency = TransactionFrequency.valueOf(row[DetectedSubscriptions.cadence]),
+                nextDueDate = row[DetectedSubscriptions.nextExpectedDate].toLocalDate(),
+                memo = "Detected subscription"
+            )
+        )
+        transaction(database) {
+            DetectedSubscriptions.update({ DetectedSubscriptions.id eq id.toInt() }) {
+                it[scheduledTransactionId] = newId.toInt()
+                it[updatedAt] = System.currentTimeMillis()
+            }
+        }
+        notifySubscriptionsChanged()
+    }
+
+    /** Best-guess stats for a manually-marked payee that doesn't meet the auto-detection bar. */
+    private fun manualStats(matchKey: String, payeeId: Long, sources: List<Src>): SubscriptionCandidate {
+        val outflows = sources.filter { it.amountCents < 0 && it.transferId == null }
+        val amounts = outflows.map { abs(it.amountCents) }.ifEmpty { listOf(0L) }
+        val dates = outflows.map { it.date }.sortedBy { it.toEpochDays() }
+        val today = Clock.System.todayIn(TimeZone.UTC)
+        val last = dates.lastOrNull() ?: today
+        val median = amounts.sorted()[amounts.size / 2]
+        return SubscriptionCandidate(
+            matchKey = matchKey,
+            payeeId = payeeId,
+            displayName = outflows.firstOrNull()?.importedName ?: matchKey.removePrefix("payee:"),
+            cadence = TransactionFrequency.MONTHLY,                  // fallback cadence
+            medianAmountCents = median,
+            minAmountCents = amounts.min(),
+            maxAmountCents = amounts.max(),
+            isVariable = median > 0 && (amounts.max() - amounts.min()).toDouble() / median > 0.15,
+            occurrenceCount = dates.size,
+            firstSeen = dates.firstOrNull() ?: today,
+            lastSeen = last,
+            nextExpectedDate = nextRecurrenceDate(last, TransactionFrequency.MONTHLY),
+            confidence = 0
+        )
     }
 
     private fun org.jetbrains.exposed.v1.core.statements.UpdateBuilder<*>.applyStats(
@@ -922,7 +1095,9 @@ class SubscriptionRepositoryImpl(
             lastSeen = this[DetectedSubscriptions.lastSeen].toLocalDate(),
             nextExpectedDate = this[DetectedSubscriptions.nextExpectedDate].toLocalDate(),
             confidence = this[DetectedSubscriptions.confidence],
-            isActive = this[DetectedSubscriptions.isActive]
+            isActive = this[DetectedSubscriptions.isActive],
+            origin = SubscriptionOrigin.valueOf(this[DetectedSubscriptions.origin]),
+            scheduledTransactionId = this[DetectedSubscriptions.scheduledTransactionId]?.value?.toLong()
         )
     }
 
@@ -933,11 +1108,13 @@ class SubscriptionRepositoryImpl(
 ```
 
 > If `getAllTransactionsWithDetails()` returns `TransactionWithDetails` whose `transaction.date` is a `LocalDate`, the mapping above is correct. Verify the property names against `TransactionRepository`/`TransactionWithDetails` and adjust if the loaded shape differs.
+>
+> **Verify the bridge against the real schedule model:** `ScheduledTransaction`'s constructor field names (`accountId`, `payeeId`, `categoryId`, `amount`, `frequency`, `nextDueDate`, `memo`) and `ScheduledTransactionRepository.insertScheduledTransaction(...)`'s signature/return type are assumed here — check `domain/model/ScheduledTransaction.kt` and `ScheduledTransactionRepository` and adjust the construction + insert call to match (e.g. required fields like `isActive`, `startDate`, or an `endDate`). Keep amount stored as an outflow consistent with how the ledger signs scheduled entries.
 
 - [ ] **Step 6: Run tests to verify they pass**
 
 Run: `./gradlew :shared:desktopTest --tests "com.financeapp.data.repository.SubscriptionRepositoryTest"`
-Expected: PASS (all 4 tests).
+Expected: PASS (all 7 tests).
 
 - [ ] **Step 7: Commit**
 
@@ -1079,6 +1256,8 @@ class SubscriptionScanServiceTest {
         override suspend fun rescan() { rescans++ }
         override suspend fun confirm(id: Long) {}
         override suspend fun dismiss(id: Long) {}
+        override suspend fun markPayeeAsSubscription(payeeId: Long) {}
+        override suspend fun createScheduledFromSubscription(id: Long) {}
         override fun notifySubscriptionsChanged() {}
     }
     private class FakePrefs : PreferencesRepository {
@@ -1203,7 +1382,8 @@ In `Modules.kt`, add imports and, in `sharedModule`, register (place the `single
 ```kotlin
 single { com.financeapp.domain.subscriptions.SubscriptionDetector() }
 single<com.financeapp.domain.repository.SubscriptionRepository> {
-    com.financeapp.data.repository.SubscriptionRepositoryImpl(get(), get(), get())
+    // args: database, transactionRepository, scheduledTransactionRepository, detector
+    com.financeapp.data.repository.SubscriptionRepositoryImpl(get(), get(), get(), get())
 }
 single { com.financeapp.domain.service.SubscriptionScanService(get(), get()) }
 ```
@@ -1330,13 +1510,19 @@ git commit -m "feat: run one-time initial subscription scan after unlock"
 
 ---
 
-## Task 9: FK cleanup on payee delete
+## Task 9: FK cleanup on payee & scheduled-transaction delete
 
-Keep `DetectedSubscriptions` consistent when a payee is deleted (FK enforcement is ON).
+Keep `DetectedSubscriptions` consistent when a referenced `Payee` or `ScheduledTransaction` is
+deleted (FK enforcement is ON). `payeeId` and `scheduledTransactionId` are both nullable references
+that must be hand-cleaned before the referenced row is removed.
 
 **Files:**
 - Modify: `shared/src/commonMain/kotlin/com/financeapp/data/repository/PayeeRepositoryImpl.kt`
+- Modify: `shared/src/commonMain/kotlin/com/financeapp/data/repository/ScheduledTransactionRepositoryImpl.kt`
 - Test: `shared/src/commonTest/kotlin/com/financeapp/data/repository/PayeeRepositoryTest.kt` (add one test)
+- Test: `shared/src/commonTest/kotlin/com/financeapp/data/repository/ScheduledTransactionRepositoryTest.kt` (add one test)
+
+### Part A: payee delete
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1400,6 +1586,75 @@ git add shared/src/commonMain/kotlin/com/financeapp/data/repository/PayeeReposit
 git commit -m "fix: hand-clean detected subscriptions on payee delete"
 ```
 
+### Part B: scheduled-transaction delete (bridge link)
+
+- [ ] **Step 6: Write the failing test**
+
+Add to `ScheduledTransactionRepositoryTest` (mirror its existing setup for building the repo + a
+scheduled transaction; verify method names against the real repository):
+
+```kotlin
+@Test
+fun `deleting a scheduled transaction nulls the subscription bridge link`() = runBlocking {
+    val scheduledId = scheduledRepository.insertScheduledTransaction(
+        TestDataFactory.createTestScheduledTransaction(accountId = accountId)
+    )
+    transaction(database) {
+        com.financeapp.db.schema.DetectedSubscriptions.insert {
+            it[matchKey] = "payee:1"; it[cadence] = "MONTHLY"; it[status] = "CONFIRMED"
+            it[medianAmount] = 1599; it[minAmount] = 1599; it[maxAmount] = 1599
+            it[isVariable] = false; it[occurrenceCount] = 3
+            it[firstSeen] = 1L; it[lastSeen] = 2L; it[nextExpectedDate] = 3L
+            it[confidence] = 80; it[isActive] = true
+            it[scheduledTransactionId] = scheduledId.toInt()
+            it[createdAt] = 1L; it[updatedAt] = 1L
+        }
+    }
+
+    scheduledRepository.deleteScheduledTransaction(scheduledId)   // must not throw despite FK
+
+    transaction(database) {
+        val row = com.financeapp.db.schema.DetectedSubscriptions.selectAll().single()
+        assertNull(row[com.financeapp.db.schema.DetectedSubscriptions.scheduledTransactionId])
+    }
+}
+```
+
+- [ ] **Step 7: Run test to verify it fails**
+
+Run: `./gradlew :shared:desktopTest --tests "com.financeapp.data.repository.ScheduledTransactionRepositoryTest.deleting a scheduled transaction nulls the subscription bridge link"`
+Expected: FAIL — the delete throws an FK violation (or the reference is not nulled).
+
+- [ ] **Step 8: Add the cleanup**
+
+In `ScheduledTransactionRepositoryImpl`'s delete path (inside the same `transaction {}` before the
+`ScheduledTransactions.deleteWhere { ... }`), add:
+
+```kotlin
+// Null the subscription bridge link so a detected subscription survives its schedule being deleted
+com.financeapp.db.schema.DetectedSubscriptions.update(
+    { com.financeapp.db.schema.DetectedSubscriptions.scheduledTransactionId eq id.toInt() }
+) {
+    it[scheduledTransactionId] = null
+}
+```
+
+Verify the delete method name/param (`deleteScheduledTransaction(id: Long)`) and that it runs inside
+an Exposed `transaction {}`; adjust to match the real repository.
+
+- [ ] **Step 9: Run test to verify pass**
+
+Run: `./gradlew :shared:desktopTest --tests "com.financeapp.data.repository.ScheduledTransactionRepositoryTest"`
+Expected: PASS (new test + existing scheduled-transaction tests).
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add shared/src/commonMain/kotlin/com/financeapp/data/repository/ScheduledTransactionRepositoryImpl.kt \
+        shared/src/commonTest/kotlin/com/financeapp/data/repository/ScheduledTransactionRepositoryTest.kt
+git commit -m "fix: hand-clean subscription bridge link on scheduled-transaction delete"
+```
+
 ---
 
 ## Task 10: Subscriptions screen + navigation
@@ -1415,8 +1670,10 @@ The dedicated screen with confirm/dismiss, plus nav registration.
 - Test: `shared/src/commonTest/kotlin/com/financeapp/ui/subscriptions/SubscriptionViewModelTest.kt`
 
 **Interfaces:**
-- Consumes: `SubscriptionRepository` (Task 4), `supervisedViewModelScope()` (existing, `com.financeapp.ui`).
-- Produces: `SubscriptionViewModel` (a plain class, matching `ScheduledViewModel` — NOT `androidx.lifecycle.ViewModel`) exposing `val uiState: StateFlow<SubscriptionUiState>` where `data class SubscriptionUiState(val subscriptions: List<DetectedSubscription>, val showDismissed: Boolean, val estimatedMonthlyCents: Long)`, plus `fun confirm(id: Long)`, `fun dismiss(id: Long)`, `fun toggleShowDismissed()`.
+- Consumes: `SubscriptionRepository` (Task 4), `PayeeRepository` (existing — for the manual-add picker), `supervisedViewModelScope()` (existing, `com.financeapp.ui`).
+- Produces: `SubscriptionViewModel` (a plain class, matching `ScheduledViewModel` — NOT `androidx.lifecycle.ViewModel`) exposing `val uiState: StateFlow<SubscriptionUiState>` where `data class SubscriptionUiState(val subscriptions: List<DetectedSubscription>, val showDismissed: Boolean, val estimatedMonthlyCents: Long, val pendingBridge: DetectedSubscription?, val payees: List<Payee>, val showPayeePicker: Boolean)`, plus `fun confirm(id)`, `fun dismiss(id)`, `fun toggleShowDismissed()`, and the fix methods `fun addScheduledForPending()`, `fun skipBridge()`, `fun openPayeePicker()`, `fun closePayeePicker()`, `fun markPayeeAsSubscription(payeeId)`.
+
+Confirm→bridge flow: `confirm(id)` sets status CONFIRMED and, if that subscription maps to a payee and isn't already bridged, parks it in `pendingBridge` so the screen can offer "Track as a scheduled transaction?". `addScheduledForPending()` calls `createScheduledFromSubscription` and clears the prompt; `skipBridge()` just clears it.
 
 > Note: view models here use `supervisedViewModelScope()` which defaults to `Dispatchers.Main`, so the test sets the Main dispatcher (mirroring `TagsViewModelTest`).
 
@@ -1426,11 +1683,13 @@ The dedicated screen with confirm/dismiss, plus nav registration.
 package com.financeapp.ui.subscriptions
 
 import com.financeapp.domain.model.*
+import com.financeapp.domain.repository.PayeeRepository
 import com.financeapp.domain.repository.SubscriptionRepository
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -1458,11 +1717,21 @@ class SubscriptionViewModelTest {
     private class FakeRepo(initial: List<DetectedSubscription>) : SubscriptionRepository {
         val flow = MutableStateFlow(initial)
         var confirmed: Long? = null
+        var bridged: Long? = null
         override fun getSubscriptions(): Flow<List<DetectedSubscription>> = flow
         override suspend fun rescan() {}
         override suspend fun confirm(id: Long) { confirmed = id }
         override suspend fun dismiss(id: Long) {}
+        override suspend fun markPayeeAsSubscription(payeeId: Long) {}
+        override suspend fun createScheduledFromSubscription(id: Long) { bridged = id }
         override fun notifySubscriptionsChanged() {}
+    }
+
+    // Minimal PayeeRepository fake — SubscriptionViewModel only reads the payee list for the picker.
+    // Verify the real method name (assumed `getAllPayees(): Flow<List<Payee>>`); stub other members.
+    private class FakePayees : PayeeRepository {
+        override fun getAllPayees(): Flow<List<Payee>> = flowOf(emptyList())
+        // Remaining PayeeRepository members are unused here; add stubs to satisfy the interface.
     }
 
     @Test
@@ -1472,7 +1741,7 @@ class SubscriptionViewModelTest {
             sub(2, TransactionFrequency.YEARLY, 12000, SubscriptionStatus.CANDIDATE),   // $120/yr -> $10/mo
             sub(3, TransactionFrequency.MONTHLY, 5000, SubscriptionStatus.DISMISSED)    // hidden
         ))
-        val vm = SubscriptionViewModel(repo)
+        val vm = SubscriptionViewModel(repo, FakePayees())
         vm.uiState.test(timeout = 5.seconds) {
             // Skip initial empty emission, take the loaded one.
             val state = awaitItem().let { if (it.subscriptions.isEmpty()) awaitItem() else it }
@@ -1485,8 +1754,25 @@ class SubscriptionViewModelTest {
     @Test
     fun `confirm delegates to repository`() = runTest(testDispatcher) {
         val repo = FakeRepo(emptyList())
-        SubscriptionViewModel(repo).confirm(7)
+        SubscriptionViewModel(repo, FakePayees()).confirm(7)
         assertEquals(7, repo.confirmed)
+    }
+
+    @Test
+    fun `confirming a payee-mapped candidate offers the schedule bridge`() = runTest(testDispatcher) {
+        val payeeMapped = sub(5, TransactionFrequency.MONTHLY, 1599, SubscriptionStatus.CANDIDATE)
+            .copy(payeeId = 42, scheduledTransactionId = null)
+        val repo = FakeRepo(listOf(payeeMapped))
+        val vm = SubscriptionViewModel(repo, FakePayees())
+        vm.uiState.test(timeout = 5.seconds) {
+            awaitItem().let { if (it.subscriptions.isEmpty()) awaitItem() else it }  // wait for load
+            vm.confirm(5)
+            assertEquals(5L, awaitItem().pendingBridge?.id, "confirm should park a bridge offer")
+            vm.addScheduledForPending()
+            assertNull(awaitItem().pendingBridge, "accepting clears the prompt")
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(5L, repo.bridged)
     }
 }
 ```
@@ -1502,8 +1788,10 @@ Expected: FAIL — unresolved `SubscriptionViewModel`.
 package com.financeapp.ui.subscriptions
 
 import com.financeapp.domain.model.DetectedSubscription
+import com.financeapp.domain.model.Payee
 import com.financeapp.domain.model.SubscriptionStatus
 import com.financeapp.domain.model.TransactionFrequency
+import com.financeapp.domain.repository.PayeeRepository
 import com.financeapp.domain.repository.SubscriptionRepository
 import com.financeapp.ui.supervisedViewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -1514,11 +1802,15 @@ import kotlinx.coroutines.launch
 data class SubscriptionUiState(
     val subscriptions: List<DetectedSubscription> = emptyList(),
     val showDismissed: Boolean = false,
-    val estimatedMonthlyCents: Long = 0
+    val estimatedMonthlyCents: Long = 0,
+    val pendingBridge: DetectedSubscription? = null,   // confirm→"track as scheduled?" offer
+    val payees: List<Payee> = emptyList(),             // for the manual-add picker
+    val showPayeePicker: Boolean = false
 )
 
 class SubscriptionViewModel(
-    private val repository: SubscriptionRepository
+    private val repository: SubscriptionRepository,
+    private val payeeRepository: PayeeRepository
 ) {
     private val scope = supervisedViewModelScope()
 
@@ -1534,10 +1826,42 @@ class SubscriptionViewModel(
                 recompute()
             }
         }
+        scope.launch {
+            payeeRepository.getAllPayees().collect { payees ->
+                _uiState.value = _uiState.value.copy(payees = payees)
+            }
+        }
     }
 
-    fun confirm(id: Long) = launchAction { repository.confirm(id) }
+    fun confirm(id: Long) = launchAction {
+        repository.confirm(id)
+        // Offer the schedule bridge for payee-mapped, not-yet-bridged subscriptions.
+        val sub = all.firstOrNull { it.id == id }
+        if (sub?.payeeId != null && sub.scheduledTransactionId == null) {
+            _uiState.value = _uiState.value.copy(pendingBridge = sub)
+        }
+    }
+
     fun dismiss(id: Long) = launchAction { repository.dismiss(id) }
+
+    /** Accept the bridge offer: create the linked schedule and clear the prompt. */
+    fun addScheduledForPending() {
+        val pending = _uiState.value.pendingBridge ?: return
+        _uiState.value = _uiState.value.copy(pendingBridge = null)
+        launchAction { repository.createScheduledFromSubscription(pending.id) }
+    }
+
+    fun skipBridge() { _uiState.value = _uiState.value.copy(pendingBridge = null) }
+
+    fun openPayeePicker() { _uiState.value = _uiState.value.copy(showPayeePicker = true) }
+    fun closePayeePicker() { _uiState.value = _uiState.value.copy(showPayeePicker = false) }
+
+    /** Manual escape hatch: mark the chosen payee as a subscription. */
+    fun markPayeeAsSubscription(payeeId: Long) {
+        _uiState.value = _uiState.value.copy(showPayeePicker = false)
+        launchAction { repository.markPayeeAsSubscription(payeeId) }
+    }
+
     fun toggleShowDismissed() {
         _uiState.value = _uiState.value.copy(showDismissed = !_uiState.value.showDismissed)
         recompute()
@@ -1581,6 +1905,7 @@ Create `SubscriptionsScreen.kt`. Follow the existing screen conventions (a `Scaf
 ```kotlin
 package com.financeapp.ui.subscriptions
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -1590,6 +1915,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.DetectedSubscription
+import com.financeapp.domain.model.Payee
 import com.financeapp.domain.model.SubscriptionStatus
 import com.financeapp.ui.components.CurrencyText
 import com.financeapp.ui.components.EmptyState
@@ -1611,6 +1937,7 @@ fun SubscriptionsScreen(
                     TextButton(onClick = onBack) { Text("Back") }
                 },
                 actions = {
+                    TextButton(onClick = viewModel::openPayeePicker) { Text("Mark payee") }
                     TextButton(onClick = viewModel::toggleShowDismissed) {
                         Text(if (state.showDismissed) "Hide dismissed" else "Show dismissed")
                     }
@@ -1645,7 +1972,51 @@ fun SubscriptionsScreen(
                 }
             }
         }
+
+        // Action bridge: offered after confirming a payee-mapped candidate.
+        state.pendingBridge?.let { pending ->
+            AlertDialog(
+                onDismissRequest = viewModel::skipBridge,
+                title = { Text("Track as a scheduled transaction?") },
+                text = { Text("Add \"${pending.displayName}\" to your scheduled transactions so it appears in cash-flow forecasts.") },
+                confirmButton = { TextButton(onClick = viewModel::addScheduledForPending) { Text("Add") } },
+                dismissButton = { TextButton(onClick = viewModel::skipBridge) { Text("Skip") } }
+            )
+        }
+
+        // Manual escape hatch: pick a payee to mark as a subscription.
+        if (state.showPayeePicker) {
+            PayeePickerDialog(
+                payees = state.payees,
+                onPick = viewModel::markPayeeAsSubscription,
+                onDismiss = viewModel::closePayeePicker
+            )
+        }
     }
+}
+
+@Composable
+private fun PayeePickerDialog(
+    payees: List<Payee>,
+    onPick: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mark a payee as a subscription") },
+        text = {
+            LazyColumn(Modifier.fillMaxWidth()) {
+                items(payees, key = { it.id }) { payee ->
+                    ListItem(
+                        headlineContent = { Text(payee.name) },
+                        modifier = Modifier.clickable { onPick(payee.id) }
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 @Composable
@@ -1667,6 +2038,9 @@ private fun SubscriptionRow(
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CurrencyText(amountCents = sub.medianAmountCents)
+                if (sub.scheduledTransactionId != null) {
+                    AssistChip(onClick = {}, enabled = false, label = { Text("Tracked") })
+                }
                 if (sub.status == SubscriptionStatus.CANDIDATE) {
                     TextButton(onClick = onConfirm) { Text("Confirm") }
                     TextButton(onClick = onDismiss) { Text("Dismiss") }
@@ -1678,13 +2052,15 @@ private fun SubscriptionRow(
 ```
 
 > Verify `EmptyState` and `CurrencyText` parameter names against their definitions (`ui/components/EmptyState.kt`, `ui/components/CurrencyText.kt`) and adjust the call sites to match. Use `HorizontalDivider` or `Divider` per the Material3 version already used elsewhere in the codebase.
+>
+> The `PayeePickerDialog` above is a minimal inline picker. If the codebase already has a reusable payee-picker composable (e.g. the one used in the import map-to-existing flow), prefer wiring that in instead. Verify `PayeeRepository`'s payee-list accessor name (assumed `getAllPayees(): Flow<List<Payee>>`) against the real interface and match it in both the ViewModel and its test. `AssistChip` is Material3; swap for a plain `Text("Tracked")` badge if the disabled-chip styling looks off.
 
 - [ ] **Step 6: Register the ViewModel in DI**
 
-In `Modules.kt` add:
+In `Modules.kt` add (args: subscriptionRepository, payeeRepository):
 
 ```kotlin
-single { com.financeapp.ui.subscriptions.SubscriptionViewModel(get()) }
+single { com.financeapp.ui.subscriptions.SubscriptionViewModel(get(), get()) }
 ```
 
 - [ ] **Step 7: Add the navigation destination**
@@ -1742,3 +2118,4 @@ git commit -m "feat: add Subscriptions screen and navigation"
 
 - [ ] Run the entire suite: `./gradlew :shared:desktopTest` — all green.
 - [ ] Manual smoke test: `./gradlew :desktopApp:run`, unlock, confirm the Subscriptions nav entry appears under Tools, import a file with a few months of recurring charges, and confirm detected subscriptions appear with cadence, amount, and next-expected date; confirm/dismiss update the list; dismissed items hide behind the toggle.
+- [ ] Smoke-test the fixes: confirming a payee-mapped subscription offers "Track as a scheduled transaction?" → **Add** creates a schedule (row shows **Tracked**, offer not repeated); **Mark payee** opens the picker and adds a `CONFIRMED` manual subscription; deleting that schedule leaves the subscription intact (bridge link nulled).
