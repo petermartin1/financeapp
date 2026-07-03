@@ -70,6 +70,13 @@ object AppDestinations {
         group = NavigationGroup.TOOLS
     )
 
+    val Subscriptions = NavigationDestination(
+        route = "subscriptions",
+        label = "Subscriptions",
+        icon = Icons.Default.Autorenew,
+        group = NavigationGroup.TOOLS
+    )
+
     val Templates = NavigationDestination(
         route = "templates",
         label = "Templates",
@@ -142,6 +149,7 @@ object AppDestinations {
         Budget,
         Reports,
         Scheduled,
+        Subscriptions,
         Templates,
         Categories,
         Payees,

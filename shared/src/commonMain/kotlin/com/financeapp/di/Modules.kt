@@ -155,6 +155,7 @@ val sharedModule = module {
     single { InvestmentViewModel(get(), get(), get()) }
     single { PerformanceTabViewModel(get(), get()) }
     single { TagsViewModel(get()) }
+    single { com.financeapp.ui.subscriptions.SubscriptionViewModel(get(), get()) }
     single { DashboardViewModel(get(), get(), get(), get()) }
     single { TemplatesViewModel(get(), get(), get(), get()) }
     factory { SearchViewModel(get(), get(), get()) }
