@@ -246,7 +246,8 @@ class SubscriptionRepositoryImpl(
         return DetectedSubscription(
             id = this[DetectedSubscriptions.id].value.toLong(),
             payeeId = payeeId,
-            displayName = payeeId?.let { payeeNames[it] } ?: matchKey.removePrefix("name:"),
+            displayName = payeeId?.let { payeeNames[it] }
+                ?: if (matchKey.startsWith("name:")) matchKey.removePrefix("name:") else "(deleted payee)",
             matchKey = matchKey,
             cadence = TransactionFrequency.valueOf(this[DetectedSubscriptions.cadence]),
             status = SubscriptionStatus.valueOf(this[DetectedSubscriptions.status]),

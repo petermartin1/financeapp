@@ -106,4 +106,21 @@ class SubscriptionViewModelTest {
         }
         assertEquals(5L, repo.bridged)
     }
+
+    @Test
+    fun `confirming a candidate with no payee does not offer the bridge`() = runTest(testDispatcher) {
+        // sub() defaults payeeId = null, so there is nothing to bridge to.
+        val repo = FakeRepo(listOf(sub(1, TransactionFrequency.MONTHLY, 1599, SubscriptionStatus.CANDIDATE)))
+        val vm = SubscriptionViewModel(repo, FakePayees())
+        vm.confirm(1)
+        assertEquals(1L, repo.confirmed, "confirm still delegates to the repository")
+        assertNull(vm.uiState.value.pendingBridge, "a candidate with no payee must not park a bridge offer")
+    }
+
+    @Test
+    fun `markPayeeAsSubscription delegates to repository`() = runTest(testDispatcher) {
+        val repo = FakeRepo(emptyList())
+        SubscriptionViewModel(repo, FakePayees()).markPayeeAsSubscription(99)
+        assertEquals(99L, repo.markedPayee)
+    }
 }
