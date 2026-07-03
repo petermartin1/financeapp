@@ -32,18 +32,33 @@ class TransactionCategoryModel internal constructor(
 
     /**
      * Pseudo-probabilities per category for the given feature tokens. Empty when the model abstains:
-     * either it has nothing to discriminate ([isEmpty]) or the input shares too little
-     * merchant-identifying evidence with anything the user has categorized. A genuine word match
-     * always contributes the word token *plus* its character trigrams, so it overlaps in several
-     * features; a lone shared trigram (a coincidental spelling collision) overlaps in just one and
-     * must not be trusted — on the standardized confidence scale a single stray feature can otherwise
-     * look decisive. Below the evidence floor we defer to the cold-start signals instead.
+     * either it has nothing to discriminate ([isEmpty]) or the input shares no real
+     * merchant-identifying evidence with anything the user has categorized (see
+     * [hasMerchantEvidence]). Below that floor we defer to the cold-start signals instead.
      */
     fun scores(features: List<String>): Map<Long, Double> {
         if (isEmpty) return emptyMap()
-        val overlap = features.toHashSet().count { it in discriminativeVocab }
-        if (overlap < MIN_DISCRIMINATIVE_OVERLAP) return emptyMap()
+        if (!hasMerchantEvidence(features)) return emptyMap()
         return softmax(logits(features))
+    }
+
+    /**
+     * True only when the input shares a real merchant identifier — a whole word token or the SIC
+     * code — with the training data. Character trigrams alone are deliberately **not** enough:
+     * two unrelated words routinely collide on a stray fragment ("QUEST" and "QUESADILLA" both yield
+     * "que"/"ues"), and on the standardized confidence scale a couple of coincidental fragments can
+     * look decisive enough to fire and preempt an authoritative SIC — the classic "medical shows up
+     * as dining" misfire. Trigrams still shape the scores once a genuine word/SIC match opens the
+     * gate; they just can't trigger a prediction on their own.
+     */
+    private fun hasMerchantEvidence(features: List<String>): Boolean {
+        for (f in features.toHashSet()) {
+            if (f !in discriminativeVocab) continue
+            if (f.startsWith(FeatureExtractor.WORD_PREFIX) || f.startsWith(FeatureExtractor.SIC_PREFIX)) {
+                return true
+            }
+        }
+        return false
     }
 
     /**
@@ -93,14 +108,6 @@ class TransactionCategoryModel internal constructor(
 
     companion object {
         val EMPTY = TransactionCategoryModel(emptyMap())
-
-        /**
-         * Minimum number of distinct merchant-identifying features (word tokens / character trigrams /
-         * SIC) the input must share with the model before its prediction is trusted. A real word match
-         * always clears this (word token + at least one trigram); a single coincidental trigram does
-         * not, so it can't masquerade as a confident match. See [scores].
-         */
-        private const val MIN_DISCRIMINATIVE_OVERLAP = 2
     }
 }
 
