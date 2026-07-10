@@ -252,3 +252,15 @@ object DetectedSubscriptions : IntIdTable("DetectedSubscription") {
     val createdAt = long("created_at")
     val updatedAt = long("updated_at")
 }
+
+// Savings goals: target amount + optional deadline, progress = linked account's balance. The
+// account link is nullable ONLY so account deletion can unlink (never silently delete) goals.
+// See docs/superpowers/specs/2026-07-09-savings-goals-design.md.
+object SavingsGoals : IntIdTable("SavingsGoal") {
+    val name = varchar("name", 100)
+    val targetAmount = long("target_amount")                     // cents, > 0
+    val accountId = reference("account_id", Accounts).nullable()
+    val deadline = long("deadline").nullable()                   // epoch millis
+    val createdAt = long("created_at")                           // epoch millis
+    val archived = bool("archived").default(false)
+}
