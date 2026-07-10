@@ -7,6 +7,7 @@ import com.financeapp.db.schema.Holdings
 import com.financeapp.db.schema.HoldingLots
 import com.financeapp.db.schema.HoldingSnapshots
 import com.financeapp.db.schema.ReconciliationSessions
+import com.financeapp.db.schema.SavingsGoals
 import com.financeapp.db.schema.ScheduledTransactions
 import com.financeapp.db.schema.SplitItems
 import com.financeapp.db.schema.TransactionTags
@@ -201,6 +202,12 @@ class AccountRepositoryImpl(
 
             // Delete connected accounts for this account
             ConnectedAccounts.deleteWhere { ConnectedAccounts.localAccountId eq id.toInt() }
+
+            // Unlink savings goals pointing at this account (never silently delete a goal —
+            // the Goals screen shows them as "needs an account" for relinking).
+            SavingsGoals.update({ SavingsGoals.accountId eq id.toInt() }) {
+                it[accountId] = null
+            }
 
             // Finally delete the account
             Accounts.deleteWhere { Accounts.id eq id.toInt() }

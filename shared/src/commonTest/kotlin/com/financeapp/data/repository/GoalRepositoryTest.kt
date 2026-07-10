@@ -91,4 +91,19 @@ class GoalRepositoryTest {
         assertFalse(goals.deleteGoal(id), "second delete is a no-op returning false")
         assertFalse(goals.setArchived(id, false), "archiving a missing id returns false")
     }
+
+    @Test
+    fun `deleting the linked account unlinks the goal instead of failing or deleting it`() = runTest {
+        val doomedAccountId = accounts.insertAccount(TestDataFactory.createTestAccount(name = "Doomed"))
+        val id = goals.createGoal("Orphan-to-be", 100_000, doomedAccountId, deadlineMs = null)
+
+        accounts.deleteAccount(doomedAccountId)   // FK enforcement is ON: must not throw
+        goals.notifyGoalsChanged()
+
+        val g = goals.getGoalsWithProgress().first().single { it.goal.id == id }
+        assertNull(g.goal.accountId, "goal must be unlinked, not deleted")
+        assertNull(g.accountName)
+        assertEquals(0, g.progress.currentCents)
+        assertNull(g.progress.onTrack)
+    }
 }
