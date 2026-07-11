@@ -37,6 +37,8 @@ record.
 ### Polish & Enhancements
 - [ ] Add dashboard mini-charts for widgets
 - [ ] Enhance BudgetScreen with better chart visualizations
+- [ ] Savings goals: goal linked to a *closed* (inactive) account shows "(deleted account)" in the editor and "Needs an account — edit to relink" on the card even though it's still linked (GoalsScreen.kt; from 2026-07-10 final review) — reword and decide closed-account UX deliberately
+- [ ] Savings goals: past-deadline goals label the full remaining amount as "need $X/mo" — remainder is correct, "/mo" suffix is wrong (GoalsScreen.kt; from 2026-07-10 final review)
 
 ## Planned Features
 
