@@ -4,6 +4,7 @@ import java.util.Locale
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -14,6 +15,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeapp.ui.theme.Spacing
@@ -48,7 +50,9 @@ fun PieChart(
     showLabels: Boolean = true,
     centerHoleRatio: Float = 0f, // 0 = full pie, 0.5 = donut with 50% hole
     totalLabel: String? = null,
-    animationEnabled: Boolean = true
+    animationEnabled: Boolean = true,
+    onSliceClick: ((Int) -> Unit)? = null,
+    selectedIndex: Int? = null
 ) {
     if (data.isEmpty()) {
         EmptyChartState(
@@ -73,7 +77,28 @@ fun PieChart(
                     .aspectRatio(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Canvas(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                val sliceValues = data.map { it.value }
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .then(
+                            if (onSliceClick != null) {
+                                Modifier.pointerInput(sliceValues, centerHoleRatio) {
+                                    detectTapGestures { tap ->
+                                        pieSliceAt(
+                                            tapX = tap.x,
+                                            tapY = tap.y,
+                                            width = size.width.toFloat(),
+                                            height = size.height.toFloat(),
+                                            values = sliceValues,
+                                            centerHoleRatio = centerHoleRatio
+                                        )?.let(onSliceClick)
+                                    }
+                                }
+                            } else Modifier
+                        )
+                ) {
                     var startAngle = -90f
 
                     data.forEachIndexed { index, slice ->
@@ -101,6 +126,26 @@ fun PieChart(
                         )
 
                         startAngle += sweepAngle
+                    }
+
+                    // Emphasize the selected slice by redrawing it slightly larger on top.
+                    selectedIndex?.let { sel ->
+                        if (sel in data.indices && total > 0f) {
+                            val selStart = -90f + data.take(sel).sumOf { ((it.value / total) * 360f).toDouble() }.toFloat()
+                            val selSweep = (data[sel].value / total) * 360f
+                            val bump = size.minDimension * 0.04f
+                            drawArc(
+                                color = data[sel].color,
+                                startAngle = selStart,
+                                sweepAngle = selSweep,
+                                useCenter = true,
+                                size = Size(size.minDimension + bump, size.minDimension + bump),
+                                topLeft = Offset(
+                                    (size.width - size.minDimension - bump) / 2,
+                                    (size.height - size.minDimension - bump) / 2
+                                )
+                            )
+                        }
                     }
 
                     // Draw center hole for donut chart
@@ -157,7 +202,9 @@ fun DonutChart(
     modifier: Modifier = Modifier,
     showLegend: Boolean = true,
     totalLabel: String? = null,
-    animationEnabled: Boolean = true
+    animationEnabled: Boolean = true,
+    onSliceClick: ((Int) -> Unit)? = null,
+    selectedIndex: Int? = null
 ) {
     PieChart(
         data = data,
@@ -165,7 +212,9 @@ fun DonutChart(
         showLegend = showLegend,
         centerHoleRatio = 0.5f,
         totalLabel = totalLabel,
-        animationEnabled = animationEnabled
+        animationEnabled = animationEnabled,
+        onSliceClick = onSliceClick,
+        selectedIndex = selectedIndex
     )
 }
 
@@ -179,7 +228,9 @@ fun AnimatedPieChart(
     showLegend: Boolean = true,
     showLabels: Boolean = true,
     centerHoleRatio: Float = 0f,
-    totalLabel: String? = null
+    totalLabel: String? = null,
+    onSliceClick: ((Int) -> Unit)? = null,
+    selectedIndex: Int? = null
 ) {
     if (data.isEmpty()) {
         EmptyChartState(
@@ -214,7 +265,28 @@ fun AnimatedPieChart(
                     .aspectRatio(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Canvas(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                val sliceValues = data.map { it.value }
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .then(
+                            if (onSliceClick != null) {
+                                Modifier.pointerInput(sliceValues, centerHoleRatio) {
+                                    detectTapGestures { tap ->
+                                        pieSliceAt(
+                                            tapX = tap.x,
+                                            tapY = tap.y,
+                                            width = size.width.toFloat(),
+                                            height = size.height.toFloat(),
+                                            values = sliceValues,
+                                            centerHoleRatio = centerHoleRatio
+                                        )?.let(onSliceClick)
+                                    }
+                                }
+                            } else Modifier
+                        )
+                ) {
                     var startAngle = -90f
 
                     data.forEachIndexed { index, slice ->
@@ -238,6 +310,26 @@ fun AnimatedPieChart(
                         )
 
                         startAngle += sweepAngle // Use full sweep for positioning, not animated
+                    }
+
+                    // Emphasize the selected slice by redrawing it slightly larger on top.
+                    selectedIndex?.let { sel ->
+                        if (sel in data.indices && total > 0f) {
+                            val selStart = -90f + data.take(sel).sumOf { ((it.value / total) * 360f).toDouble() }.toFloat()
+                            val selSweep = (data[sel].value / total) * 360f
+                            val bump = size.minDimension * 0.04f
+                            drawArc(
+                                color = data[sel].color,
+                                startAngle = selStart,
+                                sweepAngle = selSweep,
+                                useCenter = true,
+                                size = Size(size.minDimension + bump, size.minDimension + bump),
+                                topLeft = Offset(
+                                    (size.width - size.minDimension - bump) / 2,
+                                    (size.height - size.minDimension - bump) / 2
+                                )
+                            )
+                        }
                     }
 
                     // Draw center hole for donut chart
@@ -293,13 +385,17 @@ fun AnimatedDonutChart(
     data: List<PieChartData>,
     modifier: Modifier = Modifier,
     showLegend: Boolean = true,
-    totalLabel: String? = null
+    totalLabel: String? = null,
+    onSliceClick: ((Int) -> Unit)? = null,
+    selectedIndex: Int? = null
 ) {
     AnimatedPieChart(
         data = data,
         modifier = modifier,
         showLegend = showLegend,
         centerHoleRatio = 0.5f,
-        totalLabel = totalLabel
+        totalLabel = totalLabel,
+        onSliceClick = onSliceClick,
+        selectedIndex = selectedIndex
     )
 }
