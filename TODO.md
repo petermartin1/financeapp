@@ -39,6 +39,10 @@ record.
 - [ ] Enhance BudgetScreen with better chart visualizations
 - [ ] Savings goals: goal linked to a *closed* (inactive) account shows "(deleted account)" in the editor and "Needs an account — edit to relink" on the card even though it's still linked (GoalsScreen.kt; from 2026-07-10 final review) — reword and decide closed-account UX deliberately
 - [ ] Savings goals: past-deadline goals label the full remaining amount as "need $X/mo" — remainder is correct, "/mo" suffix is wrong (GoalsScreen.kt; from 2026-07-10 final review)
+- [ ] Spending drill-down: panel header "N transactions" counts split lines, not distinct transactions — reword or count distinct txn ids (ReportsScreen.kt; from 2026-07-11 final review)
+- [ ] Spending drill-down: add onSliceClick to PieChart's pointerInput keys (or rememberUpdatedState) — latent stale-closure risk when a reload keeps identical slice values (PieChart.kt; from 2026-07-11 final review)
+- [ ] Spending drill-down: category list truncates to top 10 while the pie draws all slices — thin-slice categories ranked >10 have no row-click fallback and invisible selection highlight (ReportsScreen.kt; pre-existing truncation, noted 2026-07-11)
+- [ ] Spending drill-down tests: cover null-payee/null-category join branch and id-DESC tie-breaker for getTransactionsWithDetailsByDateRange (test-only gap; from 2026-07-11 final review)
 
 ## Planned Features
 
