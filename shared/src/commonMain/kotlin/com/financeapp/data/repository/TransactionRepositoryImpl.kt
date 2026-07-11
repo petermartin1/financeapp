@@ -131,6 +131,38 @@ class TransactionRepositoryImpl(
         }
     }
 
+    override fun getTransactionsWithDetailsByDateRange(
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): Flow<List<TransactionWithDetails>> = transactionRefreshTrigger.map { _ ->
+        val tz = TimeZone.currentSystemDefault()
+        val startMillis = startDate.atStartOfDayIn(tz).toEpochMilliseconds()
+        // Use proper date arithmetic to handle DST (23/25 hour days)
+        val endMillis = endDate.plus(1, DateTimeUnit.DAY).atStartOfDayIn(tz).toEpochMilliseconds() - 1
+
+        withContext(ioDispatcher) {
+            transaction(database) {
+                val transactions = Transactions
+                    .selectAll().where { (Transactions.date greaterEq startMillis) and (Transactions.date lessEq endMillis) }
+                    .orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC)
+                    .map { it.toDomain() }
+
+                val payees = Payees.selectAll().associate { it[Payees.id].value.toLong() to it[Payees.name] }
+                val categories = Categories.selectAll().associate { it[Categories.id].value.toLong() to it[Categories.name] }
+                val accounts = Accounts.selectAll().associate { it[Accounts.id].value.toLong() to it[Accounts.name] }
+
+                transactions.map { txn ->
+                    TransactionWithDetails(
+                        transaction = txn,
+                        payeeName = txn.payeeId?.let { payees[it] },
+                        categoryName = txn.categoryId?.let { categories[it] },
+                        accountName = accounts[txn.accountId] ?: ""
+                    )
+                }
+            }
+        }
+    }
+
     override fun getTransactionsByCategory(categoryId: Long): Flow<List<Transaction>> =
         transactionRefreshTrigger.map { _ ->
             withContext(ioDispatcher) {

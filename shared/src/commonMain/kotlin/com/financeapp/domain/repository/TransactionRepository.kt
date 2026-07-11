@@ -11,6 +11,7 @@ interface TransactionRepository {
     fun getTransactionsWithDetailsByAccount(accountId: Long): Flow<List<TransactionWithDetails>>
     fun getAllTransactionsWithDetails(): Flow<List<TransactionWithDetails>>
     fun getTransactionsByDateRange(startDate: LocalDate, endDate: LocalDate): Flow<List<Transaction>>
+    fun getTransactionsWithDetailsByDateRange(startDate: LocalDate, endDate: LocalDate): Flow<List<TransactionWithDetails>>
     fun getTransactionsByCategory(categoryId: Long): Flow<List<Transaction>>
     suspend fun getTransactionById(id: Long): Transaction?
     suspend fun insertTransaction(transaction: Transaction): Long
