@@ -56,6 +56,8 @@ import com.financeapp.data.repository.ScheduledTransactionRepositoryImpl
 import com.financeapp.domain.subscriptions.SubscriptionDetector
 import com.financeapp.domain.repository.SubscriptionRepository
 import com.financeapp.data.repository.SubscriptionRepositoryImpl
+import com.financeapp.domain.repository.GoalRepository
+import com.financeapp.data.repository.GoalRepositoryImpl
 import com.financeapp.domain.service.SubscriptionScanService
 import com.financeapp.security.SecureCredentialStore
 import com.financeapp.ui.search.SearchViewModel
@@ -130,6 +132,8 @@ val sharedModule = module {
     // args: database, transactionRepository, scheduledTransactionRepository, detector
     single<SubscriptionRepository> { SubscriptionRepositoryImpl(get(), get(), get(), get()) }
     single { SubscriptionScanService(get(), get()) }
+    // args: database, accountRepository
+    single<GoalRepository> { GoalRepositoryImpl(get(), get()) }
     single { ImportRepository(get(), get(), get(), get(), get(), get(), get()) }
     single { OfxClient() }
     single { SecureCredentialStore() }
@@ -156,6 +160,7 @@ val sharedModule = module {
     single { PerformanceTabViewModel(get(), get()) }
     single { TagsViewModel(get()) }
     single { com.financeapp.ui.subscriptions.SubscriptionViewModel(get(), get()) }
+    single { com.financeapp.ui.goals.GoalsViewModel(get(), get()) }
     single { DashboardViewModel(get(), get(), get(), get()) }
     single { TemplatesViewModel(get(), get(), get(), get()) }
     factory { SearchViewModel(get(), get(), get()) }

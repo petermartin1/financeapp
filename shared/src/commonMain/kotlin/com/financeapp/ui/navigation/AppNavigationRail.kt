@@ -77,6 +77,13 @@ object AppDestinations {
         group = NavigationGroup.TOOLS
     )
 
+    val Goals = NavigationDestination(
+        route = "goals",
+        label = "Goals",
+        icon = Icons.Default.Flag,
+        group = NavigationGroup.TOOLS
+    )
+
     val Templates = NavigationDestination(
         route = "templates",
         label = "Templates",
@@ -150,6 +157,7 @@ object AppDestinations {
         Reports,
         Scheduled,
         Subscriptions,
+        Goals,
         Templates,
         Categories,
         Payees,

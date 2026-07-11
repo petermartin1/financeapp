@@ -25,6 +25,8 @@ import com.financeapp.ui.reconcile.ReconcileViewModel
 import com.financeapp.ui.scheduled.ScheduledScreen
 import com.financeapp.ui.subscriptions.SubscriptionViewModel
 import com.financeapp.ui.subscriptions.SubscriptionsScreen
+import com.financeapp.ui.goals.GoalsViewModel
+import com.financeapp.ui.goals.GoalsScreen
 import com.financeapp.ui.scheduled.ScheduledViewModel
 import com.financeapp.ui.budget.BudgetScreen
 import com.financeapp.ui.budget.BudgetViewModel
@@ -152,7 +154,7 @@ private fun UnlockedApp() {
 }
 
 enum class Screen {
-    DASHBOARD, ACCOUNTS, TRANSACTIONS, CATEGORIES, IMPORT, CONNECTIONS, RECONCILE, SCHEDULED, SUBSCRIPTIONS, BUDGET, REPORTS, BACKUP, PAYEES, INVESTMENTS, TAGS, TEMPLATES, SETTINGS
+    DASHBOARD, ACCOUNTS, TRANSACTIONS, CATEGORIES, IMPORT, CONNECTIONS, RECONCILE, SCHEDULED, SUBSCRIPTIONS, GOALS, BUDGET, REPORTS, BACKUP, PAYEES, INVESTMENTS, TAGS, TEMPLATES, SETTINGS
 }
 
 @Composable
@@ -166,6 +168,7 @@ private fun MainContent() {
     val reconcileViewModel: ReconcileViewModel = koinInject()
     val scheduledViewModel: ScheduledViewModel = koinInject()
     val subscriptionViewModel: SubscriptionViewModel = koinInject()
+    val goalsViewModel: GoalsViewModel = koinInject()
     val budgetViewModel: BudgetViewModel = koinInject()
     val reportsViewModel: ReportsViewModel = koinInject()
     val backupViewModel: BackupViewModel = koinInject()
@@ -228,6 +231,7 @@ private fun MainContent() {
             "connections" -> Screen.CONNECTIONS
             "scheduled" -> Screen.SCHEDULED
             "subscriptions" -> Screen.SUBSCRIPTIONS
+            "goals" -> Screen.GOALS
             "budget" -> Screen.BUDGET
             "reports" -> Screen.REPORTS
             "backup" -> Screen.BACKUP
@@ -254,6 +258,7 @@ private fun MainContent() {
         Screen.RECONCILE -> "accounts" // Reconcile is a sub-screen of accounts
         Screen.SCHEDULED -> "scheduled"
         Screen.SUBSCRIPTIONS -> "subscriptions"
+        Screen.GOALS -> "goals"
         Screen.BUDGET -> "budget"
         Screen.REPORTS -> "reports"
         Screen.BACKUP -> "backup"
@@ -340,6 +345,11 @@ private fun MainContent() {
                 )
                 Screen.SUBSCRIPTIONS -> SubscriptionsScreen(
                     viewModel = subscriptionViewModel,
+                    onBack = navigateBack,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Screen.GOALS -> GoalsScreen(
+                    viewModel = goalsViewModel,
                     onBack = navigateBack,
                     modifier = Modifier.fillMaxSize()
                 )
