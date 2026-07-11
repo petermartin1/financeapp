@@ -2,24 +2,31 @@ package com.financeapp.ui.reports
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.financeapp.domain.model.*
+import com.financeapp.domain.reporting.SpendingDetailLine
 import com.financeapp.ui.components.charts.*
+import com.financeapp.ui.transactions.EditTransactionDialog
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,7 +99,8 @@ fun ReportsScreen(
                 when (uiState.selectedType) {
                     ReportType.SPENDING_BY_CATEGORY -> SpendingByCategoryReport(
                         report = uiState.spendingReport,
-                        monthNames = monthNames
+                        selectedCategoryKey = uiState.selectedSpendingCategoryId,
+                        viewModel = viewModel
                     )
                     ReportType.INCOME_VS_EXPENSES -> IncomeVsExpensesReport(
                         report = uiState.incomeExpenseReport,
@@ -110,7 +118,8 @@ fun ReportsScreen(
 @Composable
 private fun SpendingByCategoryReport(
     report: SpendingReport,
-    monthNames: List<String>
+    selectedCategoryKey: Long?,
+    viewModel: ReportsViewModel
 ) {
     if (report.categorySpending.isEmpty()) {
         EmptyReportMessage("No spending data for this period")
@@ -123,6 +132,16 @@ private fun SpendingByCategoryReport(
         Color(0xFFE91E63), Color(0xFF8BC34A), Color(0xFF3F51B5),
         Color(0xFFFF9800)
     )
+
+    var transactionToEdit by remember { mutableStateOf<TransactionWithDetails?>(null) }
+    var editTagIds by remember { mutableStateOf<List<Long>>(emptyList()) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val selectedIndex = report.categorySpending
+        .indexOfFirst { it.categoryId == selectedCategoryKey }
+        .takeIf { it >= 0 }
+    val selectedSpending = selectedIndex?.let { report.categorySpending[it] }
+    val selectedLines = selectedCategoryKey?.let { report.detailLinesByCategory[it] }.orEmpty()
 
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
@@ -144,6 +163,10 @@ private fun SpendingByCategoryReport(
 
                     CategorySpendingPieChart(
                         categorySpending = report.categorySpending,
+                        selectedIndex = selectedIndex,
+                        onSliceClick = { index ->
+                            viewModel.selectSpendingCategory(report.categorySpending[index].categoryId)
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(300.dp)
@@ -160,17 +183,65 @@ private fun SpendingByCategoryReport(
             }
         }
 
+        // Drill-down panel for the selected slice
+        if (selectedSpending != null) {
+            item {
+                DrillDownHeader(
+                    spending = selectedSpending,
+                    lineCount = selectedLines.size,
+                    onClear = { viewModel.clearSpendingSelection() }
+                )
+            }
+            // No item keys: two splits of one transaction can share id+category, so positional
+            // identity is the only always-unique choice here.
+            items(selectedLines) { line ->
+                SpendingDetailRow(
+                    line = line,
+                    onClick = {
+                        coroutineScope.launch {
+                            editTagIds = viewModel.getTagsForTransaction(line.source.transaction.id)
+                            transactionToEdit = line.source
+                        }
+                    }
+                )
+            }
+        }
+
         // Category list
         items(report.categorySpending.take(10)) { item ->
             val colorIndex = report.categorySpending.indexOf(item) % colors.size
-            CategorySpendingItem(item, colors[colorIndex])
+            CategorySpendingItem(
+                item = item,
+                color = colors[colorIndex],
+                selected = item.categoryId == selectedCategoryKey,
+                onClick = { viewModel.selectSpendingCategory(item.categoryId) }
+            )
         }
+    }
+
+    // Edit transaction dialog (same reuse pattern as GlobalSearchDialog)
+    transactionToEdit?.let { txn ->
+        EditTransactionDialog(
+            transaction = txn,
+            onDismiss = { transactionToEdit = null },
+            onSave = { categoryId, memo, date, isCleared, tagIds ->
+                viewModel.editTransaction(txn.transaction, categoryId, memo, date, isCleared, tagIds)
+                transactionToEdit = null
+            },
+            onDelete = {
+                viewModel.deleteTransaction(txn.transaction.id)
+                transactionToEdit = null
+            },
+            initialTagIds = editTagIds
+        )
     }
 }
 
 @Composable
 private fun CategorySpendingPieChart(
     categorySpending: List<CategorySpending>,
+    selectedIndex: Int?,
+    onSliceClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val chartData = categorySpending.mapIndexed { index, item ->
@@ -185,17 +256,106 @@ private fun CategorySpendingPieChart(
         data = chartData,
         modifier = modifier,
         showLegend = true,
-        showLabels = false
+        showLabels = false,
+        onSliceClick = onSliceClick,
+        selectedIndex = selectedIndex
     )
+}
+
+@Composable
+private fun DrillDownHeader(
+    spending: CategorySpending,
+    lineCount: Int,
+    onClear: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                spending.categoryName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "${formatCurrency(spending.amount)} · $lineCount transaction${if (lineCount == 1) "" else "s"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        IconButton(onClick = onClear) {
+            Icon(Icons.Default.Close, contentDescription = "Clear selection")
+        }
+    }
+}
+
+@Composable
+private fun SpendingDetailRow(
+    line: SpendingDetailLine,
+    onClick: () -> Unit
+) {
+    val txn = line.source.transaction
+    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    line.source.payeeName ?: txn.importedName ?: "—",
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "${txn.date.monthNumber}/${txn.date.dayOfMonth}/${txn.date.year} · ${line.source.accountName}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                txn.memo?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    formatCurrency(kotlin.math.abs(line.lineAmountCents)),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (line.isSplitPortion) {
+                    Text(
+                        "of ${formatCurrency(kotlin.math.abs(txn.amount))} split",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
 private fun CategorySpendingItem(
     item: CategorySpending,
-    color: Color
+    color: Color,
+    selected: Boolean,
+    onClick: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(if (selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
