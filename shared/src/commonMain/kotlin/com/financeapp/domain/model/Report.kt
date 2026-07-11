@@ -1,5 +1,7 @@
 package com.financeapp.domain.model
 
+import com.financeapp.domain.reporting.SpendingDetailLine
+
 data class CategorySpending(
     val categoryId: Long,
     val categoryName: String,
@@ -23,7 +25,9 @@ data class NetWorthPoint(
 
 data class SpendingReport(
     val categorySpending: List<CategorySpending>,
-    val totalSpent: Long
+    val totalSpent: Long,
+    /** Drill-down lines per category, keyed by `categoryId ?: 0L` (0L = Uncategorized). */
+    val detailLinesByCategory: Map<Long, List<SpendingDetailLine>> = emptyMap()
 )
 
 data class IncomeExpenseReport(

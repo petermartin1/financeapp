@@ -3,10 +3,12 @@ package com.financeapp.ui.reports
 import com.financeapp.ui.supervisedViewModelScope
 
 import com.financeapp.domain.model.*
-import com.financeapp.domain.reporting.expandSpendingLines
+import com.financeapp.domain.reporting.expandSpendingDetailLines
 import com.financeapp.domain.repository.CategoryRepository
 import com.financeapp.domain.repository.TransactionRepository
 import com.financeapp.domain.repository.AccountRepository
+import com.financeapp.domain.repository.TagRepository
+import com.financeapp.ui.launchReporting
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +28,8 @@ import kotlinx.datetime.toLocalDateTime
 class ReportsViewModel(
     private val transactionRepository: TransactionRepository,
     private val accountRepository: AccountRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val tagRepository: TagRepository
 ) {
     private val scope = supervisedViewModelScope()
 
@@ -38,12 +41,12 @@ class ReportsViewModel(
     }
 
     fun setReportType(type: ReportType) {
-        _uiState.value = _uiState.value.copy(selectedType = type)
+        _uiState.value = _uiState.value.copy(selectedType = type, selectedSpendingCategoryId = null)
         loadReport()
     }
 
     fun setPeriod(period: ReportPeriod) {
-        _uiState.value = _uiState.value.copy(selectedPeriod = period)
+        _uiState.value = _uiState.value.copy(selectedPeriod = period, selectedSpendingCategoryId = null)
         loadReport()
     }
 
@@ -60,6 +63,8 @@ class ReportsViewModel(
                         val report = loadSpendingReport(startDate, endDate)
                         _uiState.value = _uiState.value.copy(
                             spendingReport = report,
+                            selectedSpendingCategoryId = _uiState.value.selectedSpendingCategoryId
+                                ?.takeIf { report.detailLinesByCategory.containsKey(it) },
                             isLoading = false
                         )
                     }
@@ -95,38 +100,42 @@ class ReportsViewModel(
     }
 
     private suspend fun loadSpendingReport(startDate: LocalDate, endDate: LocalDate): SpendingReport {
-        val transactions = transactionRepository.getTransactionsByDateRange(startDate, endDate).first()
+        val transactions = transactionRepository.getTransactionsWithDetailsByDateRange(startDate, endDate).first()
 
         val categories = categoryRepository.getAllCategories().first()
         val categoriesById = categories.associateBy { it.id }
-        val categoryNames = categories.associate { it.id to it.name }.toMutableMap()
+        val categoryNames = categories.associate { it.id to it.name }
 
         // Expand split transactions into their per-category lines so a split purchase is reported
         // under each split's category instead of the parent's.
-        val splitsByTransactionId = transactionRepository.getSplitsByTransactionIds(transactions.map { it.id })
-        val spendingLines = expandSpendingLines(transactions, splitsByTransactionId)
+        val splitsByTransactionId =
+            transactionRepository.getSplitsByTransactionIds(transactions.map { it.transaction.id })
 
         // Spending = negative, non-transfer outflows. Exclude income- and transfer-typed
         // categories (a refund/charge-back tagged with an income category is not spending),
         // consistent with the dashboard's getSpendingByCategory. Uncategorized outflows are
         // still shown as "Uncategorized".
-        val expensesByCategory = spendingLines
-            .filter { it.amount < 0 }
+        val spendingLines = expandSpendingDetailLines(transactions, splitsByTransactionId)
+            .filter { it.lineAmountCents < 0 }
             .filter { line ->
                 val type = line.categoryId?.let { categoriesById[it]?.type }
                 type == null || type == CategoryType.EXPENSE
             }
-            .groupBy { it.categoryId }
 
-        val totalSpent = expensesByCategory.values.flatten().sumOf { kotlin.math.abs(it.amount) }
+        // The pie below is aggregated from these same lines, so a slice always sums to its
+        // drill-down list.
+        val detailLinesByCategory = spendingLines
+            .groupBy { it.categoryId ?: 0L }
+            .mapValues { (_, lines) -> lines.sortedByDescending { it.source.transaction.date } }
 
-        val categorySpending = expensesByCategory.map { (categoryId, lines) ->
-            val amount = lines.sumOf { kotlin.math.abs(it.amount) }
-            val categoryName = categoryId?.let { categoryNames[it] } ?: "Uncategorized"
+        val totalSpent = spendingLines.sumOf { kotlin.math.abs(it.lineAmountCents) }
+
+        val categorySpending = detailLinesByCategory.map { (categoryKey, lines) ->
+            val amount = lines.sumOf { kotlin.math.abs(it.lineAmountCents) }
+            val categoryName = if (categoryKey == 0L) "Uncategorized" else categoryNames[categoryKey] ?: "Uncategorized"
             val percentage = if (totalSpent > 0) (amount.toFloat() / totalSpent) * 100 else 0f
-
             CategorySpending(
-                categoryId = categoryId ?: 0L,
+                categoryId = categoryKey,
                 categoryName = categoryName,
                 amount = amount,
                 percentage = percentage
@@ -135,7 +144,8 @@ class ReportsViewModel(
 
         return SpendingReport(
             categorySpending = categorySpending,
-            totalSpent = totalSpent
+            totalSpent = totalSpent,
+            detailLinesByCategory = detailLinesByCategory
         )
     }
 
@@ -170,6 +180,51 @@ class ReportsViewModel(
         )
     }
 
+    fun selectSpendingCategory(categoryKey: Long) {
+        val current = _uiState.value.selectedSpendingCategoryId
+        _uiState.value = _uiState.value.copy(
+            selectedSpendingCategoryId = if (current == categoryKey) null else categoryKey
+        )
+    }
+
+    fun clearSpendingSelection() {
+        _uiState.value = _uiState.value.copy(selectedSpendingCategoryId = null)
+    }
+
+    /** Saves an edit from the drill-down panel, then rebuilds the report (same path as search). */
+    fun editTransaction(
+        txn: Transaction,
+        categoryId: Long?,
+        memo: String?,
+        date: LocalDate,
+        isCleared: Boolean,
+        tagIds: List<Long>
+    ) {
+        scope.launchReporting("save the transaction") {
+            val updated = txn.copy(
+                categoryId = categoryId,
+                memo = memo?.ifBlank { null },
+                date = date,
+                isCleared = isCleared
+            )
+            transactionRepository.updateTransaction(updated)
+            tagRepository.setTransactionTags(txn.id, tagIds)
+            accountRepository.notifyBalancesChanged()
+            loadReport()
+        }
+    }
+
+    fun deleteTransaction(id: Long) {
+        scope.launchReporting("delete the transaction") {
+            transactionRepository.deleteTransaction(id)
+            accountRepository.notifyBalancesChanged()
+            loadReport()
+        }
+    }
+
+    suspend fun getTagsForTransaction(transactionId: Long): List<Long> =
+        tagRepository.getTagsForTransaction(transactionId).map { it.id }
+
     fun cleanup() {
         scope.cancel()
     }
@@ -203,5 +258,7 @@ data class ReportsUiState(
     val spendingReport: SpendingReport = SpendingReport(emptyList(), 0),
     val incomeExpenseReport: IncomeExpenseReport = IncomeExpenseReport(emptyList(), 0, 0),
     val netWorthReport: NetWorthReport = NetWorthReport(emptyList(), 0),
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    /** Drill-down selection: key into detailLinesByCategory (0L = Uncategorized); null = none. */
+    val selectedSpendingCategoryId: Long? = null
 )
