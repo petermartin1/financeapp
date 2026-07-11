@@ -2,6 +2,7 @@ package com.financeapp.domain.reporting
 
 import com.financeapp.domain.model.SpendingSource
 import com.financeapp.domain.model.SplitItem
+import com.financeapp.domain.model.TransactionWithDetails
 
 /** One categorized money movement contributing to spending math (amount in cents, sign preserved). */
 data class SpendingLine(val categoryId: Long?, val amount: Long)
@@ -36,4 +37,52 @@ fun expandSpendingLines(
             val splits = splitsByTransactionId[txn.id]
             if (splits.isNullOrEmpty()) listOf(SpendingLine(txn.categoryId, txn.amount))
             else splits.map { SpendingLine(it.categoryId, it.amount) }
+        }
+
+/**
+ * One spending line that keeps a handle on its source transaction, for drill-down display
+ * (amounts in cents, sign preserved). [isSplitPortion] is true when this line is one split of a
+ * larger transaction, so UIs can show "of $X split".
+ */
+data class SpendingDetailLine(
+    val source: TransactionWithDetails,
+    val categoryId: Long?,
+    val lineAmountCents: Long,
+    val isSplitPortion: Boolean
+)
+
+/**
+ * Detail-preserving counterpart of [expandSpendingLines]: identical expansion semantics
+ * (transfers excluded, split parents contribute one line per split, unsplit transactions
+ * contribute a single line), but each line keeps its source [TransactionWithDetails].
+ * SpendingDetailLinesTest pins the (categoryId, amount) projection to [expandSpendingLines]
+ * so the two cannot drift.
+ */
+fun expandSpendingDetailLines(
+    transactions: List<TransactionWithDetails>,
+    splitsByTransactionId: Map<Long, List<SplitItem>>
+): List<SpendingDetailLine> =
+    transactions
+        .filter { it.transaction.transferId == null }
+        .flatMap { txn ->
+            val splits = splitsByTransactionId[txn.transaction.id]
+            if (splits.isNullOrEmpty()) {
+                listOf(
+                    SpendingDetailLine(
+                        source = txn,
+                        categoryId = txn.transaction.categoryId,
+                        lineAmountCents = txn.transaction.amount,
+                        isSplitPortion = false
+                    )
+                )
+            } else {
+                splits.map {
+                    SpendingDetailLine(
+                        source = txn,
+                        categoryId = it.categoryId,
+                        lineAmountCents = it.amount,
+                        isSplitPortion = true
+                    )
+                }
+            }
         }
